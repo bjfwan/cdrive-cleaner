@@ -309,6 +309,8 @@ impl DiskScanner {
         println!("路径: {}", root_path);
         
         let inaccessible_count = Arc::new(AtomicUsize::new(0));
+        let large_files: Arc<Mutex<Vec<super::file_info::FileInfo>>> = Arc::new(Mutex::new(Vec::new()));
+        let large_file_threshold = 100 * 1024 * 1024; // 100 MB
         
         let nodes_map: Arc<Mutex<HashMap<PathBuf, DirectoryNode>>> = Arc::new(Mutex::new(HashMap::new()));
         let file_map: Arc<Mutex<HashMap<PathBuf, Vec<u64>>>> = Arc::new(Mutex::new(HashMap::new()));
@@ -325,6 +327,41 @@ impl DiskScanner {
                     if let Ok(metadata) = entry.metadata() {
                         if metadata.is_file() {
                             let file_size = metadata.len();
+                            
+                            if file_size >= large_file_threshold {
+                                let file_name = entry_path.file_name()
+                                    .and_then(|n| n.to_str())
+                                    .unwrap_or("Unknown")
+                                    .to_string();
+                                
+                                let extension = entry_path.extension()
+                                    .and_then(|e| e.to_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                
+                                let modified_at = metadata.modified()
+                                    .ok()
+                                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                                    .map(|d| {
+                                        let secs = d.as_secs();
+                                        chrono::DateTime::from_timestamp(secs as i64, 0)
+                                            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                                            .unwrap_or_default()
+                                    })
+                                    .unwrap_or_default();
+                                
+                                use std::os::windows::fs::MetadataExt;
+                                let is_readonly = metadata.file_attributes() & 0x1 != 0;
+                                
+                                large_files.lock().unwrap().push(super::file_info::FileInfo {
+                                    path: entry_path.to_string_lossy().to_string(),
+                                    name: file_name,
+                                    size: file_size,
+                                    extension,
+                                    modified_at,
+                                    is_readonly,
+                                });
+                            }
                             
                             if let Some(parent) = entry_path.parent() {
                                 let mut map = file_map.lock().unwrap();
@@ -442,6 +479,13 @@ impl DiskScanner {
         
         println!("=== 深度扫描结束 ===\n");
 
+        let large_files_vec = match Arc::try_unwrap(large_files) {
+            Ok(mutex) => mutex.into_inner().unwrap(),
+            Err(arc) => arc.lock().unwrap().clone(),
+        };
+
+        println!("[调试] 深度扫描收集到 {} 个大文件 (> 100MB)", large_files_vec.len());
+
         Ok(ScanResult {
             root_path,
             total_size,
@@ -449,7 +493,7 @@ impl DiskScanner {
             total_dirs,
             scan_duration_ms: duration.as_millis() as u64,
             directories,
-            large_files: vec![],
+            large_files: large_files_vec,
             inaccessible_count: inaccessible_count.load(Ordering::Relaxed),
         })
     }
