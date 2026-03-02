@@ -10,6 +10,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             commands::scan_disk,
+            commands::scan_disk_deep,
             commands::migrate_file,
             commands::get_disk_info,
         ])

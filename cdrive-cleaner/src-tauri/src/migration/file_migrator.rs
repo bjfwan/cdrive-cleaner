@@ -3,6 +3,7 @@ use anyhow::{anyhow, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+use walkdir::WalkDir;
 
 pub struct FileMigrator {
     link_creator: LinkCreator,
@@ -159,7 +160,7 @@ impl FileMigrator {
             Ok(metadata.len())
         } else {
             let mut total = 0u64;
-            for entry in walkdir::WalkDir::new(path) {
+            for entry in WalkDir::new(path) {
                 if let Ok(entry) = entry {
                     if let Ok(metadata) = entry.metadata() {
                         if metadata.is_file() {

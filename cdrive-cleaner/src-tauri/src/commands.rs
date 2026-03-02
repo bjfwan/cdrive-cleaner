@@ -8,6 +8,12 @@ pub async fn scan_disk(path: String) -> Result<ScanResult, String> {
 }
 
 #[tauri::command]
+pub async fn scan_disk_deep(path: String) -> Result<ScanResult, String> {
+    let scanner = DiskScanner::new();
+    scanner.scan_deep(&path).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn migrate_file(
     source: String,
     target_disk: String,
