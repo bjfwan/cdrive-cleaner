@@ -21,6 +21,16 @@ interface FileInfo {
   is_readonly: boolean;
 }
 
+interface DiskInfo {
+  drive_letter: string;
+  label: string;
+  file_system: string;
+  total_space: number;
+  free_space: number;
+  used_space: number;
+  usage_percent: number;
+}
+
 interface ScanResult {
   root_path: string;
   total_size: number;
@@ -38,6 +48,7 @@ interface Props {
   canGoBack: boolean;
   currentPath: string;
   deepScanning: boolean;
+  availableDisks: DiskInfo[];
 }
 
 const props = defineProps<Props>();
@@ -52,6 +63,7 @@ const selectedDir = ref<DirectoryNode | null>(null);
 const selectedFile = ref<FileInfo | null>(null);
 const loadingFiles = ref(false);
 const currentFiles = ref<FileInfo[]>([]);
+const targetDisk = ref<string>('');
 
 console.log('ScanResults 接收到的数据:', props.result);
 console.log('directories 数量:', props.result?.directories?.length || 0);
@@ -78,6 +90,7 @@ function handleChartClick(params: any) {
 function showMigrateDialog(dir: DirectoryNode) {
   selectedDir.value = dir;
   selectedFile.value = null;
+  targetDisk.value = '';
   showMigrate.value = true;
 }
 
@@ -85,6 +98,7 @@ function closeMigrateDialog() {
   showMigrate.value = false;
   selectedDir.value = null;
   selectedFile.value = null;
+  targetDisk.value = '';
 }
 
 const treemapOption = computed(() => {
@@ -193,6 +207,11 @@ const sortedLargeFiles = computed(() => {
   return [...props.result.large_files].sort((a, b) => b.size - a.size);
 });
 
+const availableTargetDisks = computed(() => {
+  const currentDriveLetter = props.currentPath.substring(0, 2);
+  return props.availableDisks.filter(disk => disk.drive_letter !== currentDriveLetter);
+});
+
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -223,6 +242,7 @@ function formatDate(dateStr: string): string {
 function showMigrateFileDialog(file: FileInfo) {
   selectedFile.value = file;
   selectedDir.value = null;
+  targetDisk.value = '';
   showMigrate.value = true;
 }
 
@@ -534,10 +554,15 @@ watch(() => props.viewMode, (newMode) => {
           </div>
           <div class="form-section">
             <label class="form-label">目标磁盘</label>
-            <select class="form-select">
+            <select class="form-select" v-model="targetDisk">
               <option value="">选择目标磁盘...</option>
-              <option value="D:\">D: 盘</option>
-              <option value="E:\">E: 盘</option>
+              <option 
+                v-for="disk in availableTargetDisks" 
+                :key="disk.drive_letter"
+                :value="disk.drive_letter + '\\'"
+              >
+                {{ disk.drive_letter }} - {{ disk.label }} (可用: {{ formatBytes(disk.free_space) }})
+              </option>
             </select>
           </div>
           <div class="warning-section">

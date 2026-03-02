@@ -223,6 +223,7 @@ function goBack() {
         :can-go-back="navigationStack.length > 1"
         :current-path="navigationStack[navigationStack.length - 1]"
         :deep-scanning="deepScanning"
+        :available-disks="disks"
         @update:view-mode="viewMode = $event"
         @navigate="navigateToPath"
         @go-back="goBack"
