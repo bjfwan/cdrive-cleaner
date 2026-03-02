@@ -265,14 +265,24 @@ function formatNumber(num: number): string {
       </div>
 
       <div v-if="viewMode === 'list'" class="view-list">
-        <div class="table-header">
-          <div class="th th-name">名称</div>
-          <div class="th th-size">大小</div>
-          <div class="th th-percent">占比</div>
-          <div class="th th-files">文件数</div>
-          <div class="th th-actions">操作</div>
+        <div v-if="sortedDirectories.length === 0" class="empty-list">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" class="empty-icon">
+            <path d="M8 12C8 9.79086 9.79086 8 12 8H20L24 12H36C38.2091 12 40 13.7909 40 16V36C40 38.2091 38.2091 40 36 40H12C9.79086 40 8 38.2091 8 36V12Z" stroke="currentColor" stroke-width="2"/>
+            <path d="M18 24H30M24 18V30" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <h3>此目录下没有子目录</h3>
+          <p>共有 {{ formatNumber(result.total_files) }} 个文件</p>
         </div>
-        <div class="table-body">
+        
+        <template v-else>
+          <div class="table-header">
+            <div class="th th-name">名称</div>
+            <div class="th th-size">大小</div>
+            <div class="th th-percent">占比</div>
+            <div class="th th-files">文件数</div>
+            <div class="th th-actions">操作</div>
+          </div>
+          <div class="table-body">
           <div 
             v-for="dir in sortedDirectories" 
             :key="dir.path"
@@ -311,6 +321,7 @@ function formatNumber(num: number): string {
             </div>
           </div>
         </div>
+        </template>
       </div>
     </div>
 
@@ -610,6 +621,32 @@ function formatNumber(num: number): string {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.empty-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+}
+
+.empty-icon {
+  color: #d6d3d1;
+  margin-bottom: 1.5rem;
+}
+
+.empty-list h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #2c2c2c;
+  margin-bottom: 0.5rem;
+}
+
+.empty-list p {
+  font-size: 0.9375rem;
+  color: #78716c;
 }
 
 .table-header {
