@@ -49,6 +49,7 @@ const emit = defineEmits<{
 
 const showMigrate = ref(false);
 const selectedDir = ref<DirectoryNode | null>(null);
+const selectedFile = ref<FileInfo | null>(null);
 const loadingFiles = ref(false);
 const currentFiles = ref<FileInfo[]>([]);
 
@@ -76,12 +77,14 @@ function handleChartClick(params: any) {
 
 function showMigrateDialog(dir: DirectoryNode) {
   selectedDir.value = dir;
+  selectedFile.value = null;
   showMigrate.value = true;
 }
 
 function closeMigrateDialog() {
   showMigrate.value = false;
   selectedDir.value = null;
+  selectedFile.value = null;
 }
 
 const treemapOption = computed(() => {
@@ -218,7 +221,9 @@ function formatDate(dateStr: string): string {
 }
 
 function showMigrateFileDialog(file: FileInfo) {
-  console.log('迁移文件:', file);
+  selectedFile.value = file;
+  selectedDir.value = null;
+  showMigrate.value = true;
 }
 
 async function loadDirectoryFiles(path: string) {
@@ -497,7 +502,7 @@ watch(() => props.viewMode, (newMode) => {
     <div v-if="showMigrate" class="migrate-dialog-overlay" @click="closeMigrateDialog">
       <div class="migrate-dialog" @click.stop>
         <div class="dialog-header">
-          <h3>迁移目录</h3>
+          <h3>{{ selectedFile ? '迁移文件' : '迁移目录' }}</h3>
           <button class="close-btn" @click="closeMigrateDialog">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
               <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -508,15 +513,23 @@ watch(() => props.viewMode, (newMode) => {
           <div class="info-section">
             <div class="info-row">
               <span class="info-label">源路径：</span>
-              <span class="info-value">{{ selectedDir?.path }}</span>
+              <span class="info-value">{{ selectedFile?.path || selectedDir?.path }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">大小：</span>
-              <span class="info-value">{{ formatBytes(selectedDir?.size || 0) }}</span>
+              <span class="info-value">{{ formatBytes(selectedFile?.size || selectedDir?.size || 0) }}</span>
             </div>
-            <div class="info-row">
+            <div v-if="selectedDir" class="info-row">
               <span class="info-label">文件数：</span>
               <span class="info-value">{{ formatNumber(selectedDir?.file_count || 0) }}</span>
+            </div>
+            <div v-if="selectedFile" class="info-row">
+              <span class="info-label">类型：</span>
+              <span class="info-value">{{ selectedFile?.extension || '无扩展名' }}</span>
+            </div>
+            <div v-if="selectedFile" class="info-row">
+              <span class="info-label">修改时间：</span>
+              <span class="info-value">{{ formatDate(selectedFile?.modified_at || '') }}</span>
             </div>
           </div>
           <div class="form-section">
