@@ -225,12 +225,37 @@ function formatNumber(num: number): string {
             />
           </div>
         </div>
+        
+        <div class="list-preview">
+          <h3 class="preview-title">最大的目录</h3>
+          <div class="preview-items">
+            <div 
+              v-for="(dir, index) in sortedDirectories.slice(0, 10)" 
+              :key="dir.path"
+              class="preview-item"
+              @click="handleItemClick(dir)"
+            >
+              <div class="preview-rank">{{ index + 1 }}</div>
+              <div class="preview-info">
+                <div class="preview-name">{{ dir.name }}</div>
+                <div class="preview-bar-container">
+                  <div 
+                    class="preview-bar" 
+                    :style="{ width: `${(dir.size / result.total_size) * 100}%` }"
+                  ></div>
+                </div>
+              </div>
+              <div class="preview-size">{{ formatBytes(dir.size) }}</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div v-if="viewMode === 'list'" class="view-list">
         <div class="table-header">
           <div class="th th-name">名称</div>
           <div class="th th-size">大小</div>
+          <div class="th th-percent">占比</div>
           <div class="th th-files">文件数</div>
         </div>
         <div class="table-body">
@@ -249,6 +274,15 @@ function formatNumber(num: number): string {
               <span v-if="deepScanning && (!dir.children || dir.children.length === 0)" class="scanning-badge">扫描中</span>
             </div>
             <div class="td td-size">{{ formatBytes(dir.size) }}</div>
+            <div class="td td-percent">
+              <div class="percent-bar-container">
+                <div 
+                  class="percent-bar" 
+                  :style="{ width: `${(dir.size / result.total_size) * 100}%` }"
+                ></div>
+                <span class="percent-text">{{ ((dir.size / result.total_size) * 100).toFixed(1) }}%</span>
+              </div>
+            </div>
             <div class="td td-files">{{ formatNumber(dir.file_count) }}</div>
           </div>
         </div>
@@ -374,8 +408,9 @@ function formatNumber(num: number): string {
 .view-treemap {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 2rem;
   overflow: hidden;
 }
 
@@ -385,9 +420,7 @@ function formatNumber(num: number): string {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  height: 60%;
-  max-height: 500px;
-  min-height: 300px;
+  min-height: 400px;
 }
 
 .treemap-container {
@@ -407,6 +440,96 @@ function formatNumber(num: number): string {
   height: calc(100% - 3rem);
 }
 
+.list-preview {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.preview-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2c2c2c;
+  margin-bottom: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.preview-items {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.preview-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.875rem;
+  background: white;
+  border: 1px solid #e7e5e4;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.preview-item:hover {
+  border-color: #007aff;
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.1);
+  transform: translateX(4px);
+}
+
+.preview-rank {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f4;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #78716c;
+  flex-shrink: 0;
+}
+
+.preview-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #2c2c2c;
+  margin-bottom: 0.375rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-bar-container {
+  height: 4px;
+  background: #f5f5f4;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.preview-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #007aff 0%, #5856d6 100%);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.preview-size {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #2c2c2c;
+  flex-shrink: 0;
+}
+
 .view-list {
   flex: 1;
   min-height: 0;
@@ -417,7 +540,7 @@ function formatNumber(num: number): string {
 
 .table-header {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(100px, 140px) minmax(80px, 120px);
+  grid-template-columns: minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px);
   gap: 1.5rem;
   padding: 0 0 1rem;
   border-bottom: 1px solid #e7e5e4;
@@ -440,7 +563,7 @@ function formatNumber(num: number): string {
 
 .table-row {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(100px, 140px) minmax(80px, 120px);
+  grid-template-columns: minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px);
   gap: 1.5rem;
   padding: 1rem 0;
   border-bottom: 1px solid #f5f5f4;
@@ -501,6 +624,42 @@ function formatNumber(num: number): string {
   font-weight: 500;
 }
 
+.td-percent {
+  color: #78716c;
+}
+
+.percent-bar-container {
+  position: relative;
+  width: 100%;
+  height: 24px;
+  background: #f5f5f4;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.percent-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #007aff 0%, #5856d6 100%);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.percent-text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #2c2c2c;
+  z-index: 1;
+}
+
 .td-files {
   color: #78716c;
 }
@@ -540,9 +699,18 @@ function formatNumber(num: number): string {
     padding: 1.5rem;
   }
 
+  .view-treemap {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    gap: 1.5rem;
+  }
+
   .treemap-card {
-    height: 50%;
-    min-height: 250px;
+    min-height: 350px;
+  }
+
+  .list-preview {
+    max-height: 300px;
   }
 
   .treemap-container {
@@ -560,7 +728,7 @@ function formatNumber(num: number): string {
 
   .table-header,
   .table-row {
-    grid-template-columns: 1fr 100px 80px;
+    grid-template-columns: 1fr 100px 120px 80px;
     gap: 1rem;
   }
 
@@ -590,9 +758,35 @@ function formatNumber(num: number): string {
     padding: 1rem;
   }
 
+  .view-treemap {
+    gap: 1rem;
+  }
+
   .treemap-card {
-    height: 45%;
-    min-height: 200px;
+    min-height: 250px;
+  }
+
+  .list-preview {
+    max-height: 250px;
+  }
+
+  .preview-item {
+    padding: 0.75rem;
+    gap: 0.75rem;
+  }
+
+  .preview-rank {
+    width: 24px;
+    height: 24px;
+    font-size: 0.8125rem;
+  }
+
+  .preview-name {
+    font-size: 0.8125rem;
+  }
+
+  .preview-size {
+    font-size: 0.8125rem;
   }
 
   .treemap-container {
@@ -614,6 +808,8 @@ function formatNumber(num: number): string {
     gap: 0.75rem;
   }
 
+  .th-percent,
+  .td-percent,
   .th-files,
   .td-files {
     display: none;
