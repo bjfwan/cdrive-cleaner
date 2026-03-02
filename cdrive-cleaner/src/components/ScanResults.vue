@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import VChart from 'vue-echarts';
 
 interface DirectoryNode {
@@ -49,6 +49,8 @@ const emit = defineEmits<{
 
 const showMigrate = ref(false);
 const selectedDir = ref<DirectoryNode | null>(null);
+const loadingFiles = ref(false);
+const currentFiles = ref<FileInfo[]>([]);
 
 console.log('ScanResults 接收到的数据:', props.result);
 console.log('directories 数量:', props.result?.directories?.length || 0);
@@ -218,6 +220,32 @@ function formatDate(dateStr: string): string {
 function showMigrateFileDialog(file: FileInfo) {
   console.log('迁移文件:', file);
 }
+
+async function loadDirectoryFiles(path: string) {
+  loadingFiles.value = true;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const files = await invoke<FileInfo[]>('scan_directory_files', { path });
+    currentFiles.value = files;
+  } catch (err) {
+    console.error('加载文件失败:', err);
+    currentFiles.value = [];
+  } finally {
+    loadingFiles.value = false;
+  }
+}
+
+watch(() => props.currentPath, (newPath) => {
+  if (props.viewMode === 'list') {
+    loadDirectoryFiles(newPath);
+  }
+}, { immediate: true });
+
+watch(() => props.viewMode, (newMode) => {
+  if (newMode === 'list' && currentFiles.value.length === 0) {
+    loadDirectoryFiles(props.currentPath);
+  }
+});
 </script>
 
 <template>
@@ -308,21 +336,26 @@ function showMigrateFileDialog(file: FileInfo) {
       </div>
 
       <div v-if="viewMode === 'list'" class="view-list">
-        <div v-if="sortedDirectories.length === 0" class="empty-list">
+        <div v-if="sortedDirectories.length === 0 && currentFiles.length === 0 && !loadingFiles" class="empty-list">
           <svg width="48" height="48" viewBox="0 0 48 48" fill="none" class="empty-icon">
             <path d="M8 12C8 9.79086 9.79086 8 12 8H20L24 12H36C38.2091 12 40 13.7909 40 16V36C40 38.2091 38.2091 40 36 40H12C9.79086 40 8 38.2091 8 36V12Z" stroke="currentColor" stroke-width="2"/>
             <path d="M18 24H30M24 18V30" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
-          <h3>此目录下没有子目录</h3>
-          <p>共有 {{ formatNumber(result.total_files) }} 个文件</p>
+          <h3>此目录为空</h3>
+          <p>没有子目录和文件</p>
         </div>
         
-        <template v-else>
+        <div v-if="loadingFiles" class="loading-files">
+          <div class="spinner-small"></div>
+          <span>加载文件中...</span>
+        </div>
+        
+        <template v-else-if="sortedDirectories.length > 0 || currentFiles.length > 0">
           <div class="table-header">
             <div class="th th-name">名称</div>
             <div class="th th-size">大小</div>
             <div class="th th-percent">占比</div>
-            <div class="th th-files">文件数</div>
+            <div class="th th-files">文件数/类型</div>
             <div class="th th-actions">操作</div>
           </div>
           <div class="table-body">
@@ -354,6 +387,44 @@ function showMigrateFileDialog(file: FileInfo) {
               <button 
                 class="migrate-btn"
                 @click.stop="showMigrateDialog(dir)"
+                title="迁移到其他磁盘"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 2L12 6H9V10H7V6H4L8 2Z" fill="currentColor"/>
+                  <path d="M3 12H13V14H3V12Z" fill="currentColor"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          <div 
+            v-for="file in currentFiles" 
+            :key="file.path"
+            class="table-row table-row-file"
+          >
+            <div class="td td-name">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M4 2H10L14 6V14C14 15.1046 13.1046 16 12 16H4C2.89543 16 2 15.1046 2 14V4C2 2.89543 2.89543 2 4 2Z" fill="#78716c"/>
+                <path d="M10 2V6H14" stroke="#78716c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>{{ file.name }}</span>
+              <span v-if="file.is_readonly" class="readonly-badge">只读</span>
+            </div>
+            <div class="td td-size">{{ formatBytes(file.size) }}</div>
+            <div class="td td-percent">
+              <div class="percent-bar-container">
+                <div 
+                  class="percent-bar percent-bar-file" 
+                  :style="{ width: `${(file.size / result.total_size) * 100}%` }"
+                ></div>
+                <span class="percent-text">{{ ((file.size / result.total_size) * 100).toFixed(1) }}%</span>
+              </div>
+            </div>
+            <div class="td td-files">{{ file.extension || '-' }}</div>
+            <div class="td td-actions">
+              <button 
+                class="migrate-btn"
+                @click.stop="showMigrateFileDialog(file)"
                 title="迁移到其他磁盘"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -823,6 +894,37 @@ function showMigrateFileDialog(file: FileInfo) {
   margin: 0;
   padding: 1rem 0;
   border-left: none;
+}
+
+.table-row-file {
+  opacity: 0.85;
+}
+
+.table-row-file:hover {
+  opacity: 1;
+}
+
+.loading-files {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem 2rem;
+  color: #78716c;
+  font-size: 0.9375rem;
+}
+
+.readonly-badge {
+  padding: 0.125rem 0.5rem;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.percent-bar-file {
+  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
 }
 
 .scanning-badge {

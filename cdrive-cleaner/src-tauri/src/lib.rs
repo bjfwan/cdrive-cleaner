@@ -11,6 +11,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::scan_disk,
             commands::scan_disk_deep,
+            commands::scan_directory_files,
             commands::migrate_file,
             commands::get_disk_info,
         ])

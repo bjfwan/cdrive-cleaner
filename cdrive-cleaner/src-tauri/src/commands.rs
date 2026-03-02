@@ -1,4 +1,4 @@
-use crate::scanner::{DiskScanner, file_info::ScanResult};
+use crate::scanner::{DiskScanner, file_info::{ScanResult, FileInfo}};
 use crate::migration::{FileMigrator, LinkType, file_migrator::MigrationResult};
 
 #[tauri::command]
@@ -11,6 +11,68 @@ pub async fn scan_disk(path: String) -> Result<ScanResult, String> {
 pub async fn scan_disk_deep(path: String) -> Result<ScanResult, String> {
     let scanner = DiskScanner::new();
     scanner.scan_deep(&path).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn scan_directory_files(path: String) -> Result<Vec<FileInfo>, String> {
+    use std::fs;
+    use std::path::Path;
+    
+    let dir_path = Path::new(&path);
+    if !dir_path.exists() || !dir_path.is_dir() {
+        return Err("路径不存在或不是目录".to_string());
+    }
+
+    let mut files = Vec::new();
+    
+    match fs::read_dir(dir_path) {
+        Ok(entries) => {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Ok(metadata) = entry.metadata() {
+                        let file_name = path.file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("Unknown")
+                            .to_string();
+                        
+                        let extension = path.extension()
+                            .and_then(|e| e.to_str())
+                            .unwrap_or("")
+                            .to_string();
+                        
+                        let modified_at = metadata.modified()
+                            .ok()
+                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                            .map(|d| {
+                                let secs = d.as_secs();
+                                chrono::DateTime::from_timestamp(secs as i64, 0)
+                                    .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                                    .unwrap_or_default()
+                            })
+                            .unwrap_or_default();
+                        
+                        use std::os::windows::fs::MetadataExt;
+                        let is_readonly = metadata.file_attributes() & 0x1 != 0;
+                        
+                        files.push(FileInfo {
+                            path: path.to_string_lossy().to_string(),
+                            name: file_name,
+                            size: metadata.len(),
+                            extension,
+                            modified_at,
+                            is_readonly,
+                        });
+                    }
+                }
+            }
+        }
+        Err(e) => return Err(format!("无法读取目录: {}", e)),
+    }
+    
+    files.sort_by(|a, b| b.size.cmp(&a.size));
+    
+    Ok(files)
 }
 
 #[tauri::command]
