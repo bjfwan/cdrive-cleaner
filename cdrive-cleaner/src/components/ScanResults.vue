@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import VChart from 'vue-echarts';
 
 interface DirectoryNode {
@@ -37,6 +37,9 @@ const emit = defineEmits<{
   'goBack': [];
 }>();
 
+const showMigrate = ref(false);
+const selectedDir = ref<DirectoryNode | null>(null);
+
 console.log('ScanResults 接收到的数据:', props.result);
 console.log('directories 数量:', props.result?.directories?.length || 0);
 if (props.result?.directories?.length > 0) {
@@ -57,6 +60,16 @@ function handleChartClick(params: any) {
     }
     emit('navigate', params.data.path);
   }
+}
+
+function showMigrateDialog(dir: DirectoryNode) {
+  selectedDir.value = dir;
+  showMigrate.value = true;
+}
+
+function closeMigrateDialog() {
+  showMigrate.value = false;
+  selectedDir.value = null;
 }
 
 const treemapOption = computed(() => {
@@ -257,6 +270,7 @@ function formatNumber(num: number): string {
           <div class="th th-size">大小</div>
           <div class="th th-percent">占比</div>
           <div class="th th-files">文件数</div>
+          <div class="th th-actions">操作</div>
         </div>
         <div class="table-body">
           <div 
@@ -264,17 +278,16 @@ function formatNumber(num: number): string {
             :key="dir.path"
             class="table-row"
             :class="{ 'row-disabled': deepScanning && (!dir.children || dir.children.length === 0) }"
-            @click="handleItemClick(dir)"
           >
-            <div class="td td-name">
+            <div class="td td-name" @click="handleItemClick(dir)">
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                 <path d="M2 4.5C2 3.67157 2.67157 3 3.5 3H6L7.5 4.5H14.5C15.3284 4.5 16 5.17157 16 6V13.5C16 14.3284 15.3284 15 14.5 15H3.5C2.67157 15 2 14.3284 2 13.5V4.5Z" fill="#2c2c2c"/>
               </svg>
               <span>{{ dir.name }}</span>
               <span v-if="deepScanning && (!dir.children || dir.children.length === 0)" class="scanning-badge">扫描中</span>
             </div>
-            <div class="td td-size">{{ formatBytes(dir.size) }}</div>
-            <div class="td td-percent">
+            <div class="td td-size" @click="handleItemClick(dir)">{{ formatBytes(dir.size) }}</div>
+            <div class="td td-percent" @click="handleItemClick(dir)">
               <div class="percent-bar-container">
                 <div 
                   class="percent-bar" 
@@ -283,7 +296,19 @@ function formatNumber(num: number): string {
                 <span class="percent-text">{{ ((dir.size / result.total_size) * 100).toFixed(1) }}%</span>
               </div>
             </div>
-            <div class="td td-files">{{ formatNumber(dir.file_count) }}</div>
+            <div class="td td-files" @click="handleItemClick(dir)">{{ formatNumber(dir.file_count) }}</div>
+            <div class="td td-actions">
+              <button 
+                class="migrate-btn"
+                @click.stop="showMigrateDialog(dir)"
+                title="迁移到其他磁盘"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 2L12 6H9V10H7V6H4L8 2Z" fill="currentColor"/>
+                  <path d="M3 12H13V14H3V12Z" fill="currentColor"/>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -291,6 +316,55 @@ function formatNumber(num: number): string {
 
     <div v-if="result.inaccessible_count > 0" class="notice">
       {{ result.inaccessible_count }} 个项目无法访问
+    </div>
+
+    <div v-if="showMigrate" class="migrate-dialog-overlay" @click="closeMigrateDialog">
+      <div class="migrate-dialog" @click.stop>
+        <div class="dialog-header">
+          <h3>迁移目录</h3>
+          <button class="close-btn" @click="closeMigrateDialog">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="dialog-body">
+          <div class="info-section">
+            <div class="info-row">
+              <span class="info-label">源路径：</span>
+              <span class="info-value">{{ selectedDir?.path }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">大小：</span>
+              <span class="info-value">{{ formatBytes(selectedDir?.size || 0) }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">文件数：</span>
+              <span class="info-value">{{ formatNumber(selectedDir?.file_count || 0) }}</span>
+            </div>
+          </div>
+          <div class="form-section">
+            <label class="form-label">目标磁盘</label>
+            <select class="form-select">
+              <option value="">选择目标磁盘...</option>
+              <option value="D:\">D: 盘</option>
+              <option value="E:\">E: 盘</option>
+            </select>
+          </div>
+          <div class="warning-section">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M10 2L2 17H18L10 2Z" stroke="#ff9500" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M10 8V12" stroke="#ff9500" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="10" cy="15" r="0.5" fill="#ff9500"/>
+            </svg>
+            <span>迁移后将在原位置创建符号链接，程序可正常访问</span>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="btn btn-secondary" @click="closeMigrateDialog">取消</button>
+          <button class="btn btn-primary">开始迁移</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -540,7 +614,7 @@ function formatNumber(num: number): string {
 
 .table-header {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px);
+  grid-template-columns: minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px) 60px;
   gap: 1.5rem;
   padding: 0 0 1rem;
   border-bottom: 1px solid #e7e5e4;
@@ -563,7 +637,7 @@ function formatNumber(num: number): string {
 
 .table-row {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px);
+  grid-template-columns: minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px) 60px;
   gap: 1.5rem;
   padding: 1rem 0;
   border-bottom: 1px solid #f5f5f4;
@@ -664,6 +738,31 @@ function formatNumber(num: number): string {
   color: #78716c;
 }
 
+.td-actions {
+  justify-content: center;
+}
+
+.migrate-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f4;
+  border: none;
+  border-radius: 6px;
+  color: #78716c;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.migrate-btn:hover {
+  background: #007aff;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 122, 255, 0.2);
+}
+
 .notice {
   position: absolute;
   bottom: 1rem;
@@ -678,6 +777,188 @@ function formatNumber(num: number): string {
   backdrop-filter: blur(8px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   z-index: 10;
+}
+
+.migrate-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.migrate-dialog {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog-header {
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid #e7e5e4;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dialog-header h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #2c2c2c;
+  margin: 0;
+}
+
+.close-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f4;
+  border: none;
+  border-radius: 8px;
+  color: #78716c;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+  background: #e7e5e4;
+  color: #2c2c2c;
+}
+
+.dialog-body {
+  padding: 2rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.info-section {
+  background: #fafaf9;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  font-size: 0.9375rem;
+}
+
+.info-row:not(:last-child) {
+  border-bottom: 1px solid #e7e5e4;
+}
+
+.info-label {
+  color: #78716c;
+  font-weight: 500;
+}
+
+.info-value {
+  color: #2c2c2c;
+  font-weight: 600;
+}
+
+.form-section {
+  margin-bottom: 1.5rem;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #2c2c2c;
+  margin-bottom: 0.5rem;
+}
+
+.form-select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 0.9375rem;
+  background: white;
+  border: 1.5px solid #e7e5e4;
+  border-radius: 10px;
+  color: #2c2c2c;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.form-select:hover {
+  border-color: #007aff;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: #007aff;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+}
+
+.warning-section {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  color: #92400e;
+}
+
+.dialog-footer {
+  padding: 1.5rem 2rem;
+  border-top: 1px solid #e7e5e4;
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary {
+  background: #f5f5f4;
+  color: #78716c;
+}
+
+.btn-secondary:hover {
+  background: #e7e5e4;
+  color: #2c2c2c;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #007aff 0%, #0051d5 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.25);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 122, 255, 0.35);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
 }
 
 @media (max-width: 900px) {
