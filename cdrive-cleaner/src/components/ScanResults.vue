@@ -263,11 +263,13 @@ async function loadDirectoryFiles(path: string) {
 watch(() => props.currentPath, (newPath) => {
   if (props.viewMode === 'list') {
     loadDirectoryFiles(newPath);
+  } else {
+    currentFiles.value = [];
   }
 }, { immediate: true });
 
 watch(() => props.viewMode, (newMode) => {
-  if (newMode === 'list' && currentFiles.value.length === 0) {
+  if (newMode === 'list') {
     loadDirectoryFiles(props.currentPath);
   }
 });
