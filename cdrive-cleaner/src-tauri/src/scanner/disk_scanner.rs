@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use walkdir::WalkDir;
+use chrono;
 
 #[cfg(windows)]
 use std::os::windows::io::AsRawHandle;
@@ -109,6 +110,8 @@ impl DiskScanner {
         let total_files = Arc::new(AtomicUsize::new(0));
         let total_dirs = Arc::new(AtomicUsize::new(0));
         let inaccessible_count = Arc::new(AtomicUsize::new(0));
+        let large_files: Arc<Mutex<Vec<super::file_info::FileInfo>>> = Arc::new(Mutex::new(Vec::new()));
+        let large_file_threshold = 100 * 1024 * 1024; // 100 MB
 
         let step1 = Instant::now();
         let entries: Vec<_> = match fs::read_dir(path) {
@@ -141,8 +144,9 @@ impl DiskScanner {
                 if metadata.is_dir() {
                     total_dirs.fetch_add(1, Ordering::Relaxed);
                     
+                    let large_files_clone = Arc::clone(&large_files);
                     let (dir_size, dir_files, dir_inaccessible) = 
-                        Self::calculate_dir_size(&path);
+                        Self::calculate_dir_size(&path, large_file_threshold, large_files_clone);
                     
                     total_size.fetch_add(dir_size, Ordering::Relaxed);
                     total_files.fetch_add(dir_files, Ordering::Relaxed);
@@ -209,6 +213,13 @@ impl DiskScanner {
         
         println!("=== 快速扫描结束 ===\n");
 
+        let large_files_vec = match Arc::try_unwrap(large_files) {
+            Ok(mutex) => mutex.into_inner().unwrap(),
+            Err(arc) => arc.lock().unwrap().clone(),
+        };
+
+        println!("[调试] 收集到 {} 个大文件 (> 100MB)", large_files_vec.len());
+
         Ok(ScanResult {
             root_path,
             total_size: total_size.load(Ordering::Relaxed),
@@ -216,11 +227,16 @@ impl DiskScanner {
             total_dirs: total_dirs.load(Ordering::Relaxed),
             scan_duration_ms: duration.as_millis() as u64,
             directories,
+            large_files: large_files_vec,
             inaccessible_count: inaccessible_count.load(Ordering::Relaxed),
         })
     }
 
-    fn calculate_dir_size(path: &Path) -> (u64, usize, usize) {
+    fn calculate_dir_size(
+        path: &Path, 
+        large_file_threshold: u64,
+        large_files: Arc<Mutex<Vec<super::file_info::FileInfo>>>
+    ) -> (u64, usize, usize) {
         let start = Instant::now();
         let size = Arc::new(AtomicU64::new(0));
         let files = Arc::new(AtomicUsize::new(0));
@@ -236,8 +252,28 @@ impl DiskScanner {
                     Ok(entry) => {
                         if let Ok(metadata) = entry.metadata() {
                             if metadata.is_file() {
-                                size.fetch_add(metadata.len(), Ordering::Relaxed);
+                                let file_size = metadata.len();
+                                size.fetch_add(file_size, Ordering::Relaxed);
                                 files.fetch_add(1, Ordering::Relaxed);
+                                
+                                if file_size >= large_file_threshold {
+                                    if let Ok(modified) = metadata.modified() {
+                                        let datetime: chrono::DateTime<chrono::Local> = modified.into();
+                                        let file_info = super::file_info::FileInfo {
+                                            path: entry.path().to_string_lossy().to_string(),
+                                            name: entry.file_name().to_string_lossy().to_string(),
+                                            size: file_size,
+                                            extension: entry.path()
+                                                .extension()
+                                                .unwrap_or_default()
+                                                .to_string_lossy()
+                                                .to_string(),
+                                            modified_at: datetime.format("%Y-%m-%d %H:%M:%S").to_string(),
+                                            is_readonly: metadata.permissions().readonly(),
+                                        };
+                                        large_files.lock().unwrap().push(file_info);
+                                    }
+                                }
                             }
                         } else {
                             inaccessible.fetch_add(1, Ordering::Relaxed);
@@ -413,6 +449,7 @@ impl DiskScanner {
             total_dirs,
             scan_duration_ms: duration.as_millis() as u64,
             directories,
+            large_files: vec![],
             inaccessible_count: inaccessible_count.load(Ordering::Relaxed),
         })
     }

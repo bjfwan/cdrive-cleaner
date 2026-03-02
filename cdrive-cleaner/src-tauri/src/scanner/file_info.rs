@@ -29,5 +29,6 @@ pub struct ScanResult {
     pub total_dirs: usize,
     pub scan_duration_ms: u64,
     pub directories: Vec<DirectoryNode>,
+    pub large_files: Vec<FileInfo>,
     pub inaccessible_count: usize,
 }
