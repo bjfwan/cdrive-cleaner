@@ -246,11 +246,23 @@ function showMigrateFileDialog(file: FileInfo) {
   showMigrate.value = true;
 }
 
+async function openFile(file: FileInfo) {
+  try {
+    const { open } = await import('@tauri-apps/plugin-opener');
+    await open(file.path);
+  } catch (err) {
+    console.error('打开文件失败:', err);
+    alert('无法打开文件');
+  }
+}
+
 async function loadDirectoryFiles(path: string) {
   loadingFiles.value = true;
+  console.log('[调试] 开始加载目录文件:', path);
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     const files = await invoke<FileInfo[]>('scan_directory_files', { path });
+    console.log('[调试] 加载到', files.length, '个文件');
     currentFiles.value = files;
   } catch (err) {
     console.error('加载文件失败:', err);
@@ -261,11 +273,7 @@ async function loadDirectoryFiles(path: string) {
 }
 
 watch(() => props.currentPath, (newPath) => {
-  if (props.viewMode === 'list') {
-    loadDirectoryFiles(newPath);
-  } else {
-    currentFiles.value = [];
-  }
+  loadDirectoryFiles(newPath);
 }, { immediate: true });
 
 watch(() => props.viewMode, (newMode) => {
@@ -450,7 +458,17 @@ watch(() => props.viewMode, (newMode) => {
             <div class="td td-files">{{ file.extension || '-' }}</div>
             <div class="td td-actions">
               <button 
-                class="migrate-btn"
+                class="action-btn open-btn"
+                @click.stop="openFile(file)"
+                title="打开文件"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M14 9V13C14 13.5523 13.5523 14 13 14H3C2.44772 14 2 13.5523 2 13V9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  <path d="M8 2V10M8 10L5 7M8 10L11 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <button 
+                class="action-btn migrate-btn"
                 @click.stop="showMigrateFileDialog(file)"
                 title="迁移到其他磁盘"
               >
@@ -501,7 +519,17 @@ watch(() => props.viewMode, (newMode) => {
               <div class="td td-modified">{{ formatDate(file.modified_at) }}</div>
               <div class="td td-actions">
                 <button 
-                  class="migrate-btn"
+                  class="action-btn open-btn"
+                  @click.stop="openFile(file)"
+                  title="打开文件"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M14 9V13C14 13.5523 13.5523 14 13 14H3C2.44772 14 2 13.5523 2 13V9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <path d="M8 2V10M8 10L5 7M8 10L11 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <button 
+                  class="action-btn migrate-btn"
                   @click.stop="showMigrateFileDialog(file)"
                   title="迁移到其他磁盘"
                 >
@@ -837,11 +865,11 @@ watch(() => props.viewMode, (newMode) => {
 }
 
 .view-large-files .table-header {
-  grid-template-columns: minmax(150px, 1fr) minmax(200px, 2fr) minmax(100px, 140px) minmax(120px, 160px) 60px;
+  grid-template-columns: minmax(150px, 1fr) minmax(200px, 2fr) minmax(100px, 140px) minmax(120px, 160px) 80px;
 }
 
 .view-large-files .table-row {
-  grid-template-columns: minmax(150px, 1fr) minmax(200px, 2fr) minmax(100px, 140px) minmax(120px, 160px) 60px;
+  grid-template-columns: minmax(150px, 1fr) minmax(200px, 2fr) minmax(100px, 140px) minmax(120px, 160px) 80px;
 }
 
 .td-path {
@@ -885,7 +913,7 @@ watch(() => props.viewMode, (newMode) => {
 
 .table-header {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px) 60px;
+  grid-template-columns: minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px) 80px;
   gap: 1.5rem;
   padding: 0 0 1rem;
   border-bottom: 1px solid #e7e5e4;
@@ -908,7 +936,7 @@ watch(() => props.viewMode, (newMode) => {
 
 .table-row {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px) 60px;
+  grid-template-columns: minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px) 80px;
   gap: 1.5rem;
   padding: 1rem 0;
   border-bottom: 1px solid #f5f5f4;
@@ -938,10 +966,16 @@ watch(() => props.viewMode, (newMode) => {
 
 .table-row-file {
   opacity: 0.85;
+  cursor: default;
 }
 
 .table-row-file:hover {
   opacity: 1;
+  background: linear-gradient(to right, rgba(16, 185, 129, 0.03) 0%, transparent 100%);
+  margin: 0 -2rem;
+  padding-left: 2rem;
+  padding-right: 2rem;
+  border-left: 2px solid #10b981;
 }
 
 .loading-files {
@@ -1042,6 +1076,28 @@ watch(() => props.viewMode, (newMode) => {
 
 .td-actions {
   justify-content: center;
+  gap: 0.5rem;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f4;
+  border: none;
+  border-radius: 6px;
+  color: #78716c;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.open-btn:hover {
+  background: #10b981;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.2);
 }
 
 .migrate-btn {

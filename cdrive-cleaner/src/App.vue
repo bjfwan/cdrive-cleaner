@@ -122,6 +122,7 @@ async function navigateToPath(path: string) {
             total_dirs: node.children.length,
             scan_duration_ms: 0,
             directories: node.children,
+            large_files: [],
             inaccessible_count: 0
           };
         }
@@ -138,6 +139,7 @@ async function navigateToPath(path: string) {
       scanResult.value = found;
       navigationStack.value.push(path);
       scanCache.value.set(path, found);
+      console.log('[调试] 从深度扫描树中找到目录:', path, '子目录数:', found.directories.length);
       return;
     }
   }
