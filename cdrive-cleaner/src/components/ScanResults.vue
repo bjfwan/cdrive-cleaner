@@ -12,6 +12,15 @@ interface DirectoryNode {
   link_target?: string;
 }
 
+interface FileInfo {
+  path: string;
+  name: string;
+  size: number;
+  extension: string;
+  modified_at: string;
+  is_readonly: boolean;
+}
+
 interface ScanResult {
   root_path: string;
   total_size: number;
@@ -19,12 +28,13 @@ interface ScanResult {
   total_dirs: number;
   scan_duration_ms: number;
   directories: DirectoryNode[];
+  large_files: FileInfo[];
   inaccessible_count: number;
 }
 
 interface Props {
   result: ScanResult;
-  viewMode: 'treemap' | 'list';
+  viewMode: 'treemap' | 'list' | 'large-files';
   canGoBack: boolean;
   currentPath: string;
   deepScanning: boolean;
@@ -32,7 +42,7 @@ interface Props {
 
 const props = defineProps<Props>();
 const emit = defineEmits<{
-  'update:viewMode': [mode: 'treemap' | 'list'];
+  'update:viewMode': [mode: 'treemap' | 'list' | 'large-files'];
   'navigate': [path: string];
   'goBack': [];
 }>();
@@ -171,6 +181,13 @@ const sortedDirectories = computed(() => {
   return [...props.result.directories].sort((a, b) => b.size - a.size);
 });
 
+const sortedLargeFiles = computed(() => {
+  if (!props.result?.large_files || props.result.large_files.length === 0) {
+    return [];
+  }
+  return [...props.result.large_files].sort((a, b) => b.size - a.size);
+});
+
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -181,6 +198,25 @@ function formatBytes(bytes: number): string {
 
 function formatNumber(num: number): string {
   return num.toLocaleString('zh-CN');
+}
+
+function formatDate(dateStr: string): string {
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+function showMigrateFileDialog(file: FileInfo) {
+  console.log('迁移文件:', file);
 }
 </script>
 
@@ -222,6 +258,13 @@ function formatNumber(num: number): string {
           @click="$emit('update:viewMode', 'list')"
         >
           列表
+        </button>
+        <button 
+          class="view-btn"
+          :class="{ active: viewMode === 'large-files' }"
+          @click="$emit('update:viewMode', 'large-files')"
+        >
+          大文件
         </button>
       </div>
     </header>
@@ -321,6 +364,57 @@ function formatNumber(num: number): string {
             </div>
           </div>
         </div>
+        </template>
+      </div>
+
+      <div v-if="viewMode === 'large-files'" class="view-large-files">
+        <div v-if="!result.large_files || result.large_files.length === 0" class="empty-list">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" class="empty-icon">
+            <rect x="10" y="8" width="28" height="32" rx="2" stroke="currentColor" stroke-width="2"/>
+            <path d="M16 16H32M16 22H32M16 28H24" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <h3>没有找到大文件</h3>
+          <p>扫描中未发现大于 100MB 的文件</p>
+        </div>
+        
+        <template v-else>
+          <div class="table-header">
+            <div class="th th-name">文件名</div>
+            <div class="th th-path">路径</div>
+            <div class="th th-size">大小</div>
+            <div class="th th-modified">修改时间</div>
+            <div class="th th-actions">操作</div>
+          </div>
+          <div class="table-body">
+            <div 
+              v-for="file in sortedLargeFiles" 
+              :key="file.path"
+              class="table-row"
+            >
+              <div class="td td-name">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <path d="M4 2H10L14 6V14C14 15.1046 13.1046 16 12 16H4C2.89543 16 2 15.1046 2 14V4C2 2.89543 2.89543 2 4 2Z" fill="#78716c"/>
+                  <path d="M10 2V6H14" stroke="#78716c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span :title="file.name">{{ file.name }}</span>
+              </div>
+              <div class="td td-path" :title="file.path">{{ file.path }}</div>
+              <div class="td td-size">{{ formatBytes(file.size) }}</div>
+              <div class="td td-modified">{{ formatDate(file.modified_at) }}</div>
+              <div class="td td-actions">
+                <button 
+                  class="migrate-btn"
+                  @click.stop="showMigrateFileDialog(file)"
+                  title="迁移到其他磁盘"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 2L12 6H9V10H7V6H4L8 2Z" fill="currentColor"/>
+                    <path d="M3 12H13V14H3V12Z" fill="currentColor"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
         </template>
       </div>
     </div>
@@ -621,6 +715,35 @@ function formatNumber(num: number): string {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.view-large-files {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.view-large-files .table-header {
+  grid-template-columns: minmax(150px, 1fr) minmax(200px, 2fr) minmax(100px, 140px) minmax(120px, 160px) 60px;
+}
+
+.view-large-files .table-row {
+  grid-template-columns: minmax(150px, 1fr) minmax(200px, 2fr) minmax(100px, 140px) minmax(120px, 160px) 60px;
+}
+
+.td-path {
+  color: #78716c;
+  font-size: 0.875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.td-modified {
+  color: #78716c;
+  font-size: 0.875rem;
 }
 
 .empty-list {
@@ -1050,6 +1173,19 @@ function formatNumber(num: number): string {
     gap: 1rem;
   }
 
+  .view-large-files .table-header,
+  .view-large-files .table-row {
+    grid-template-columns: 1fr 100px 120px;
+    gap: 1rem;
+  }
+
+  .view-large-files .th-path,
+  .view-large-files .td-path,
+  .view-large-files .th-modified,
+  .view-large-files .td-modified {
+    display: none;
+  }
+
   .table-row:hover {
     margin: 0 -1.5rem;
     padding-left: 1.5rem;
@@ -1124,6 +1260,19 @@ function formatNumber(num: number): string {
   .table-row {
     grid-template-columns: 1fr 90px;
     gap: 0.75rem;
+  }
+
+  .view-large-files .table-header,
+  .view-large-files .table-row {
+    grid-template-columns: 1fr 90px;
+    gap: 0.75rem;
+  }
+
+  .view-large-files .th-path,
+  .view-large-files .td-path,
+  .view-large-files .th-modified,
+  .view-large-files .td-modified {
+    display: none;
   }
 
   .th-percent,

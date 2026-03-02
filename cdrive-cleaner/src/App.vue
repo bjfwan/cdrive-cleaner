@@ -37,7 +37,7 @@ const deepScanning = ref(false);
 const scanResult = ref<ScanResult | null>(null);
 const deepScanResult = ref<ScanResult | null>(null);
 const error = ref<string>('');
-const viewMode = ref<'treemap' | 'list'>('treemap');
+const viewMode = ref<'treemap' | 'list' | 'large-files'>('treemap');
 const navigationStack = ref<string[]>([]);
 const scanCache = ref<Map<string, ScanResult>>(new Map());
 
