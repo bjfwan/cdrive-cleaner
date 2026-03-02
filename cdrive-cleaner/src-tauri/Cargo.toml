@@ -33,4 +33,5 @@ walkdir = "2.4"
 rusqlite = { version = "0.31", features = ["bundled"] }
 chrono = "0.4"
 anyhow = "1.0"
+junction = "1.0"
 
