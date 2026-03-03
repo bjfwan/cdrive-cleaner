@@ -26,13 +26,7 @@ impl FileMigrator {
         let source = source.as_ref();
         let target_disk = target_disk.as_ref();
 
-        println!("\n=== 开始迁移 ===");
-        println!("源路径: {}", source.display());
-        println!("目标磁盘: {}", target_disk.display());
-        println!("链接类型: {:?}", link_type);
-
         if !source.exists() {
-            println!("❌ 错误: 源路径不存在");
             return Ok(MigrationResult {
                 success: false,
                 source_path: source.to_string_lossy().to_string(),
@@ -44,24 +38,16 @@ impl FileMigrator {
                 error: Some("Source not found".to_string()),
             });
         }
-        println!("✓ 源路径存在");
 
         let file_name = source.file_name()
             .ok_or_else(|| anyhow!("Invalid source path"))?;
         let target_path = target_disk.join(file_name);
-        println!("目标路径: {}", target_path.display());
 
         let is_directory = source.is_dir();
-        println!("类型: {}", if is_directory { "目录" } else { "文件" });
-        
         let file_size = self.calculate_size(source)?;
-        println!("文件大小: {} 字节", file_size);
-
         let available_space = self.get_available_space(target_disk)?;
-        println!("目标磁盘可用空间: {} 字节", available_space);
         
         if available_space < file_size {
-            println!("❌ 错误: 目标磁盘空间不足");
             return Ok(MigrationResult {
                 success: false,
                 source_path: source.to_string_lossy().to_string(),
@@ -73,13 +59,10 @@ impl FileMigrator {
                 error: Some("Target disk full".to_string()),
             });
         }
-        println!("✓ 目标磁盘空间充足");
 
-        println!("开始复制文件...");
         match self.copy_to_target(source, &target_path) {
-            Ok(_) => println!("✓ 文件复制完成"),
+            Ok(_) => {},
             Err(e) => {
-                println!("❌ 复制失败: {}", e);
                 return Ok(MigrationResult {
                     success: false,
                     source_path: source.to_string_lossy().to_string(),
@@ -93,9 +76,7 @@ impl FileMigrator {
             }
         }
 
-        println!("验证复制完整性...");
         if !self.verify_copy(source, &target_path)? {
-            println!("❌ 验证失败");
             let _ = self.cleanup_target(&target_path);
             return Ok(MigrationResult {
                 success: false,
@@ -108,13 +89,10 @@ impl FileMigrator {
                 error: Some("Verification failed".to_string()),
             });
         }
-        println!("✓ 验证通过");
 
         let backup_path = self.create_backup_path(source);
-        println!("创建备份: {}", backup_path.display());
         
         if let Err(e) = fs::rename(source, &backup_path) {
-            println!("❌ 备份失败: {}", e);
             let _ = self.cleanup_target(&target_path);
             return Ok(MigrationResult {
                 success: false,
@@ -127,16 +105,10 @@ impl FileMigrator {
                 error: Some(format!("Backup failed: {}", e)),
             });
         }
-        println!("✓ 备份完成");
 
-        println!("创建链接...");
         let actual_link_type = match self.link_creator.create_link(source, &target_path, link_type.clone(), is_directory) {
-            Ok(lt) => {
-                println!("✓ 链接创建成功，类型: {:?}", lt);
-                lt
-            },
+            Ok(lt) => lt,
             Err(e) => {
-                println!("❌ 链接创建失败: {}", e);
                 let _ = fs::rename(&backup_path, source);
                 let _ = self.cleanup_target(&target_path);
                 return Ok(MigrationResult {
@@ -152,9 +124,7 @@ impl FileMigrator {
             }
         };
 
-        println!("验证链接...");
         if !self.link_creator.verify_link(source, &target_path)? {
-            println!("❌ 链接验证失败");
             let _ = fs::remove_file(source).or_else(|_| fs::remove_dir_all(source));
             let _ = fs::rename(&backup_path, source);
             let _ = self.cleanup_target(&target_path);
@@ -169,13 +139,8 @@ impl FileMigrator {
                 error: Some("Link verification failed".to_string()),
             });
         }
-        println!("✓ 链接验证通过");
 
-        println!("清理备份...");
         let _ = self.cleanup_backup(&backup_path);
-        println!("✓ 备份清理完成");
-
-        println!("=== 迁移成功 ===\n");
 
         Ok(MigrationResult {
             success: true,
