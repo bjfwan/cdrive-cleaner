@@ -43,6 +43,11 @@ const migrationResult = ref<any>(null);
 const currentMigratingIndex = ref(0);
 const migrationResults = ref<Array<{ path: string; success: boolean; error?: string }>>([]);
 
+const migrationStartTime = ref(0);
+const migratedSize = ref(0);
+const migrationSpeed = ref(0);
+const estimatedTimeRemaining = ref(0);
+
 const isBatchMode = computed(() => props.selectedItems && props.selectedItems.length > 0);
 const itemName = computed(() => {
   if (isBatchMode.value) {
@@ -70,6 +75,20 @@ function formatNumber(num: number): string {
   return num.toLocaleString('zh-CN');
 }
 
+function formatSpeed(bytesPerSecond: number): string {
+  if (bytesPerSecond === 0) return '0 B/s';
+  const k = 1024;
+  const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+  const i = Math.floor(Math.log(bytesPerSecond) / Math.log(k));
+  return `${(bytesPerSecond / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+}
+
+function formatTime(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)} 秒`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分 ${Math.round(seconds % 60)} 秒`;
+  return `${Math.floor(seconds / 3600)} 小时 ${Math.floor((seconds % 3600) / 60)} 分`;
+}
+
 function close() {
   targetDisk.value = '';
   migrating.value = false;
@@ -78,6 +97,10 @@ function close() {
   migrationResult.value = null;
   currentMigratingIndex.value = 0;
   migrationResults.value = [];
+  migrationStartTime.value = 0;
+  migratedSize.value = 0;
+  migrationSpeed.value = 0;
+  estimatedTimeRemaining.value = 0;
   emit('close');
 }
 
@@ -102,6 +125,8 @@ async function startSingleMigration() {
 
   migrating.value = true;
   migrationError.value = '';
+  migrationStartTime.value = Date.now();
+  migratedSize.value = 0;
 
   try {
     const { invoke } = await import('@tauri-apps/api/core');
@@ -126,8 +151,11 @@ async function startBatchMigration() {
   migrationError.value = '';
   migrationResults.value = [];
   currentMigratingIndex.value = 0;
+  migrationStartTime.value = Date.now();
+  migratedSize.value = 0;
 
   const { invoke } = await import('@tauri-apps/api/core');
+  const totalSize = itemSize.value;
 
   for (let i = 0; i < props.selectedItems.length; i++) {
     currentMigratingIndex.value = i;
@@ -139,6 +167,15 @@ async function startBatchMigration() {
         targetDisk: targetDisk.value,
         linkType: null
       });
+      
+      migratedSize.value += item.size || 0;
+      
+      const elapsedSeconds = (Date.now() - migrationStartTime.value) / 1000;
+      if (elapsedSeconds > 0) {
+        migrationSpeed.value = migratedSize.value / elapsedSeconds;
+        const remainingSize = totalSize - migratedSize.value;
+        estimatedTimeRemaining.value = remainingSize / migrationSpeed.value;
+      }
       
       migrationResults.value.push({
         path: item.path,
@@ -254,7 +291,11 @@ async function startBatchMigration() {
                 正在迁移 {{ currentMigratingIndex + 1 }} / {{ selectedItems.length }}
               </span>
               <span class="progress-label" v-else>正在迁移...</span>
+              <span class="progress-stats" v-if="isBatchMode && migrationSpeed > 0">
+                {{ formatSpeed(migrationSpeed) }}
+              </span>
             </div>
+            
             <div v-if="isBatchMode" class="progress-bar-wrapper">
               <div class="progress-bar-track">
                 <div class="progress-bar-fill" :style="{ width: `${((currentMigratingIndex + 1) / selectedItems.length) * 100}%` }"></div>
@@ -265,11 +306,23 @@ async function startBatchMigration() {
                 <div class="progress-bar-fill"></div>
               </div>
             </div>
+            
             <div class="progress-info">
               <span class="progress-text" v-if="isBatchMode && selectedItems[currentMigratingIndex]">
                 {{ selectedItems[currentMigratingIndex].name }}
               </span>
               <span class="progress-text" v-else>正在复制文件到目标磁盘</span>
+            </div>
+            
+            <div v-if="isBatchMode && migrationSpeed > 0" class="progress-details">
+              <div class="progress-detail-item">
+                <span class="detail-label">已传输</span>
+                <span class="detail-value">{{ formatBytes(migratedSize) }} / {{ formatBytes(itemSize) }}</span>
+              </div>
+              <div class="progress-detail-item" v-if="estimatedTimeRemaining > 0 && estimatedTimeRemaining < 86400">
+                <span class="detail-label">剩余时间</span>
+                <span class="detail-value">{{ formatTime(estimatedTimeRemaining) }}</span>
+              </div>
             </div>
           </div>
         </div>
