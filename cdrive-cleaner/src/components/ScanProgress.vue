@@ -15,13 +15,19 @@ const currentPath = ref('');
 const elapsedMs = ref(0);
 const filesPerSecond = ref(0);
 
+// 平滑处理的目标值
+const targetFiles = ref(0);
+const targetDirs = ref(0);
+const targetSize = ref(0);
+
 const formattedSize = computed(() => formatBytes(totalSize.value));
-const formattedSpeed = computed(() => `${filesPerSecond.value.toFixed(0)} 文件/秒`);
-const formattedTime = computed(() => formatTime(elapsedMs.value));
-const estimatedRemaining = computed(() => {
-  if (filesPerSecond.value === 0) return '--:--';
-  return '--:--';
+const formattedSpeed = computed(() => {
+  const speed = filesPerSecond.value;
+  if (speed === 0) return '计算中...';
+  if (speed < 10) return `${speed.toFixed(1)} 文件/秒`;
+  return `${Math.round(speed)} 文件/秒`;
 });
+const formattedTime = computed(() => formatTime(elapsedMs.value));
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -42,14 +48,52 @@ function formatTime(ms: number): string {
   return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
+// 平滑动画
+function smoothUpdate() {
+  const smoothFactor = 0.3; // 平滑系数，越小越平滑
+  
+  scannedFiles.value += (targetFiles.value - scannedFiles.value) * smoothFactor;
+  scannedDirs.value += (targetDirs.value - scannedDirs.value) * smoothFactor;
+  totalSize.value += (targetSize.value - totalSize.value) * smoothFactor;
+  
+  // 如果接近目标值，直接设置为目标值
+  if (Math.abs(targetFiles.value - scannedFiles.value) < 1) {
+    scannedFiles.value = targetFiles.value;
+  }
+  if (Math.abs(targetDirs.value - scannedDirs.value) < 1) {
+    scannedDirs.value = targetDirs.value;
+  }
+  if (Math.abs(targetSize.value - totalSize.value) < 1024) {
+    totalSize.value = targetSize.value;
+  }
+}
+
 let unlisten: (() => void) | null = null;
+let animationFrame: number | null = null;
+
+function startAnimation() {
+  const animate = () => {
+    smoothUpdate();
+    animationFrame = requestAnimationFrame(animate);
+  };
+  animationFrame = requestAnimationFrame(animate);
+}
+
+function stopAnimation() {
+  if (animationFrame !== null) {
+    cancelAnimationFrame(animationFrame);
+    animationFrame = null;
+  }
+}
 
 onMounted(async () => {
+  startAnimation();
+  
   unlisten = await listen('scan-progress', (event: any) => {
     const progress = event.payload;
-    scannedFiles.value = progress.scanned_files;
-    scannedDirs.value = progress.scanned_dirs;
-    totalSize.value = progress.total_size;
+    targetFiles.value = progress.scanned_files;
+    targetDirs.value = progress.scanned_dirs;
+    targetSize.value = progress.total_size;
     currentPath.value = progress.current_path;
     elapsedMs.value = progress.elapsed_ms;
     filesPerSecond.value = progress.files_per_second;
@@ -57,6 +101,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  stopAnimation();
   if (unlisten) {
     unlisten();
   }
@@ -86,7 +131,7 @@ onUnmounted(() => {
             </svg>
           </div>
           <div class="stat-content">
-            <div class="stat-value">{{ scannedDirs.toLocaleString() }}</div>
+            <div class="stat-value">{{ Math.round(scannedDirs).toLocaleString() }}</div>
             <div class="stat-label">目录</div>
           </div>
         </div>
@@ -99,7 +144,7 @@ onUnmounted(() => {
             </svg>
           </div>
           <div class="stat-content">
-            <div class="stat-value">{{ scannedFiles.toLocaleString() }}</div>
+            <div class="stat-value">{{ Math.round(scannedFiles).toLocaleString() }}</div>
             <div class="stat-label">文件</div>
           </div>
         </div>
