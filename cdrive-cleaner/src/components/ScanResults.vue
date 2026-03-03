@@ -64,6 +64,7 @@ const emit = defineEmits<{
 const showMigrate = ref(false);
 const selectedDir = ref<DirectoryNode | null>(null);
 const selectedFile = ref<FileInfo | null>(null);
+const selectedItems = ref<Array<DirectoryNode | FileInfo>>([]);
 
 const sortedDirectories = computed(() => {
   if (!props.result?.directories || props.result.directories.length === 0) {
@@ -99,12 +100,21 @@ function formatNumber(num: number): string {
 function showMigrateDialog(dir: DirectoryNode) {
   selectedDir.value = dir;
   selectedFile.value = null;
+  selectedItems.value = [];
   showMigrate.value = true;
 }
 
 function showMigrateFileDialog(file: FileInfo) {
   selectedFile.value = file;
   selectedDir.value = null;
+  selectedItems.value = [];
+  showMigrate.value = true;
+}
+
+function showBatchMigrateDialog(items: Array<DirectoryNode | FileInfo>) {
+  selectedItems.value = items;
+  selectedDir.value = null;
+  selectedFile.value = null;
   showMigrate.value = true;
 }
 
@@ -112,6 +122,7 @@ function closeMigrateDialog() {
   showMigrate.value = false;
   selectedDir.value = null;
   selectedFile.value = null;
+  selectedItems.value = [];
 }
 
 async function openFile(file: FileInfo) {
@@ -192,6 +203,7 @@ async function openFile(file: FileInfo) {
         @navigate="$emit('navigate', $event)"
         @migrate-dir="showMigrateDialog"
         @migrate-file="showMigrateFileDialog"
+        @batch-migrate="showBatchMigrateDialog"
         @open-file="openFile"
       />
 
@@ -212,6 +224,7 @@ async function openFile(file: FileInfo) {
       :show="showMigrate"
       :selected-dir="selectedDir"
       :selected-file="selectedFile"
+      :selected-items="selectedItems"
       :available-disks="availableTargetDisks"
       @close="closeMigrateDialog"
     />
