@@ -357,33 +357,41 @@ function handleItemClick(dir: DirectoryNode) {
 
   .preview-item {
     flex-direction: column;
+    align-items: center;
     min-width: 140px;
     max-width: 160px;
     flex-shrink: 0;
     padding: 0.875rem;
-    gap: 0.625rem;
+    gap: 0.5rem;
+  }
+
+  .preview-item:hover {
+    transform: translateY(-2px);
   }
 
   .preview-rank {
-    width: 100%;
+    width: auto;
     height: auto;
-    padding: 0.375rem;
+    padding: 0.25rem 0.5rem;
   }
 
   .preview-info {
     width: 100%;
-    text-align: center;
   }
 
   .preview-name {
     text-align: center;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.375rem;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.3;
   }
 
   .preview-size {
     width: 100%;
     text-align: center;
     font-size: 0.875rem;
+    margin-top: 0.25rem;
   }
 
   .preview-bar-container {
@@ -418,10 +426,12 @@ function handleItemClick(dir: DirectoryNode) {
     min-width: 120px;
     max-width: 140px;
     padding: 0.75rem;
+    gap: 0.5rem;
   }
 
   .preview-rank {
     font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
   }
 
   .preview-name {
