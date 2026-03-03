@@ -56,35 +56,45 @@ const selectedItems = computed(() => {
 const hasSelection = computed(() => selectedDirs.value.size > 0 || selectedFiles.value.size > 0);
 
 function toggleDirSelection(dir: DirectoryNode) {
-  if (selectedDirs.value.has(dir.path)) {
-    selectedDirs.value.delete(dir.path);
+  const newSet = new Set(selectedDirs.value);
+  if (newSet.has(dir.path)) {
+    newSet.delete(dir.path);
   } else {
-    selectedDirs.value.add(dir.path);
+    newSet.add(dir.path);
   }
+  selectedDirs.value = newSet;
 }
 
 function toggleFileSelection(file: FileInfo) {
-  if (selectedFiles.value.has(file.path)) {
-    selectedFiles.value.delete(file.path);
+  const newSet = new Set(selectedFiles.value);
+  if (newSet.has(file.path)) {
+    newSet.delete(file.path);
   } else {
-    selectedFiles.value.add(file.path);
+    newSet.add(file.path);
   }
+  selectedFiles.value = newSet;
 }
 
 function selectAll() {
+  const newDirSet = new Set(selectedDirs.value);
+  const newFileSet = new Set(selectedFiles.value);
+  
   props.directories.forEach(dir => {
     if (!props.deepScanning || (dir.children && dir.children.length > 0)) {
-      selectedDirs.value.add(dir.path);
+      newDirSet.add(dir.path);
     }
   });
   currentFiles.value.forEach(file => {
-    selectedFiles.value.add(file.path);
+    newFileSet.add(file.path);
   });
+  
+  selectedDirs.value = newDirSet;
+  selectedFiles.value = newFileSet;
 }
 
 function clearSelection() {
-  selectedDirs.value.clear();
-  selectedFiles.value.clear();
+  selectedDirs.value = new Set();
+  selectedFiles.value = new Set();
 }
 
 function handleBatchMigrate() {
@@ -186,7 +196,7 @@ watch(() => props.currentPath, (newPath) => {
           class="table-row"
           :class="{ 'row-disabled': deepScanning && (!dir.children || dir.children.length === 0), 'row-selected': selectedDirs.has(dir.path) }"
         >
-          <div class="td td-checkbox" @click.stop="toggleDirSelection(dir)">
+          <div class="td td-checkbox" @click.stop>
             <input 
               type="checkbox" 
               class="checkbox"
@@ -226,7 +236,7 @@ watch(() => props.currentPath, (newPath) => {
           class="table-row table-row-file"
           :class="{ 'row-selected': selectedFiles.has(file.path) }"
         >
-          <div class="td td-checkbox" @click.stop="toggleFileSelection(file)">
+          <div class="td td-checkbox" @click.stop>
             <input 
               type="checkbox" 
               class="checkbox"

@@ -47,6 +47,8 @@ const migrationStartTime = ref(0);
 const migratedSize = ref(0);
 const migrationSpeed = ref(0);
 const estimatedTimeRemaining = ref(0);
+const elapsedTime = ref(0);
+const updateTimer = ref<number | null>(null);
 
 const isBatchMode = computed(() => props.selectedItems && props.selectedItems.length > 0);
 const itemName = computed(() => {
@@ -89,7 +91,26 @@ function formatTime(seconds: number): string {
   return `${Math.floor(seconds / 3600)} 小时 ${Math.floor((seconds % 3600) / 60)} 分`;
 }
 
+function startProgressTimer() {
+  if (updateTimer.value) {
+    clearInterval(updateTimer.value);
+  }
+  updateTimer.value = window.setInterval(() => {
+    if (migrationStartTime.value > 0) {
+      elapsedTime.value = (Date.now() - migrationStartTime.value) / 1000;
+    }
+  }, 500);
+}
+
+function stopProgressTimer() {
+  if (updateTimer.value) {
+    clearInterval(updateTimer.value);
+    updateTimer.value = null;
+  }
+}
+
 function close() {
+  stopProgressTimer();
   targetDisk.value = '';
   migrating.value = false;
   migrationError.value = '';
@@ -101,6 +122,7 @@ function close() {
   migratedSize.value = 0;
   migrationSpeed.value = 0;
   estimatedTimeRemaining.value = 0;
+  elapsedTime.value = 0;
   emit('close');
 }
 
@@ -127,6 +149,8 @@ async function startSingleMigration() {
   migrationError.value = '';
   migrationStartTime.value = Date.now();
   migratedSize.value = 0;
+  elapsedTime.value = 0;
+  startProgressTimer();
 
   try {
     const { invoke } = await import('@tauri-apps/api/core');
@@ -136,10 +160,12 @@ async function startSingleMigration() {
       linkType: null
     });
     
+    stopProgressTimer();
     migrationSuccess.value = true;
     migrationResult.value = result;
     migrating.value = false;
   } catch (err) {
+    stopProgressTimer();
     console.error('迁移失败:', err);
     migrationError.value = String(err);
     migrating.value = false;
