@@ -66,6 +66,8 @@ const currentFiles = ref<FileInfo[]>([]);
 const targetDisk = ref<string>('');
 const migrating = ref(false);
 const migrationError = ref<string>('');
+const migrationSuccess = ref(false);
+const migrationResult = ref<any>(null);
 
 console.log('ScanResults 接收到的数据:', props.result);
 console.log('directories 数量:', props.result?.directories?.length || 0);
@@ -103,6 +105,8 @@ function closeMigrateDialog() {
   targetDisk.value = '';
   migrating.value = false;
   migrationError.value = '';
+  migrationSuccess.value = false;
+  migrationResult.value = null;
 }
 
 async function startMigration() {
@@ -129,12 +133,12 @@ async function startMigration() {
     });
     
     console.log('迁移成功:', result);
-    alert('迁移成功！');
-    closeMigrateDialog();
+    migrationSuccess.value = true;
+    migrationResult.value = result;
+    migrating.value = false;
   } catch (err) {
     console.error('迁移失败:', err);
     migrationError.value = String(err);
-  } finally {
     migrating.value = false;
   }
 }
@@ -589,72 +593,119 @@ watch(() => props.viewMode, (newMode) => {
 
     <div v-if="showMigrate" class="migrate-dialog-overlay" @click="closeMigrateDialog">
       <div class="migrate-dialog" @click.stop>
-        <div class="dialog-header">
-          <h3>{{ selectedFile ? '迁移文件' : '迁移目录' }}</h3>
-          <button class="close-btn" @click="closeMigrateDialog">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-          </button>
+        <div v-if="!migrationSuccess" class="dialog-content">
+          <div class="dialog-header">
+            <h3>{{ selectedFile ? '迁移文件' : '迁移目录' }}</h3>
+            <button class="close-btn" @click="closeMigrateDialog">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+          <div class="dialog-body">
+            <div class="info-section">
+              <div class="info-row">
+                <span class="info-label">源路径</span>
+                <span class="info-value">{{ selectedFile?.path || selectedDir?.path }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">大小</span>
+                <span class="info-value">{{ formatBytes(selectedFile?.size || selectedDir?.size || 0) }}</span>
+              </div>
+              <div v-if="selectedDir" class="info-row">
+                <span class="info-label">文件数</span>
+                <span class="info-value">{{ formatNumber(selectedDir?.file_count || 0) }}</span>
+              </div>
+              <div v-if="selectedFile" class="info-row">
+                <span class="info-label">类型</span>
+                <span class="info-value">{{ selectedFile?.extension || '无扩展名' }}</span>
+              </div>
+            </div>
+            <div class="form-section">
+              <label class="form-label">目标磁盘</label>
+              <select class="form-select" v-model="targetDisk" :disabled="migrating">
+                <option value="">选择目标磁盘...</option>
+                <option 
+                  v-for="disk in availableTargetDisks" 
+                  :key="disk.drive_letter"
+                  :value="disk.drive_letter + '\\'"
+                >
+                  {{ disk.drive_letter }} - {{ disk.label }} (可用: {{ formatBytes(disk.free_space) }})
+                </option>
+              </select>
+            </div>
+            <div class="warning-section">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M10 2L2 17H18L10 2Z" stroke="#ff9500" stroke-width="2" stroke-linejoin="round"/>
+                <path d="M10 8V12" stroke="#ff9500" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="10" cy="15" r="0.5" fill="#ff9500"/>
+              </svg>
+              <span>迁移后将在原位置创建符号链接，程序可正常访问</span>
+            </div>
+            <div v-if="migrationError" class="error-section">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <circle cx="10" cy="10" r="8" stroke="#ef4444" stroke-width="2"/>
+                <path d="M10 6V10M10 14H10.01" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+              <span>{{ migrationError }}</span>
+            </div>
+            <div v-if="migrating" class="progress-section">
+              <div class="progress-header">
+                <span class="progress-label">正在迁移...</span>
+              </div>
+              <div class="progress-bar-wrapper">
+                <div class="progress-bar-track">
+                  <div class="progress-bar-fill progress-bar-indeterminate"></div>
+                </div>
+              </div>
+              <div class="progress-info">
+                <span class="progress-text">正在复制文件到目标磁盘</span>
+              </div>
+            </div>
+          </div>
+          <div class="dialog-footer">
+            <button class="btn btn-secondary" @click="closeMigrateDialog" :disabled="migrating">取消</button>
+            <button class="btn btn-primary" @click="startMigration" :disabled="!targetDisk || migrating">
+              <span v-if="migrating">
+                <svg class="btn-spinner" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="30 10"/>
+                </svg>
+                迁移中
+              </span>
+              <span v-else>开始迁移</span>
+            </button>
+          </div>
         </div>
-        <div class="dialog-body">
-          <div class="info-section">
-            <div class="info-row">
-              <span class="info-label">源路径：</span>
-              <span class="info-value">{{ selectedFile?.path || selectedDir?.path }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">大小：</span>
-              <span class="info-value">{{ formatBytes(selectedFile?.size || selectedDir?.size || 0) }}</span>
-            </div>
-            <div v-if="selectedDir" class="info-row">
-              <span class="info-label">文件数：</span>
-              <span class="info-value">{{ formatNumber(selectedDir?.file_count || 0) }}</span>
-            </div>
-            <div v-if="selectedFile" class="info-row">
-              <span class="info-label">类型：</span>
-              <span class="info-value">{{ selectedFile?.extension || '无扩展名' }}</span>
-            </div>
-            <div v-if="selectedFile" class="info-row">
-              <span class="info-label">修改时间：</span>
-              <span class="info-value">{{ formatDate(selectedFile?.modified_at || '') }}</span>
-            </div>
-          </div>
-          <div class="form-section">
-            <label class="form-label">目标磁盘</label>
-            <select class="form-select" v-model="targetDisk">
-              <option value="">选择目标磁盘...</option>
-              <option 
-                v-for="disk in availableTargetDisks" 
-                :key="disk.drive_letter"
-                :value="disk.drive_letter + '\\'"
-              >
-                {{ disk.drive_letter }} - {{ disk.label }} (可用: {{ formatBytes(disk.free_space) }})
-              </option>
-            </select>
-          </div>
-          <div class="warning-section">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M10 2L2 17H18L10 2Z" stroke="#ff9500" stroke-width="2" stroke-linejoin="round"/>
-              <path d="M10 8V12" stroke="#ff9500" stroke-width="2" stroke-linecap="round"/>
-              <circle cx="10" cy="15" r="0.5" fill="#ff9500"/>
+        
+        <div v-else class="dialog-success">
+          <div class="success-icon-wrapper">
+            <svg class="success-icon" width="64" height="64" viewBox="0 0 64 64" fill="none">
+              <circle cx="32" cy="32" r="30" fill="#10b981" fill-opacity="0.1"/>
+              <circle cx="32" cy="32" r="24" stroke="#10b981" stroke-width="3"/>
+              <path d="M20 32L28 40L44 24" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span>迁移后将在原位置创建符号链接，程序可正常访问</span>
           </div>
-          <div v-if="migrationError" class="error-section">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="10" r="8" stroke="#ef4444" stroke-width="2"/>
-              <path d="M10 6V10M10 14H10.01" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-            <span>{{ migrationError }}</span>
+          <h3 class="success-title">迁移成功</h3>
+          <p class="success-message">文件已成功迁移到目标磁盘，并在原位置创建了符号链接</p>
+          <div class="success-details">
+            <div class="success-detail-row">
+              <span class="detail-label">源路径</span>
+              <span class="detail-value">{{ migrationResult?.source_path }}</span>
+            </div>
+            <div class="success-detail-row">
+              <span class="detail-label">目标路径</span>
+              <span class="detail-value">{{ migrationResult?.target_path }}</span>
+            </div>
+            <div class="success-detail-row">
+              <span class="detail-label">文件大小</span>
+              <span class="detail-value">{{ formatBytes(migrationResult?.file_size || 0) }}</span>
+            </div>
+            <div class="success-detail-row">
+              <span class="detail-label">耗时</span>
+              <span class="detail-value">{{ (migrationResult?.duration_ms / 1000).toFixed(2) }} 秒</span>
+            </div>
           </div>
-        </div>
-        <div class="dialog-footer">
-          <button class="btn btn-secondary" @click="closeMigrateDialog" :disabled="migrating">取消</button>
-          <button class="btn btn-primary" @click="startMigration" :disabled="!targetDisk || migrating">
-            <span v-if="migrating">迁移中...</span>
-            <span v-else>开始迁移</span>
-          </button>
+          <button class="btn btn-primary btn-full" @click="closeMigrateDialog">完成</button>
         </div>
       </div>
     </div>
@@ -1201,29 +1252,49 @@ watch(() => props.viewMode, (newMode) => {
 
 .migrate-dialog {
   background: white;
-  border-radius: 16px;
+  border-radius: 20px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   width: 90%;
-  max-width: 500px;
+  max-width: 540px;
   max-height: 90vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  animation: dialogSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes dialogSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.dialog-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .dialog-header {
-  padding: 1.5rem 2rem;
-  border-bottom: 1px solid #e7e5e4;
+  padding: 1.75rem 2rem;
+  border-bottom: 1px solid #f5f5f4;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: linear-gradient(to bottom, #fafaf9 0%, #ffffff 100%);
 }
 
 .dialog-header h3 {
-  font-size: 1.25rem;
+  font-size: 1.375rem;
   font-weight: 600;
   color: #2c2c2c;
   margin: 0;
+  letter-spacing: -0.02em;
 }
 
 .close-btn {
@@ -1261,22 +1332,28 @@ watch(() => props.viewMode, (newMode) => {
 .info-row {
   display: flex;
   justify-content: space-between;
-  padding: 0.5rem 0;
+  align-items: flex-start;
+  padding: 0.875rem 0;
   font-size: 0.9375rem;
+  gap: 1rem;
 }
 
 .info-row:not(:last-child) {
-  border-bottom: 1px solid #e7e5e4;
+  border-bottom: 1px solid #f5f5f4;
 }
 
 .info-label {
   color: #78716c;
   font-weight: 500;
+  flex-shrink: 0;
+  min-width: 80px;
 }
 
 .info-value {
   color: #2c2c2c;
-  font-weight: 600;
+  font-weight: 500;
+  text-align: right;
+  word-break: break-all;
 }
 
 .form-section {
@@ -1376,6 +1453,181 @@ watch(() => props.viewMode, (newMode) => {
 
 .btn-primary:active {
   transform: translateY(0);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-spinner {
+  display: inline-block;
+  margin-right: 0.5rem;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.progress-section {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-radius: 12px;
+  border: 1px solid #bae6fd;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.progress-label {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #0c4a6e;
+}
+
+.progress-bar-wrapper {
+  margin-bottom: 0.75rem;
+}
+
+.progress-bar-track {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0ea5e9 0%, #06b6d4 100%);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-bar-indeterminate {
+  width: 40%;
+  animation: indeterminate 1.5s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8125rem;
+  color: #0c4a6e;
+}
+
+.progress-text {
+  opacity: 0.8;
+}
+
+.dialog-success {
+  padding: 3rem 2.5rem;
+  text-align: center;
+  animation: successFadeIn 0.4s ease-out;
+}
+
+@keyframes successFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.success-icon-wrapper {
+  margin-bottom: 1.5rem;
+  animation: successIconPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes successIconPop {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.success-icon {
+  display: inline-block;
+}
+
+.success-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #2c2c2c;
+  margin: 0 0 0.75rem 0;
+  letter-spacing: -0.02em;
+}
+
+.success-message {
+  font-size: 0.9375rem;
+  color: #78716c;
+  line-height: 1.6;
+  margin: 0 0 2rem 0;
+}
+
+.success-details {
+  background: #fafaf9;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 2rem;
+  text-align: left;
+}
+
+.success-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 0.75rem 0;
+  font-size: 0.875rem;
+  gap: 1rem;
+}
+
+.success-detail-row:not(:last-child) {
+  border-bottom: 1px solid #f5f5f4;
+}
+
+.detail-label {
+  color: #78716c;
+  font-weight: 500;
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+.detail-value {
+  color: #2c2c2c;
+  font-weight: 500;
+  text-align: right;
+  word-break: break-all;
+}
+
+.btn-full {
+  width: 100%;
+  padding: 1rem 1.5rem;
+  font-size: 1rem;
 }
 
 @media (max-width: 900px) {

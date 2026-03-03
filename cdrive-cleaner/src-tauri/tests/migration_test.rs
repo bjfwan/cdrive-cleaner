@@ -71,3 +71,43 @@ mod tests {
         println!("\n=== 测试完成 ===\n");
     }
 }
+
+    #[tokio::test]
+    async fn test_directory_migration_real() {
+        // 测试目录迁移（使用 Junction，不需要管理员权限）
+        println!("\n=== 测试目录迁移 ===");
+        
+        let source_path = "C:\\test_migration_source\\subdir";
+        let target_disk = "D:\\";
+        
+        println!("源路径: {}", source_path);
+        println!("目标磁盘: {}", target_disk);
+        
+        // 检查前置条件
+        assert!(Path::new(source_path).exists(), "源目录不存在");
+        assert!(Path::new(target_disk).exists(), "目标磁盘不存在");
+        println!("✓ 前置条件检查通过");
+        
+        // 读取原目录中的文件
+        let original_file = format!("{}\\file2.txt", source_path);
+        let original_content = fs::read_to_string(&original_file).expect("无法读取源文件");
+        println!("原文件内容: {}", original_content.trim());
+        
+        // 创建迁移器
+        use cdrive_cleaner_lib::migration::{FileMigrator, LinkType};
+        let migrator = FileMigrator::new();
+        
+        println!("开始迁移...");
+        let result = migrator.migrate(source_path, target_disk, LinkType::Auto).await;
+        
+        match result {
+            Ok(migration_result) => {
+                println!("\n迁移结果:");
+                println!("  成功: {}", migration_result.success);
+                println!("  源路径: {}", migration_result.source_path);
+                println!("  目标路径: {}", migration_result.target_path);
+                println!("  链接类型: {:?}", migration_result.link_type);
+                println!("  文件大小: {} 字节", migration_result.file_size);
+                println!("  耗时: {} 毫秒", migration_result.duration_ms);
+                
+    
