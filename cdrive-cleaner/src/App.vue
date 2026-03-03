@@ -78,8 +78,6 @@ async function startScan() {
 
   try {
     const result = await invoke<ScanResult>('scan_disk', { path: selectedDisk.value });
-    console.log('[前端] 快速扫描完成');
-    console.log('directories 数量:', result.directories?.length || 0);
     scanResult.value = result;
     navigationStack.value = [selectedDisk.value];
     scanCache.value.set(selectedDisk.value, result);
@@ -87,7 +85,6 @@ async function startScan() {
     scanning.value = false;
     
     setTimeout(() => {
-      console.log('[前端] 开始后台深度扫描');
       startDeepScan();
     }, 100);
   } catch (err) {
@@ -100,18 +97,14 @@ async function startScan() {
 async function startDeepScan() {
   if (!selectedDisk.value) return;
   deepScanning.value = true;
-  console.log('[前端] 深度扫描开始（后台进行）');
 
   try {
-    // 传递快速扫描的文件数作为估算值
     const estimatedFiles = scanResult.value?.total_files || 800000;
-    console.log('[前端] 使用快速扫描文件数作为基准:', estimatedFiles);
     
     const result = await invoke<ScanResult>('scan_disk_deep', { 
       path: selectedDisk.value,
       estimatedFiles: estimatedFiles
     });
-    console.log('[前端] 深度扫描完成');
     deepScanResult.value = result;
     scanCache.value.set(selectedDisk.value, result);
     if (navigationStack.value[navigationStack.value.length - 1] === selectedDisk.value) {

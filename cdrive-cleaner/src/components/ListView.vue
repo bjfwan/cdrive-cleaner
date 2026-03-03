@@ -120,7 +120,7 @@ watch(() => props.currentPath, (newPath) => {
           </div>
           <div class="td td-files" @click="handleItemClick(dir)">{{ formatNumber(dir.file_count) }}</div>
           <div class="td td-actions">
-            <button class="action-btn migrate-btn" @click.stop="$emit('migrate-dir', dir)" title="迁移到其他磁盘">
+            <button class="action-btn migrate-btn" @click.stop="$emit('migrate-dir', dir)" :disabled="deepScanning" :title="deepScanning ? '深度扫描完成后可迁移' : '迁移到其他磁盘'">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M8 2L12 6H9V10H7V6H4L8 2Z" fill="currentColor"/>
                 <path d="M3 12H13V14H3V12Z" fill="currentColor"/>
@@ -157,7 +157,7 @@ watch(() => props.currentPath, (newPath) => {
                 <path d="M8 2V10M8 10L5 7M8 10L11 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
-            <button class="action-btn migrate-btn" @click.stop="$emit('migrate-file', file)" title="迁移到其他磁盘">
+            <button class="action-btn migrate-btn" @click.stop="$emit('migrate-file', file)" :disabled="deepScanning" :title="deepScanning ? '深度扫描完成后可迁移' : '迁移到其他磁盘'">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M8 2L12 6H9V10H7V6H4L8 2Z" fill="currentColor"/>
                 <path d="M3 12H13V14H3V12Z" fill="currentColor"/>

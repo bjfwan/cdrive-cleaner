@@ -107,7 +107,6 @@ onMounted(async () => {
   // 只监听快速扫描的进度事件
   unlisten = await listen('quick-scan-progress', (event: any) => {
     const progress = event.payload;
-    console.log('[前端] 收到快速扫描进度:', progress.scanned_files, '文件');
     
     targetFiles.value = progress.scanned_files;
     targetDirs.value = progress.scanned_dirs;

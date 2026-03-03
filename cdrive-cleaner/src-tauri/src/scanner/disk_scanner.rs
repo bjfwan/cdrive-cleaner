@@ -116,10 +116,6 @@ impl DiskScanner {
         let start = Instant::now();
         let root_path = path.to_string_lossy().to_string();
         
-        println!("\n=== 快速扫描开始 ===");
-        println!("[调试] 路径: {}", root_path);
-        println!("[调试] 准备发送进度事件");
-        
         let total_size = Arc::new(AtomicU64::new(0));
         let total_files = Arc::new(AtomicUsize::new(0));
         let total_dirs = Arc::new(AtomicUsize::new(0));
@@ -137,21 +133,14 @@ impl DiskScanner {
             files_per_second: 0.0,
             progress_percent: 0.0,
         });
-        println!("[调试] 已发送快速扫描初始进度事件");
 
-        let step1 = Instant::now();
         let entries: Vec<_> = match fs::read_dir(path) {
             Ok(entries) => entries.collect(),
             Err(e) => {
-                println!("[错误] 无法读取目录: {}", e);
                 return Err(anyhow::anyhow!("Failed to read directory: {}", e));
             }
         };
-        
-        println!("[性能] 读取根目录条目: {:.3} 秒, 共 {} 个条目", 
-            step1.elapsed().as_secs_f64(), entries.len());
 
-        let step2 = Instant::now();
         let app_clone = app.clone();
         let total_size_clone = Arc::clone(&total_size);
         let total_files_clone = Arc::clone(&total_files);
@@ -164,16 +153,12 @@ impl DiskScanner {
         let progress_handle = std::thread::spawn(move || {
             let mut last_files = 0;
             let mut last_time = Instant::now();
-            let mut update_count = 0;
             let mut last_progress_percent = 0.0;
-            
-            println!("[调试] 快速扫描进度线程启动");
             
             loop {
                 std::thread::sleep(std::time::Duration::from_millis(300));
                 
                 if should_stop_clone.load(Ordering::Relaxed) == 1 {
-                    println!("[调试] 快速扫描进度报告线程收到停止信号，共发送 {} 次进度", update_count);
                     break;
                 }
                 
@@ -192,7 +177,6 @@ impl DiskScanner {
                 };
                 
                 // 基于已扫描文件数估算进度（假设总文件数约为 800,000）
-                // 使用平滑的估算，避免进度跳跃
                 let estimated_total_files = 800000.0;
                 let raw_progress = (current_files as f64 / estimated_total_files) * 100.0;
                 
@@ -207,8 +191,6 @@ impl DiskScanner {
                 last_files = current_files;
                 last_time = now;
                 
-                update_count += 1;
-                
                 let progress = ScanProgress {
                     scanned_files: current_files as u64,
                     scanned_dirs: current_dirs as u64,
@@ -219,15 +201,7 @@ impl DiskScanner {
                     progress_percent,
                 };
                 
-                if update_count % 10 == 0 || progress_percent > 90.0 {
-                    println!("[调试] 发送进度 #{}: 文件={}, 进度={:.1}%", 
-                        update_count, current_files, progress_percent);
-                }
-                
-                if app_clone.emit("quick-scan-progress", progress).is_err() {
-                    println!("[调试] 快速扫描进度报告线程退出（emit失败）");
-                    break;
-                }
+                let _ = app_clone.emit("quick-scan-progress", progress);
             }
         });
 
@@ -262,7 +236,6 @@ impl DiskScanner {
                     let (dir_size, dir_files, dir_inaccessible) = 
                         Self::calculate_dir_size(&path, large_file_threshold, large_files_clone, total_files_clone, total_size_clone);
                     
-                    // 注意：这里不再累加，因为 calculate_dir_size 内部已经更新了全局计数器
                     inaccessible_count.fetch_add(dir_inaccessible, Ordering::Relaxed);
 
                     let is_symlink = metadata.file_type().is_symlink();
@@ -294,50 +267,23 @@ impl DiskScanner {
         // 停止进度报告线程
         should_stop.store(1, Ordering::Relaxed);
         let _ = progress_handle.join();
-        println!("[调试] 快速扫描进度报告线程已停止");
-        
-        println!("[性能] 并行扫描目录: {:.3} 秒", step2.elapsed().as_secs_f64());
 
-        let step3 = Instant::now();
         let mut directories = directories;
         directories.sort_by(|a, b| b.size.cmp(&a.size));
-        println!("[性能] 排序目录: {:.3} 秒", step3.elapsed().as_secs_f64());
 
-        let step4 = Instant::now();
         let scanned_size = total_size.load(Ordering::Relaxed);
         
         if let Some((total, used, free)) = Self::get_disk_usage(path) {
-            println!("=== 磁盘真实使用情况（Windows API）===");
-            println!("磁盘总容量: {:.1} GB", total as f64 / 1024.0 / 1024.0 / 1024.0);
-            println!("已使用空间: {:.1} GB", used as f64 / 1024.0 / 1024.0 / 1024.0);
-            println!("可用空间: {:.1} GB", free as f64 / 1024.0 / 1024.0 / 1024.0);
-            println!("扫描统计大小: {:.1} GB", scanned_size as f64 / 1024.0 / 1024.0 / 1024.0);
-            println!("差异: {:.1} GB", (used as i64 - scanned_size as i64).abs() as f64 / 1024.0 / 1024.0 / 1024.0);
-        } else {
-            println!("总大小: {:.1} GB", scanned_size as f64 / 1024.0 / 1024.0 / 1024.0);
+            // 磁盘使用情况已获取，但不输出日志
+            let _ = (total, used, free);
         }
-        println!("[性能] 获取磁盘使用情况: {:.3} 秒", step4.elapsed().as_secs_f64());
-        
-        println!("文件数: {}", total_files.load(Ordering::Relaxed));
-        println!("目录数: {}", total_dirs.load(Ordering::Relaxed));
-        println!("返回的顶层目录数: {}", directories.len());
         
         let duration = start.elapsed();
-        println!("扫描时间: {:.1} 秒", duration.as_secs_f64());
-        println!("无法访问: {}", inaccessible_count.load(Ordering::Relaxed));
         
-        for (i, dir) in directories.iter().take(5).enumerate() {
-            println!("  {}. {} - {:.1} GB", i + 1, dir.name, dir.size as f64 / 1024.0 / 1024.0 / 1024.0);
-        }
-        
-        println!("=== 快速扫描结束 ===\n");
-
         let large_files_vec = match Arc::try_unwrap(large_files) {
             Ok(mutex) => mutex.into_inner().unwrap(),
             Err(arc) => arc.lock().unwrap().clone(),
         };
-
-        println!("[调试] 收集到 {} 个大文件 (> 100MB)", large_files_vec.len());
 
         Ok(ScanResult {
             root_path,
@@ -413,15 +359,6 @@ impl DiskScanner {
         let final_size = size.load(Ordering::Relaxed);
         let final_files = files.load(Ordering::Relaxed);
         let final_inaccessible = inaccessible.load(Ordering::Relaxed);
-        
-        let elapsed = start.elapsed().as_secs_f64();
-        if elapsed > 1.0 {
-            println!("[性能] calculate_dir_size({}) 耗时: {:.3} 秒, 文件数: {}", 
-                path.file_name().unwrap_or_default().to_string_lossy(), 
-                elapsed, 
-                final_files
-            );
-        }
 
         (final_size, final_files, final_inaccessible)
     }
@@ -429,10 +366,6 @@ impl DiskScanner {
     fn scan_deep_blocking(path: &Path, app: AppHandle, estimated_files: usize) -> Result<ScanResult> {
         let start = Instant::now();
         let root_path = path.to_string_lossy().to_string();
-        
-        println!("\n=== 深度扫描开始 ===");
-        println!("[调试] 路径: {}", root_path);
-        println!("[调试] 快速扫描文件数: {}", estimated_files);
         
         let inaccessible_count = Arc::new(AtomicUsize::new(0));
         let large_files: Arc<Mutex<Vec<super::file_info::FileInfo>>> = Arc::new(Mutex::new(Vec::new()));
@@ -455,7 +388,6 @@ impl DiskScanner {
             files_per_second: 0.0,
             progress_percent: 0.0,
         });
-        println!("[调试] 深度扫描：已发送初始进度事件");
         
         // 启动进度报告线程
         let app_clone = app.clone();
@@ -469,17 +401,13 @@ impl DiskScanner {
         let progress_handle = std::thread::spawn(move || {
             let mut last_files = 0;
             let mut last_time = Instant::now();
-            let mut update_count = 0;
             let mut estimated_total = (estimated_files as f64 * 1.1) as usize;
             let mut last_progress_percent = 0.0;
-            
-            println!("[调试] 深度扫描进度线程启动，初始估算: {} 文件", estimated_total);
             
             loop {
                 std::thread::sleep(std::time::Duration::from_millis(500));
                 
                 if should_stop_clone.load(Ordering::Relaxed) == 1 {
-                    println!("[调试] 深度扫描进度报告线程收到停止信号，共发送 {} 次进度", update_count);
                     break;
                 }
                 
@@ -497,12 +425,9 @@ impl DiskScanner {
                     0.0
                 };
                 
-                // 动态调整估算值：如果当前文件数超过估算值的 90%，增加估算值
+                // 动态调整估算值
                 if current_files > (estimated_total as f64 * 0.9) as usize {
-                    let old_estimated = estimated_total;
                     estimated_total = (current_files as f64 * 1.2) as usize;
-                    println!("[调试] 动态调整估算值: {} -> {} (当前: {})", 
-                        old_estimated, estimated_total, current_files);
                 }
                 
                 // 计算原始进度百分比
@@ -522,7 +447,6 @@ impl DiskScanner {
                 last_progress_percent = progress_percent;
                 last_files = current_files;
                 last_time = now;
-                update_count += 1;
                 
                 let progress = ScanProgress {
                     scanned_files: current_files as u64,
@@ -534,15 +458,7 @@ impl DiskScanner {
                     progress_percent,
                 };
                 
-                if update_count % 10 == 0 || progress_percent > 90.0 {
-                    println!("[调试] 深度扫描进度 #{}: 文件={}, 进度={:.1}%, 估算总数={}", 
-                        update_count, current_files, progress_percent, estimated_total);
-                }
-                
-                if app_clone.emit("deep-scan-progress", progress).is_err() {
-                    println!("[调试] 深度扫描进度报告线程退出（emit失败）");
-                    break;
-                }
+                let _ = app_clone.emit("deep-scan-progress", progress);
             }
         });
         
@@ -640,8 +556,6 @@ impl DiskScanner {
         // 停止进度报告线程
         should_stop.store(1, Ordering::Relaxed);
         let _ = progress_handle.join();
-        println!("[调试] 深度扫描：进度报告线程已停止");
-        println!("[调试] 深度扫描：遍历完成，开始构建树结构");
         
         let mut nodes_map = Arc::try_unwrap(nodes_map).unwrap().into_inner().unwrap();
         let file_map = Arc::try_unwrap(file_map).unwrap().into_inner().unwrap();
@@ -696,36 +610,11 @@ impl DiskScanner {
         let total_dirs = directories.len();
         
         let duration = start.elapsed();
-        
-        if let Some((total, used, free)) = Self::get_disk_usage(path) {
-            println!("=== 磁盘真实使用情况（Windows API）===");
-            println!("磁盘总容量: {:.1} GB", total as f64 / 1024.0 / 1024.0 / 1024.0);
-            println!("已使用空间: {:.1} GB", used as f64 / 1024.0 / 1024.0 / 1024.0);
-            println!("可用空间: {:.1} GB", free as f64 / 1024.0 / 1024.0 / 1024.0);
-            println!("扫描统计大小: {:.1} GB", total_size as f64 / 1024.0 / 1024.0 / 1024.0);
-            println!("差异: {:.1} GB", (used as i64 - total_size as i64).abs() as f64 / 1024.0 / 1024.0 / 1024.0);
-        } else {
-            println!("总大小: {:.1} GB", total_size as f64 / 1024.0 / 1024.0 / 1024.0);
-        }
-        
-        println!("文件数: {}", total_files);
-        println!("目录数: {}", total_dirs);
-        println!("返回的顶层目录数: {}", directories.len());
-        println!("扫描时间: {:.1} 秒", duration.as_secs_f64());
-        println!("无法访问: {}", inaccessible_count.load(Ordering::Relaxed));
-        
-        for (i, dir) in directories.iter().take(5).enumerate() {
-            println!("  {}. {} - {:.1} GB ({} 个文件)", i + 1, dir.name, dir.size as f64 / 1024.0 / 1024.0 / 1024.0, dir.file_count);
-        }
-        
-        println!("=== 深度扫描结束 ===\n");
 
         let large_files_vec = match Arc::try_unwrap(large_files) {
             Ok(mutex) => mutex.into_inner().unwrap(),
             Err(arc) => arc.lock().unwrap().clone(),
         };
-
-        println!("[调试] 深度扫描收集到 {} 个大文件 (> 100MB)", large_files_vec.len());
 
         Ok(ScanResult {
             root_path,

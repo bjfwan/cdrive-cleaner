@@ -198,6 +198,7 @@ async function openFile(file: FileInfo) {
       <LargeFilesView
         v-if="viewMode === 'large-files'"
         :files="sortedLargeFiles"
+        :deep-scanning="deepScanning"
         @migrate-file="showMigrateFileDialog"
         @open-file="openFile"
       />
