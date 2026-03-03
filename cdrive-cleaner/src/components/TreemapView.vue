@@ -219,6 +219,7 @@ function handleItemClick(dir: DirectoryNode) {
 .list-preview {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -232,10 +233,29 @@ function handleItemClick(dir: DirectoryNode) {
 
 .preview-items {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.625rem;
+  padding-right: 0.25rem;
+}
+
+.preview-items::-webkit-scrollbar {
+  width: 6px;
+}
+
+.preview-items::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.preview-items::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 3px;
+}
+
+.preview-items::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
 }
 
 .preview-item {
@@ -309,7 +329,7 @@ function handleItemClick(dir: DirectoryNode) {
 @media (max-width: 900px) {
   .treemap-view {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
+    grid-template-rows: 1fr minmax(200px, 40%);
     gap: 1.25rem;
   }
 
@@ -318,7 +338,7 @@ function handleItemClick(dir: DirectoryNode) {
   }
 
   .list-preview {
-    max-height: 280px;
+    min-height: 200px;
   }
 
   .treemap-container {
@@ -337,6 +357,7 @@ function handleItemClick(dir: DirectoryNode) {
 
 @media (max-width: 600px) {
   .treemap-view {
+    grid-template-rows: 1fr minmax(180px, 35%);
     gap: 1rem;
   }
 
@@ -345,7 +366,7 @@ function handleItemClick(dir: DirectoryNode) {
   }
 
   .list-preview {
-    max-height: 220px;
+    min-height: 180px;
   }
 
   .preview-item {
