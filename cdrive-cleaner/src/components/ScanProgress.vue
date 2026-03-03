@@ -50,26 +50,34 @@ function formatTime(ms: number): string {
 
 // 平滑动画
 function smoothUpdate() {
-  const smoothFactor = 0.3; // 平滑系数，越小越平滑
+  const fileDiff = Math.abs(targetFiles.value - scannedFiles.value);
+  const dirDiff = Math.abs(targetDirs.value - scannedDirs.value);
+  const sizeDiff = Math.abs(targetSize.value - totalSize.value);
   
-  scannedFiles.value += (targetFiles.value - scannedFiles.value) * smoothFactor;
-  scannedDirs.value += (targetDirs.value - scannedDirs.value) * smoothFactor;
-  totalSize.value += (targetSize.value - totalSize.value) * smoothFactor;
+  // 根据差距大小动态调整平滑系数
+  const fileSmoothFactor = fileDiff > 10000 ? 0.3 : fileDiff > 1000 ? 0.2 : 0.1;
+  const dirSmoothFactor = dirDiff > 100 ? 0.3 : 0.15;
+  const sizeSmoothFactor = sizeDiff > 1024 * 1024 * 1024 ? 0.3 : 0.15; // 1GB
+  
+  scannedFiles.value += (targetFiles.value - scannedFiles.value) * fileSmoothFactor;
+  scannedDirs.value += (targetDirs.value - scannedDirs.value) * dirSmoothFactor;
+  totalSize.value += (targetSize.value - totalSize.value) * sizeSmoothFactor;
   
   // 如果接近目标值，直接设置为目标值
-  if (Math.abs(targetFiles.value - scannedFiles.value) < 1) {
+  if (fileDiff < 50) {
     scannedFiles.value = targetFiles.value;
   }
-  if (Math.abs(targetDirs.value - scannedDirs.value) < 1) {
+  if (dirDiff < 2) {
     scannedDirs.value = targetDirs.value;
   }
-  if (Math.abs(targetSize.value - totalSize.value) < 1024) {
+  if (sizeDiff < 10 * 1024 * 1024) { // 10MB
     totalSize.value = targetSize.value;
   }
 }
 
 let unlisten: (() => void) | null = null;
 let animationFrame: number | null = null;
+let isQuickScanComplete = ref(false);
 
 function startAnimation() {
   const animate = () => {
@@ -91,6 +99,19 @@ onMounted(async () => {
   
   unlisten = await listen('scan-progress', (event: any) => {
     const progress = event.payload;
+    
+    // 只接收快速扫描的进度，忽略深度扫描的进度
+    if (progress.current_path.includes('深度扫描')) {
+      console.log('[前端] 忽略深度扫描进度事件');
+      return;
+    }
+    
+    // 如果快速扫描已完成，不再更新进度
+    if (isQuickScanComplete.value) {
+      console.log('[前端] 快速扫描已完成，忽略后续进度事件');
+      return;
+    }
+    
     targetFiles.value = progress.scanned_files;
     targetDirs.value = progress.scanned_dirs;
     targetSize.value = progress.total_size;
@@ -104,6 +125,13 @@ onUnmounted(() => {
   stopAnimation();
   if (unlisten) {
     unlisten();
+  }
+});
+
+// 监听 scanning 变化，当变为 false 时标记快速扫描完成
+defineExpose({
+  markQuickScanComplete: () => {
+    isQuickScanComplete.value = true;
   }
 });
 </script>

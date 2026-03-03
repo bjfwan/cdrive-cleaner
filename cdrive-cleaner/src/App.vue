@@ -41,6 +41,7 @@ const error = ref<string>('');
 const viewMode = ref<'treemap' | 'list' | 'large-files'>('treemap');
 const navigationStack = ref<string[]>([]);
 const scanCache = ref<Map<string, ScanResult>>(new Map());
+const scanProgressRef = ref<any>(null);
 
 onMounted(async () => {
   await loadDisks();
@@ -70,14 +71,18 @@ async function startScan() {
 
   try {
     const result = await invoke<ScanResult>('scan_disk', { path: selectedDisk.value });
-    console.log('快速扫描结果:', result);
+    console.log('[前端] 快速扫描完成');
     console.log('directories 数量:', result.directories?.length || 0);
     scanResult.value = result;
     navigationStack.value = [selectedDisk.value];
     scanCache.value.set(selectedDisk.value, result);
+    
     scanning.value = false;
     
-    startDeepScan();
+    setTimeout(() => {
+      console.log('[前端] 开始后台深度扫描');
+      startDeepScan();
+    }, 100);
   } catch (err) {
     console.error('扫描失败:', err);
     error.value = '扫描失败';
@@ -88,9 +93,11 @@ async function startScan() {
 async function startDeepScan() {
   if (!selectedDisk.value) return;
   deepScanning.value = true;
+  console.log('[前端] 深度扫描开始（后台静默）');
 
   try {
     const result = await invoke<ScanResult>('scan_disk_deep', { path: selectedDisk.value });
+    console.log('[前端] 深度扫描完成');
     deepScanResult.value = result;
     scanCache.value.set(selectedDisk.value, result);
     if (navigationStack.value[navigationStack.value.length - 1] === selectedDisk.value) {
@@ -229,7 +236,7 @@ function goBack() {
       <div v-if="error" class="error">{{ error }}</div>
     </main>
 
-    <ScanProgress :scanning="scanning" />
+    <ScanProgress :scanning="scanning" ref="scanProgressRef" />
   </div>
 </template>
 

@@ -153,6 +153,8 @@ impl DiskScanner {
         let total_files_clone = Arc::clone(&total_files);
         let total_dirs_clone = Arc::clone(&total_dirs);
         let start_clone = start.clone();
+        let should_stop = Arc::new(AtomicUsize::new(0));
+        let should_stop_clone = Arc::clone(&should_stop);
         
         // 启动进度报告线程
         let progress_handle = std::thread::spawn(move || {
@@ -160,7 +162,12 @@ impl DiskScanner {
             let mut last_time = Instant::now();
             
             loop {
-                std::thread::sleep(std::time::Duration::from_millis(500));
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                
+                if should_stop_clone.load(Ordering::Relaxed) == 1 {
+                    println!("[调试] 快速扫描进度报告线程收到停止信号");
+                    break;
+                }
                 
                 let current_files = total_files_clone.load(Ordering::Relaxed);
                 let current_dirs = total_dirs_clone.load(Ordering::Relaxed);
@@ -183,13 +190,13 @@ impl DiskScanner {
                     scanned_files: current_files as u64,
                     scanned_dirs: current_dirs as u64,
                     total_size: current_size,
-                    current_path: "扫描中...".to_string(),
+                    current_path: "快速扫描中...".to_string(),
                     elapsed_ms: elapsed,
                     files_per_second,
                 };
                 
                 if app_clone.emit("scan-progress", progress).is_err() {
-                    println!("[调试] 进度报告线程退出");
+                    println!("[调试] 快速扫描进度报告线程退出（emit失败）");
                     break;
                 }
             }
@@ -255,7 +262,9 @@ impl DiskScanner {
             .collect();
         
         // 停止进度报告线程
-        drop(progress_handle);
+        should_stop.store(1, Ordering::Relaxed);
+        let _ = progress_handle.join();
+        println!("[调试] 快速扫描进度报告线程已停止");
         
         println!("[性能] 并行扫描目录: {:.3} 秒", step2.elapsed().as_secs_f64());
 
@@ -387,6 +396,7 @@ impl DiskScanner {
         
         println!("\n=== 深度扫描开始 ===");
         println!("[调试] 路径: {}", root_path);
+        println!("[调试] 深度扫描在后台静默运行，不发送进度事件");
         
         let inaccessible_count = Arc::new(AtomicUsize::new(0));
         let large_files: Arc<Mutex<Vec<super::file_info::FileInfo>>> = Arc::new(Mutex::new(Vec::new()));
@@ -398,64 +408,6 @@ impl DiskScanner {
         let total_files = Arc::new(AtomicUsize::new(0));
         let total_dirs = Arc::new(AtomicUsize::new(0));
         let total_size = Arc::new(AtomicU64::new(0));
-        
-        // 发送初始进度
-        let _ = app.emit("scan-progress", ScanProgress {
-            scanned_files: 0,
-            scanned_dirs: 0,
-            total_size: 0,
-            current_path: root_path.clone(),
-            elapsed_ms: 0,
-            files_per_second: 0.0,
-        });
-        println!("[调试] 深度扫描：已发送初始进度事件");
-        
-        // 启动进度报告线程
-        let app_clone = app.clone();
-        let total_files_clone = Arc::clone(&total_files);
-        let total_dirs_clone = Arc::clone(&total_dirs);
-        let total_size_clone = Arc::clone(&total_size);
-        let start_clone = start.clone();
-        
-        let progress_handle = std::thread::spawn(move || {
-            let mut last_files = 0;
-            let mut last_time = Instant::now();
-            
-            loop {
-                std::thread::sleep(std::time::Duration::from_millis(500));
-                
-                let current_files = total_files_clone.load(Ordering::Relaxed);
-                let current_dirs = total_dirs_clone.load(Ordering::Relaxed);
-                let current_size = total_size_clone.load(Ordering::Relaxed);
-                let elapsed = start_clone.elapsed().as_millis() as u64;
-                
-                let now = Instant::now();
-                let time_diff = now.duration_since(last_time).as_secs_f64();
-                let files_diff = current_files.saturating_sub(last_files);
-                let files_per_second = if time_diff > 0.0 {
-                    files_diff as f64 / time_diff
-                } else {
-                    0.0
-                };
-                
-                last_files = current_files;
-                last_time = now;
-                
-                let progress = ScanProgress {
-                    scanned_files: current_files as u64,
-                    scanned_dirs: current_dirs as u64,
-                    total_size: current_size,
-                    current_path: "深度扫描中...".to_string(),
-                    elapsed_ms: elapsed,
-                    files_per_second,
-                };
-                
-                if app_clone.emit("scan-progress", progress).is_err() {
-                    println!("[调试] 深度扫描进度报告线程退出");
-                    break;
-                }
-            }
-        });
         
         for entry in WalkDir::new(path)
             .follow_links(false)
@@ -548,9 +500,8 @@ impl DiskScanner {
             }
         }
         
-        // 停止进度报告线程
-        drop(progress_handle);
-        println!("[调试] 深度扫描：已停止进度报告线程");
+        // 深度扫描不需要停止进度报告线程（因为没有启动）
+        println!("[调试] 深度扫描：遍历完成，开始构建树结构");
         
         let mut nodes_map = Arc::try_unwrap(nodes_map).unwrap().into_inner().unwrap();
         let file_map = Arc::try_unwrap(file_map).unwrap().into_inner().unwrap();
