@@ -160,12 +160,15 @@ impl DiskScanner {
         let progress_handle = std::thread::spawn(move || {
             let mut last_files = 0;
             let mut last_time = Instant::now();
+            let mut update_count = 0;
+            
+            println!("[调试] 快速扫描进度线程启动");
             
             loop {
                 std::thread::sleep(std::time::Duration::from_millis(300));
                 
                 if should_stop_clone.load(Ordering::Relaxed) == 1 {
-                    println!("[调试] 快速扫描进度报告线程收到停止信号");
+                    println!("[调试] 快速扫描进度报告线程收到停止信号，共发送 {} 次进度", update_count);
                     break;
                 }
                 
@@ -186,6 +189,8 @@ impl DiskScanner {
                 last_files = current_files;
                 last_time = now;
                 
+                update_count += 1;
+                
                 let progress = ScanProgress {
                     scanned_files: current_files as u64,
                     scanned_dirs: current_dirs as u64,
@@ -194,6 +199,11 @@ impl DiskScanner {
                     elapsed_ms: elapsed,
                     files_per_second,
                 };
+                
+                println!("[调试] 发送进度 #{}: 文件={}, 目录={}, 大小={:.1}GB, 速度={:.0}/s", 
+                    update_count, current_files, current_dirs, 
+                    current_size as f64 / 1024.0 / 1024.0 / 1024.0,
+                    files_per_second);
                 
                 if app_clone.emit("quick-scan-progress", progress).is_err() {
                     println!("[调试] 快速扫描进度报告线程退出（emit失败）");
@@ -228,11 +238,12 @@ impl DiskScanner {
                     total_dirs.fetch_add(1, Ordering::Relaxed);
                     
                     let large_files_clone = Arc::clone(&large_files);
+                    let total_files_clone = Arc::clone(&total_files);
+                    let total_size_clone = Arc::clone(&total_size);
                     let (dir_size, dir_files, dir_inaccessible) = 
-                        Self::calculate_dir_size(&path, large_file_threshold, large_files_clone);
+                        Self::calculate_dir_size(&path, large_file_threshold, large_files_clone, total_files_clone, total_size_clone);
                     
-                    total_size.fetch_add(dir_size, Ordering::Relaxed);
-                    total_files.fetch_add(dir_files, Ordering::Relaxed);
+                    // 注意：这里不再累加，因为 calculate_dir_size 内部已经更新了全局计数器
                     inaccessible_count.fetch_add(dir_inaccessible, Ordering::Relaxed);
 
                     let is_symlink = metadata.file_type().is_symlink();
@@ -324,7 +335,9 @@ impl DiskScanner {
     fn calculate_dir_size(
         path: &Path, 
         large_file_threshold: u64,
-        large_files: Arc<Mutex<Vec<super::file_info::FileInfo>>>
+        large_files: Arc<Mutex<Vec<super::file_info::FileInfo>>>,
+        total_files_counter: Arc<AtomicUsize>,
+        total_size_counter: Arc<AtomicU64>,
     ) -> (u64, usize, usize) {
         let start = Instant::now();
         let size = Arc::new(AtomicU64::new(0));
@@ -344,6 +357,10 @@ impl DiskScanner {
                                 let file_size = metadata.len();
                                 size.fetch_add(file_size, Ordering::Relaxed);
                                 files.fetch_add(1, Ordering::Relaxed);
+                                
+                                // 更新全局计数器，让进度线程能看到
+                                total_files_counter.fetch_add(1, Ordering::Relaxed);
+                                total_size_counter.fetch_add(file_size, Ordering::Relaxed);
                                 
                                 if file_size >= large_file_threshold {
                                     if let Ok(modified) = metadata.modified() {
