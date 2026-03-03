@@ -3,8 +3,8 @@ mod scanner;
 pub mod migration;
 mod database;
 mod commands;
-mod safety;
-mod cache;
+pub mod safety;
+pub mod cache;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
