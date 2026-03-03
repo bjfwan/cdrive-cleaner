@@ -148,23 +148,14 @@ impl DiskScanner {
             }
         };
         
-        // 只计算目录数量，不包括文件
-        let dir_count: usize = entries.iter()
-            .filter_map(|e| e.as_ref().ok())
-            .filter(|e| e.metadata().map(|m| m.is_dir()).unwrap_or(false))
-            .count();
-        
-        let total_top_dirs = dir_count;
-        let completed_dirs = Arc::new(AtomicUsize::new(0));
-        println!("[性能] 读取根目录条目: {:.3} 秒, 共 {} 个条目，其中 {} 个目录", 
-            step1.elapsed().as_secs_f64(), entries.len(), total_top_dirs);
+        println!("[性能] 读取根目录条目: {:.3} 秒, 共 {} 个条目", 
+            step1.elapsed().as_secs_f64(), entries.len());
 
         let step2 = Instant::now();
         let app_clone = app.clone();
         let total_size_clone = Arc::clone(&total_size);
         let total_files_clone = Arc::clone(&total_files);
         let total_dirs_clone = Arc::clone(&total_dirs);
-        let completed_dirs_clone = Arc::clone(&completed_dirs);
         let start_clone = start.clone();
         let should_stop = Arc::new(AtomicUsize::new(0));
         let should_stop_clone = Arc::clone(&should_stop);
@@ -174,6 +165,7 @@ impl DiskScanner {
             let mut last_files = 0;
             let mut last_time = Instant::now();
             let mut update_count = 0;
+            let mut last_progress_percent = 0.0;
             
             println!("[调试] 快速扫描进度线程启动");
             
@@ -188,7 +180,6 @@ impl DiskScanner {
                 let current_files = total_files_clone.load(Ordering::Relaxed);
                 let current_dirs = total_dirs_clone.load(Ordering::Relaxed);
                 let current_size = total_size_clone.load(Ordering::Relaxed);
-                let completed = completed_dirs_clone.load(Ordering::Relaxed);
                 let elapsed = start_clone.elapsed().as_millis() as u64;
                 
                 let now = Instant::now();
@@ -200,13 +191,19 @@ impl DiskScanner {
                     0.0
                 };
                 
-                // 计算进度百分比（基于已完成的顶层目录数）
-                let progress_percent = if total_top_dirs > 0 {
-                    (completed as f64 / total_top_dirs as f64) * 100.0
+                // 基于已扫描文件数估算进度（假设总文件数约为 800,000）
+                // 使用平滑的估算，避免进度跳跃
+                let estimated_total_files = 800000.0;
+                let raw_progress = (current_files as f64 / estimated_total_files) * 100.0;
+                
+                // 平滑进度：不允许进度倒退，且限制最大值为 99%
+                let progress_percent = if raw_progress > last_progress_percent {
+                    raw_progress.min(99.0)
                 } else {
-                    0.0
+                    last_progress_percent
                 };
                 
+                last_progress_percent = progress_percent;
                 last_files = current_files;
                 last_time = now;
                 
@@ -223,8 +220,8 @@ impl DiskScanner {
                 };
                 
                 if update_count % 10 == 0 || progress_percent > 90.0 {
-                    println!("[调试] 发送进度 #{}: 文件={}, 已完成目录={}/{}, 进度={:.1}%", 
-                        update_count, current_files, completed, total_top_dirs, progress_percent);
+                    println!("[调试] 发送进度 #{}: 文件={}, 进度={:.1}%", 
+                        update_count, current_files, progress_percent);
                 }
                 
                 if app_clone.emit("quick-scan-progress", progress).is_err() {
@@ -264,9 +261,6 @@ impl DiskScanner {
                     let total_size_clone = Arc::clone(&total_size);
                     let (dir_size, dir_files, dir_inaccessible) = 
                         Self::calculate_dir_size(&path, large_file_threshold, large_files_clone, total_files_clone, total_size_clone);
-                    
-                    // 标记该顶层目录已完成
-                    completed_dirs.fetch_add(1, Ordering::Relaxed);
                     
                     // 注意：这里不再累加，因为 calculate_dir_size 内部已经更新了全局计数器
                     inaccessible_count.fetch_add(dir_inaccessible, Ordering::Relaxed);
