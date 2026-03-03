@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 
 interface DirectoryNode {
   path: string;
@@ -30,10 +30,69 @@ const emit = defineEmits<{
   'migrate-dir': [dir: DirectoryNode];
   'migrate-file': [file: FileInfo];
   'open-file': [file: FileInfo];
+  'batch-migrate': [items: Array<DirectoryNode | FileInfo>];
 }>();
 
 const loadingFiles = ref(false);
 const currentFiles = ref<FileInfo[]>([]);
+const selectedDirs = ref<Set<string>>(new Set());
+const selectedFiles = ref<Set<string>>(new Set());
+
+const selectedItems = computed(() => {
+  const items: Array<DirectoryNode | FileInfo> = [];
+  props.directories.forEach(dir => {
+    if (selectedDirs.value.has(dir.path)) {
+      items.push(dir);
+    }
+  });
+  currentFiles.value.forEach(file => {
+    if (selectedFiles.value.has(file.path)) {
+      items.push(file);
+    }
+  });
+  return items;
+});
+
+const hasSelection = computed(() => selectedDirs.value.size > 0 || selectedFiles.value.size > 0);
+
+function toggleDirSelection(dir: DirectoryNode) {
+  if (selectedDirs.value.has(dir.path)) {
+    selectedDirs.value.delete(dir.path);
+  } else {
+    selectedDirs.value.add(dir.path);
+  }
+}
+
+function toggleFileSelection(file: FileInfo) {
+  if (selectedFiles.value.has(file.path)) {
+    selectedFiles.value.delete(file.path);
+  } else {
+    selectedFiles.value.add(file.path);
+  }
+}
+
+function selectAll() {
+  props.directories.forEach(dir => {
+    if (!props.deepScanning || (dir.children && dir.children.length > 0)) {
+      selectedDirs.value.add(dir.path);
+    }
+  });
+  currentFiles.value.forEach(file => {
+    selectedFiles.value.add(file.path);
+  });
+}
+
+function clearSelection() {
+  selectedDirs.value.clear();
+  selectedFiles.value.clear();
+}
+
+function handleBatchMigrate() {
+  if (hasSelection.value) {
+    emit('batch-migrate', selectedItems.value);
+    clearSelection();
+  }
+}
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -90,7 +149,29 @@ watch(() => props.currentPath, (newPath) => {
     </div>
     
     <template v-else-if="directories.length > 0 || currentFiles.length > 0">
+      <div v-if="hasSelection" class="batch-toolbar">
+        <span class="batch-info">已选择 {{ selectedItems.length }} 项</span>
+        <div class="batch-actions">
+          <button class="batch-btn batch-migrate-btn" @click="handleBatchMigrate" :disabled="deepScanning">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M8 2L12 6H9V10H7V6H4L8 2Z" fill="currentColor"/>
+              <path d="M3 12H13V14H3V12Z" fill="currentColor"/>
+            </svg>
+            批量迁移
+          </button>
+          <button class="batch-btn batch-clear-btn" @click="clearSelection">清除选择</button>
+        </div>
+      </div>
+      
       <div class="table-header">
+        <div class="th th-checkbox">
+          <input 
+            type="checkbox" 
+            class="checkbox"
+            :checked="hasSelection && selectedItems.length === (directories.length + currentFiles.length)"
+            @change="hasSelection ? clearSelection() : selectAll()"
+          />
+        </div>
         <div class="th th-name">名称</div>
         <div class="th th-size">大小</div>
         <div class="th th-percent">占比</div>
@@ -102,8 +183,17 @@ watch(() => props.currentPath, (newPath) => {
           v-for="dir in directories" 
           :key="dir.path"
           class="table-row"
-          :class="{ 'row-disabled': deepScanning && (!dir.children || dir.children.length === 0) }"
+          :class="{ 'row-disabled': deepScanning && (!dir.children || dir.children.length === 0), 'row-selected': selectedDirs.has(dir.path) }"
         >
+          <div class="td td-checkbox" @click.stop="toggleDirSelection(dir)">
+            <input 
+              type="checkbox" 
+              class="checkbox"
+              :checked="selectedDirs.has(dir.path)"
+              :disabled="deepScanning && (!dir.children || dir.children.length === 0)"
+              @change="toggleDirSelection(dir)"
+            />
+          </div>
           <div class="td td-name" @click="handleItemClick(dir)">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <path d="M2 4.5C2 3.67157 2.67157 3 3.5 3H6L7.5 4.5H14.5C15.3284 4.5 16 5.17157 16 6V13.5C16 14.3284 15.3284 15 14.5 15H3.5C2.67157 15 2 14.3284 2 13.5V4.5Z" fill="#2c2c2c"/>
@@ -133,7 +223,16 @@ watch(() => props.currentPath, (newPath) => {
           v-for="file in currentFiles" 
           :key="file.path"
           class="table-row table-row-file"
+          :class="{ 'row-selected': selectedFiles.has(file.path) }"
         >
+          <div class="td td-checkbox" @click.stop="toggleFileSelection(file)">
+            <input 
+              type="checkbox" 
+              class="checkbox"
+              :checked="selectedFiles.has(file.path)"
+              @change="toggleFileSelection(file)"
+            />
+          </div>
           <div class="td td-name">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <path d="M4 2H10L14 6V14C14 15.1046 13.1046 16 12 16H4C2.89543 16 2 15.1046 2 14V4C2 2.89543 2.89543 2 4 2Z" fill="#78716c"/>
@@ -177,6 +276,84 @@ watch(() => props.currentPath, (newPath) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1.25rem;
+  background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  margin-bottom: 1rem;
+  flex-shrink: 0;
+}
+
+.batch-info {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #1e40af;
+}
+
+.batch-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.batch-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.batch-migrate-btn {
+  background: #007aff;
+  color: white;
+}
+
+.batch-migrate-btn:hover:not(:disabled) {
+  background: #0051d5;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+}
+
+.batch-migrate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.batch-clear-btn {
+  background: white;
+  color: #78716c;
+  border: 1px solid #e7e5e4;
+}
+
+.batch-clear-btn:hover {
+  background: #f5f5f4;
+  border-color: #d6d3d1;
+}
+
+.checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #007aff;
+}
+
+.td-checkbox {
+  justify-content: center;
+}
+
+.row-selected {
+  background: rgba(0, 122, 255, 0.05);
 }
 
 .empty {
@@ -230,7 +407,7 @@ watch(() => props.currentPath, (newPath) => {
 
 .table-header {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px) 80px;
+  grid-template-columns: 40px minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px) 80px;
   gap: 1.5rem;
   padding: 0 0 1rem;
   border-bottom: 1px solid #e7e5e4;
@@ -253,7 +430,7 @@ watch(() => props.currentPath, (newPath) => {
 
 .table-row {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px) 80px;
+  grid-template-columns: 40px minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px) 80px;
   gap: 1.5rem;
   padding: 1rem 0;
   border-bottom: 1px solid #f5f5f4;
@@ -414,7 +591,7 @@ watch(() => props.currentPath, (newPath) => {
 @media (max-width: 900px) {
   .table-header,
   .table-row {
-    grid-template-columns: 1fr 100px 120px 80px;
+    grid-template-columns: 40px 1fr 100px 120px 80px;
     gap: 1rem;
   }
 
@@ -423,12 +600,26 @@ watch(() => props.currentPath, (newPath) => {
     padding-left: 1.5rem;
     padding-right: 1.5rem;
   }
+
+  .batch-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .batch-actions {
+    width: 100%;
+  }
+
+  .batch-btn {
+    flex: 1;
+  }
 }
 
 @media (max-width: 600px) {
   .table-header,
   .table-row {
-    grid-template-columns: 1fr 90px;
+    grid-template-columns: 40px 1fr 90px;
     gap: 0.75rem;
   }
 
