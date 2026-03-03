@@ -147,9 +147,17 @@ impl DiskScanner {
                 return Err(anyhow::anyhow!("Failed to read directory: {}", e));
             }
         };
-        let total_top_dirs = entries.len();
+        
+        // 只计算目录数量，不包括文件
+        let dir_count: usize = entries.iter()
+            .filter_map(|e| e.as_ref().ok())
+            .filter(|e| e.metadata().map(|m| m.is_dir()).unwrap_or(false))
+            .count();
+        
+        let total_top_dirs = dir_count;
         let completed_dirs = Arc::new(AtomicUsize::new(0));
-        println!("[性能] 读取根目录条目: {:.3} 秒, 共 {} 个条目", step1.elapsed().as_secs_f64(), entries.len());
+        println!("[性能] 读取根目录条目: {:.3} 秒, 共 {} 个条目，其中 {} 个目录", 
+            step1.elapsed().as_secs_f64(), entries.len(), total_top_dirs);
 
         let step2 = Instant::now();
         let app_clone = app.clone();
@@ -214,10 +222,10 @@ impl DiskScanner {
                     progress_percent,
                 };
                 
-                println!("[调试] 发送进度 #{}: 文件={}, 目录={}, 大小={:.1}GB, 速度={:.0}/s, 进度={:.1}%", 
-                    update_count, current_files, current_dirs, 
-                    current_size as f64 / 1024.0 / 1024.0 / 1024.0,
-                    files_per_second, progress_percent);
+                if update_count % 10 == 0 || progress_percent > 90.0 {
+                    println!("[调试] 发送进度 #{}: 文件={}, 已完成目录={}/{}, 进度={:.1}%", 
+                        update_count, current_files, completed, total_top_dirs, progress_percent);
+                }
                 
                 if app_clone.emit("quick-scan-progress", progress).is_err() {
                     println!("[调试] 快速扫描进度报告线程退出（emit失败）");
