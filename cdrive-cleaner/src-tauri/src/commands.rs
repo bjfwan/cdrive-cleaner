@@ -20,9 +20,10 @@ pub async fn scan_disk(path: String, app: AppHandle) -> Result<ScanResult, Strin
 }
 
 #[tauri::command]
-pub async fn scan_disk_deep(path: String, app: AppHandle) -> Result<ScanResult, String> {
+pub async fn scan_disk_deep(path: String, app: AppHandle, estimated_files: Option<usize>) -> Result<ScanResult, String> {
     let scanner = DiskScanner::new();
-    scanner.scan_deep(&path, app).await.map_err(|e| e.to_string())
+    let estimated = estimated_files.unwrap_or(800000); // 默认估算值
+    scanner.scan_deep(&path, app, estimated).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

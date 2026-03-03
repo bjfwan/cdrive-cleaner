@@ -102,11 +102,11 @@ impl DiskScanner {
         .map_err(|e| anyhow::anyhow!("Task join error: {}", e))?
     }
 
-    pub async fn scan_deep<P: AsRef<Path>>(&self, path: P, app: AppHandle) -> Result<ScanResult> {
+    pub async fn scan_deep<P: AsRef<Path>>(&self, path: P, app: AppHandle, estimated_files: usize) -> Result<ScanResult> {
         let path = path.as_ref().to_path_buf();
         
         tokio::task::spawn_blocking(move || {
-            Self::scan_deep_blocking(&path, app)
+            Self::scan_deep_blocking(&path, app, estimated_files)
         })
         .await
         .map_err(|e| anyhow::anyhow!("Task join error: {}", e))?
@@ -424,12 +424,13 @@ impl DiskScanner {
         (final_size, final_files, final_inaccessible)
     }
 
-    fn scan_deep_blocking(path: &Path, app: AppHandle) -> Result<ScanResult> {
+    fn scan_deep_blocking(path: &Path, app: AppHandle, estimated_files: usize) -> Result<ScanResult> {
         let start = Instant::now();
         let root_path = path.to_string_lossy().to_string();
         
         println!("\n=== 深度扫描开始 ===");
         println!("[调试] 路径: {}", root_path);
+        println!("[调试] 快速扫描文件数: {}", estimated_files);
         
         let inaccessible_count = Arc::new(AtomicUsize::new(0));
         let large_files: Arc<Mutex<Vec<super::file_info::FileInfo>>> = Arc::new(Mutex::new(Vec::new()));
@@ -492,9 +493,9 @@ impl DiskScanner {
                     0.0
                 };
                 
-                // 深度扫描无法准确计算进度百分比，使用估算
-                // 假设总文件数约为快速扫描的 1.2 倍
-                let estimated_total = 800000; // 估算值
+                // 使用快速扫描的文件数作为基准计算进度
+                // 深度扫描通常会发现更多文件（隐藏文件、系统文件等），所以乘以 1.1 作为估算
+                let estimated_total = (estimated_files as f64 * 1.1) as usize;
                 let progress_percent = if estimated_total > 0 {
                     ((current_files as f64 / estimated_total as f64) * 100.0).min(99.0)
                 } else {

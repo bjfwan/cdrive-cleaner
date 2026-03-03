@@ -96,7 +96,14 @@ async function startDeepScan() {
   console.log('[前端] 深度扫描开始');
 
   try {
-    const result = await invoke<ScanResult>('scan_disk_deep', { path: selectedDisk.value });
+    // 传递快速扫描的文件数作为估算值
+    const estimatedFiles = scanResult.value?.total_files || 800000;
+    console.log('[前端] 使用快速扫描文件数作为基准:', estimatedFiles);
+    
+    const result = await invoke<ScanResult>('scan_disk_deep', { 
+      path: selectedDisk.value,
+      estimatedFiles: estimatedFiles
+    });
     console.log('[前端] 深度扫描完成');
     deepScanResult.value = result;
     scanCache.value.set(selectedDisk.value, result);
