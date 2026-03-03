@@ -470,8 +470,9 @@ impl DiskScanner {
             let mut last_files = 0;
             let mut last_time = Instant::now();
             let mut update_count = 0;
+            let mut estimated_total = (estimated_files as f64 * 1.1) as usize;
             
-            println!("[调试] 深度扫描进度线程启动");
+            println!("[调试] 深度扫描进度线程启动，初始估算: {} 文件", estimated_total);
             
             loop {
                 std::thread::sleep(std::time::Duration::from_millis(500));
@@ -495,9 +496,15 @@ impl DiskScanner {
                     0.0
                 };
                 
-                // 使用快速扫描的文件数作为基准计算进度
-                // 深度扫描通常会发现更多文件（隐藏文件、系统文件等），所以乘以 1.1 作为估算
-                let estimated_total = (estimated_files as f64 * 1.1) as usize;
+                // 动态调整估算值：如果当前文件数超过估算值的 90%，增加估算值
+                if current_files > (estimated_total as f64 * 0.9) as usize {
+                    let old_estimated = estimated_total;
+                    estimated_total = (current_files as f64 * 1.2) as usize;
+                    println!("[调试] 动态调整估算值: {} -> {} (当前: {})", 
+                        old_estimated, estimated_total, current_files);
+                }
+                
+                // 计算进度百分比
                 let progress_percent = if estimated_total > 0 {
                     ((current_files as f64 / estimated_total as f64) * 100.0).min(99.0)
                 } else {
@@ -518,10 +525,10 @@ impl DiskScanner {
                     progress_percent,
                 };
                 
-                println!("[调试] 深度扫描进度 #{}: 文件={}, 目录={}, 大小={:.1}GB, 速度={:.0}/s, 进度={:.1}%", 
-                    update_count, current_files, current_dirs, 
-                    current_size as f64 / 1024.0 / 1024.0 / 1024.0,
-                    files_per_second, progress_percent);
+                if update_count % 10 == 0 || progress_percent > 90.0 {
+                    println!("[调试] 深度扫描进度 #{}: 文件={}, 进度={:.1}%, 估算总数={}", 
+                        update_count, current_files, progress_percent, estimated_total);
+                }
                 
                 if app_clone.emit("deep-scan-progress", progress).is_err() {
                     println!("[调试] 深度扫描进度报告线程退出（emit失败）");
