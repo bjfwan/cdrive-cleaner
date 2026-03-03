@@ -389,7 +389,6 @@ function handleItemClick(dir: DirectoryNode) {
   .preview-bar-container {
     width: 100%;
   }
-}
 
   .treemap-container {
     padding: 0.875rem;
@@ -422,25 +421,6 @@ function handleItemClick(dir: DirectoryNode) {
   }
 
   .preview-rank {
-    font-size: 0.75rem;
-  }
-
-  .preview-name {
-    font-size: 0.75rem;
-  }
-
-  .preview-size {
-    font-size: 0.75rem;
-  }
-
-  .preview-item {
-    padding: 0.625rem;
-    gap: 0.625rem;
-  }
-
-  .preview-rank {
-    width: 24px;
-    height: 24px;
     font-size: 0.75rem;
   }
 
