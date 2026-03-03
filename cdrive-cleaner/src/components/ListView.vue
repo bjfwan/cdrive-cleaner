@@ -129,6 +129,7 @@ async function loadDirectoryFiles(path: string) {
 
 watch(() => props.currentPath, (newPath) => {
   loadDirectoryFiles(newPath);
+  clearSelection();
 }, { immediate: true });
 </script>
 
