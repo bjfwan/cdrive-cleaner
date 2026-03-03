@@ -185,7 +185,7 @@ function handleItemClick(dir: DirectoryNode) {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 1fr 320px;
+  grid-template-columns: 1fr 360px;
   gap: 1.5rem;
   overflow: hidden;
 }
@@ -329,7 +329,7 @@ function handleItemClick(dir: DirectoryNode) {
 @media (max-width: 900px) {
   .treemap-view {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr minmax(200px, 40%);
+    grid-template-rows: 1fr minmax(240px, 45%);
     gap: 1.25rem;
   }
 
@@ -338,7 +338,7 @@ function handleItemClick(dir: DirectoryNode) {
   }
 
   .list-preview {
-    min-height: 200px;
+    min-height: 240px;
   }
 
   .treemap-container {
@@ -357,7 +357,7 @@ function handleItemClick(dir: DirectoryNode) {
 
 @media (max-width: 600px) {
   .treemap-view {
-    grid-template-rows: 1fr minmax(180px, 35%);
+    grid-template-rows: 1fr minmax(200px, 40%);
     gap: 1rem;
   }
 
@@ -366,7 +366,7 @@ function handleItemClick(dir: DirectoryNode) {
   }
 
   .list-preview {
-    min-height: 180px;
+    min-height: 200px;
   }
 
   .preview-item {
