@@ -1,6 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod scanner;
-mod migration;
+pub mod migration;
 mod database;
 mod commands;
 
