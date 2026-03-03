@@ -329,7 +329,7 @@ function handleItemClick(dir: DirectoryNode) {
 @media (max-width: 900px) {
   .treemap-view {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr minmax(280px, 50%);
+    grid-template-rows: 1fr auto;
     gap: 1.25rem;
   }
 
@@ -338,8 +338,58 @@ function handleItemClick(dir: DirectoryNode) {
   }
 
   .list-preview {
-    min-height: 280px;
+    min-height: auto;
   }
+
+  .preview-items {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-right: 0;
+    padding-bottom: 0.5rem;
+    gap: 0.75rem;
+  }
+
+  .preview-items::-webkit-scrollbar {
+    height: 6px;
+    width: auto;
+  }
+
+  .preview-item {
+    flex-direction: column;
+    min-width: 140px;
+    max-width: 160px;
+    flex-shrink: 0;
+    padding: 0.875rem;
+    gap: 0.625rem;
+  }
+
+  .preview-rank {
+    width: 100%;
+    height: auto;
+    padding: 0.375rem;
+  }
+
+  .preview-info {
+    width: 100%;
+    text-align: center;
+  }
+
+  .preview-name {
+    text-align: center;
+    margin-bottom: 0.5rem;
+  }
+
+  .preview-size {
+    width: 100%;
+    text-align: center;
+    font-size: 0.875rem;
+  }
+
+  .preview-bar-container {
+    width: 100%;
+  }
+}
 
   .treemap-container {
     padding: 0.875rem;
@@ -357,7 +407,7 @@ function handleItemClick(dir: DirectoryNode) {
 
 @media (max-width: 600px) {
   .treemap-view {
-    grid-template-rows: 1fr minmax(240px, 45%);
+    grid-template-rows: 1fr auto;
     gap: 1rem;
   }
 
@@ -365,8 +415,22 @@ function handleItemClick(dir: DirectoryNode) {
     min-height: 220px;
   }
 
-  .list-preview {
-    min-height: 240px;
+  .preview-item {
+    min-width: 120px;
+    max-width: 140px;
+    padding: 0.75rem;
+  }
+
+  .preview-rank {
+    font-size: 0.75rem;
+  }
+
+  .preview-name {
+    font-size: 0.75rem;
+  }
+
+  .preview-size {
+    font-size: 0.75rem;
   }
 
   .preview-item {
