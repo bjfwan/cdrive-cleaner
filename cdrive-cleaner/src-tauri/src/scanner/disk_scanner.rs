@@ -245,6 +245,9 @@ impl DiskScanner {
                         None
                     };
 
+                    // 分析迁移安全性
+                    let safety = crate::safety::analyze_migration_safety(&path, dir_size).ok();
+
                     Some(DirectoryNode {
                         path: path.to_string_lossy().to_string(),
                         name: entry.file_name().to_string_lossy().to_string(),
@@ -253,6 +256,7 @@ impl DiskScanner {
                         children: vec![],
                         is_symlink,
                         link_target,
+                        safety,
                     })
                 } else if metadata.is_file() {
                     total_files.fetch_add(1, Ordering::Relaxed);
@@ -539,6 +543,7 @@ impl DiskScanner {
                                 children: vec![],
                                 is_symlink,
                                 link_target,
+                                safety: None, // 深度扫描时先不分析，后面统一分析
                             };
                             
                             nodes_map.lock().unwrap().insert(entry_path.to_path_buf(), node);

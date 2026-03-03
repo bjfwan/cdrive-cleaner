@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use crate::safety::MigrationSafety;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileInfo {
@@ -19,6 +20,8 @@ pub struct DirectoryNode {
     pub children: Vec<DirectoryNode>,
     pub is_symlink: bool,
     pub link_target: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub safety: Option<MigrationSafety>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

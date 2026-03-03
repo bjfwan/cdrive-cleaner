@@ -7,6 +7,14 @@ interface DirectoryNode {
   size: number;
   file_count: number;
   children: DirectoryNode[];
+  safety?: {
+    risk_level: 'safe' | 'moderate' | 'risky' | 'dangerous';
+    safety_score: number;
+    can_migrate: boolean;
+    reasons: string[];
+    recommendations: string[];
+    app_type: string;
+  };
 }
 
 interface FileInfo {
@@ -141,6 +149,37 @@ watch(() => props.currentPath, (newPath) => {
   loadDirectoryFiles(newPath);
   clearSelection();
 }, { immediate: true });
+
+// 风险等级辅助函数
+function getRiskIcon(riskLevel?: string): string {
+  switch (riskLevel) {
+    case 'safe': return '🟢';
+    case 'moderate': return '🟡';
+    case 'risky': return '🟠';
+    case 'dangerous': return '🔴';
+    default: return '⚪';
+  }
+}
+
+function getRiskLabel(riskLevel?: string): string {
+  switch (riskLevel) {
+    case 'safe': return '安全';
+    case 'moderate': return '中风险';
+    case 'risky': return '高风险';
+    case 'dangerous': return '危险';
+    default: return '未知';
+  }
+}
+
+function getRiskClass(riskLevel?: string): string {
+  switch (riskLevel) {
+    case 'safe': return 'risk-safe';
+    case 'moderate': return 'risk-moderate';
+    case 'risky': return 'risk-risky';
+    case 'dangerous': return 'risk-dangerous';
+    default: return '';
+  }
+}
 </script>
 
 <template>
@@ -210,6 +249,9 @@ watch(() => props.currentPath, (newPath) => {
               <path d="M2 4.5C2 3.67157 2.67157 3 3.5 3H6L7.5 4.5H14.5C15.3284 4.5 16 5.17157 16 6V13.5C16 14.3284 15.3284 15 14.5 15H3.5C2.67157 15 2 14.3284 2 13.5V4.5Z" fill="#2c2c2c"/>
             </svg>
             <span>{{ dir.name }}</span>
+            <span v-if="dir.safety" class="risk-badge" :class="getRiskClass(dir.safety.risk_level)" :title="`${getRiskLabel(dir.safety.risk_level)} - ${dir.safety.app_type}`">
+              {{ getRiskIcon(dir.safety.risk_level) }}
+            </span>
             <span v-if="deepScanning && (!dir.children || dir.children.length === 0)" class="badge">扫描中</span>
           </div>
           <div class="td td-size" @click="handleItemClick(dir)">{{ formatBytes(dir.size) }}</div>
@@ -681,5 +723,36 @@ watch(() => props.currentPath, (newPath) => {
   .td-files {
     display: none;
   }
+}
+
+/* 风险等级徽章 */
+.risk-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  margin-left: 6px;
+  cursor: help;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.risk-badge:hover {
+  transform: scale(1.2);
+}
+
+.risk-safe {
+  filter: drop-shadow(0 0 2px rgba(34, 197, 94, 0.3));
+}
+
+.risk-moderate {
+  filter: drop-shadow(0 0 2px rgba(234, 179, 8, 0.3));
+}
+
+.risk-risky {
+  filter: drop-shadow(0 0 2px rgba(249, 115, 22, 0.3));
+}
+
+.risk-dangerous {
+  filter: drop-shadow(0 0 2px rgba(239, 68, 68, 0.3));
 }
 </style>
