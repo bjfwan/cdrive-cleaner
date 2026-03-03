@@ -1,16 +1,27 @@
 use crate::scanner::{DiskScanner, file_info::{ScanResult, FileInfo}};
 use crate::migration::{FileMigrator, LinkType, file_migrator::MigrationResult};
+use tauri::{AppHandle, Emitter};
 
-#[tauri::command]
-pub async fn scan_disk(path: String) -> Result<ScanResult, String> {
-    let scanner = DiskScanner::new();
-    scanner.scan(&path).await.map_err(|e| e.to_string())
+#[derive(Clone, serde::Serialize)]
+pub struct ScanProgress {
+    pub scanned_files: u64,
+    pub scanned_dirs: u64,
+    pub total_size: u64,
+    pub current_path: String,
+    pub elapsed_ms: u64,
+    pub files_per_second: f64,
 }
 
 #[tauri::command]
-pub async fn scan_disk_deep(path: String) -> Result<ScanResult, String> {
+pub async fn scan_disk(path: String, app: AppHandle) -> Result<ScanResult, String> {
     let scanner = DiskScanner::new();
-    scanner.scan_deep(&path).await.map_err(|e| e.to_string())
+    scanner.scan(&path, app).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn scan_disk_deep(path: String, app: AppHandle) -> Result<ScanResult, String> {
+    let scanner = DiskScanner::new();
+    scanner.scan_deep(&path, app).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

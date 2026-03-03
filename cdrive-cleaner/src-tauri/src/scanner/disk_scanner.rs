@@ -19,6 +19,18 @@ use windows::Win32::Storage::FileSystem::{GetFileInformationByHandle, BY_HANDLE_
 #[cfg(windows)]
 use windows::core::PCWSTR;
 
+use tauri::{AppHandle, Emitter};
+
+#[derive(Clone, serde::Serialize)]
+pub struct ScanProgress {
+    pub scanned_files: u64,
+    pub scanned_dirs: u64,
+    pub total_size: u64,
+    pub current_path: String,
+    pub elapsed_ms: u64,
+    pub files_per_second: f64,
+}
+
 pub struct DiskScanner;
 
 impl DiskScanner {
@@ -79,21 +91,21 @@ impl DiskScanner {
         None
     }
 
-    pub async fn scan<P: AsRef<Path>>(&self, path: P) -> Result<ScanResult> {
+    pub async fn scan<P: AsRef<Path>>(&self, path: P, app: AppHandle) -> Result<ScanResult> {
         let path = path.as_ref().to_path_buf();
         
         tokio::task::spawn_blocking(move || {
-            Self::scan_quick(&path)
+            Self::scan_quick(&path, app)
         })
         .await
         .map_err(|e| anyhow::anyhow!("Task join error: {}", e))?
     }
 
-    pub async fn scan_deep<P: AsRef<Path>>(&self, path: P) -> Result<ScanResult> {
+    pub async fn scan_deep<P: AsRef<Path>>(&self, path: P, app: AppHandle) -> Result<ScanResult> {
         let path = path.as_ref().to_path_buf();
         
         tokio::task::spawn_blocking(move || {
-            Self::scan_deep_blocking(&path)
+            Self::scan_deep_blocking(&path, app)
         })
         .await
         .map_err(|e| anyhow::anyhow!("Task join error: {}", e))?
