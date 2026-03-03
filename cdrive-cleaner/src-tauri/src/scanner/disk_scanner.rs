@@ -471,6 +471,7 @@ impl DiskScanner {
             let mut last_time = Instant::now();
             let mut update_count = 0;
             let mut estimated_total = (estimated_files as f64 * 1.1) as usize;
+            let mut last_progress_percent = 0.0;
             
             println!("[调试] 深度扫描进度线程启动，初始估算: {} 文件", estimated_total);
             
@@ -504,13 +505,21 @@ impl DiskScanner {
                         old_estimated, estimated_total, current_files);
                 }
                 
-                // 计算进度百分比
-                let progress_percent = if estimated_total > 0 {
+                // 计算原始进度百分比
+                let raw_progress = if estimated_total > 0 {
                     ((current_files as f64 / estimated_total as f64) * 100.0).min(99.0)
                 } else {
                     0.0
                 };
                 
+                // 平滑进度：确保进度只增不减
+                let progress_percent = if raw_progress > last_progress_percent {
+                    raw_progress
+                } else {
+                    last_progress_percent
+                };
+                
+                last_progress_percent = progress_percent;
                 last_files = current_files;
                 last_time = now;
                 update_count += 1;
