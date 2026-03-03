@@ -9,6 +9,7 @@ import DiskCard from './components/DiskCard.vue';
 import ScanResults from './components/ScanResults.vue';
 import ScanProgress from './components/ScanProgress.vue';
 import DeepScanProgress from './components/DeepScanProgress.vue';
+import Toast from './components/Toast.vue';
 
 use([CanvasRenderer, TreemapChart, TitleComponent, TooltipComponent]);
 
@@ -42,6 +43,12 @@ const error = ref<string>('');
 const viewMode = ref<'treemap' | 'list' | 'large-files'>('treemap');
 const navigationStack = ref<string[]>([]);
 const scanCache = ref<Map<string, ScanResult>>(new Map());
+
+// Toast 通知
+const showToast = ref(false);
+const toastMessage = ref('');
+const toastSubMessage = ref('');
+const toastType = ref<'success' | 'info' | 'warning' | 'error'>('success');
 
 onMounted(async () => {
   await loadDisks();
@@ -110,11 +117,37 @@ async function startDeepScan() {
     if (navigationStack.value[navigationStack.value.length - 1] === selectedDisk.value) {
       scanResult.value = result;
     }
+    
+    // 显示完成通知
+    showToastNotification(
+      '深度扫描完成',
+      `发现 ${result.total_files.toLocaleString()} 个文件 · ${formatBytes(result.total_size)}`,
+      'success'
+    );
   } catch (err) {
     console.error('深度扫描失败:', err);
   } finally {
     deepScanning.value = false;
   }
+}
+
+function showToastNotification(message: string, subMessage: string, type: 'success' | 'info' | 'warning' | 'error' = 'success') {
+  toastMessage.value = message;
+  toastSubMessage.value = subMessage;
+  toastType.value = type;
+  showToast.value = true;
+}
+
+function closeToast() {
+  showToast.value = false;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
 }
 
 async function navigateToPath(path: string) {
@@ -242,6 +275,14 @@ function goBack() {
     </main>
 
     <ScanProgress :scanning="scanning" />
+    
+    <Toast 
+      :show="showToast"
+      :message="toastMessage"
+      :sub-message="toastSubMessage"
+      :type="toastType"
+      @close="closeToast"
+    />
   </div>
 </template>
 
