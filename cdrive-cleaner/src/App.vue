@@ -8,6 +8,7 @@ import { TitleComponent, TooltipComponent } from 'echarts/components';
 import DiskCard from './components/DiskCard.vue';
 import ScanResults from './components/ScanResults.vue';
 import ScanProgress from './components/ScanProgress.vue';
+import DeepScanProgress from './components/DeepScanProgress.vue';
 
 use([CanvasRenderer, TreemapChart, TitleComponent, TooltipComponent]);
 
@@ -92,8 +93,7 @@ async function startScan() {
 async function startDeepScan() {
   if (!selectedDisk.value) return;
   deepScanning.value = true;
-  scanning.value = true; // 显示进度对话框
-  console.log('[前端] 深度扫描开始');
+  console.log('[前端] 深度扫描开始（后台进行）');
 
   try {
     // 传递快速扫描的文件数作为估算值
@@ -114,7 +114,6 @@ async function startDeepScan() {
     console.error('深度扫描失败:', err);
   } finally {
     deepScanning.value = false;
-    scanning.value = false; // 关闭进度对话框
   }
 }
 
@@ -211,10 +210,8 @@ function goBack() {
         >
           {{ scanning ? '扫描中' : '扫描磁盘' }}
         </button>
-        <div v-if="deepScanning" class="deep-scan-status">
-          <div class="spinner-small"></div>
-          <span>后台深度扫描中...</span>
-        </div>
+        
+        <DeepScanProgress :scanning="deepScanning" />
       </div>
     </aside>
 
@@ -307,7 +304,7 @@ body {
   background: linear-gradient(to top, #fafaf9 0%, #ffffff 100%);
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0;
 }
 
 .scan-btn {
@@ -337,26 +334,6 @@ body {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
-}
-
-.deep-scan-status {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  background: #f5f5f4;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  color: #78716c;
-}
-
-.spinner-small {
-  width: 16px;
-  height: 16px;
-  border: 2px solid #e7e5e4;
-  border-top-color: #007aff;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
 }
 
 .main {
