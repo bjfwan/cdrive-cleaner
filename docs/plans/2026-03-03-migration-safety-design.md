@@ -66,34 +66,63 @@ src-tauri/src/
 
 ### Layer 1: 路径模式匹配（最快，100% 准确）
 
-**黑名单（绝对禁止）：**
+**黑名单（绝对禁止）：** 极度精简，只包含真正危险的
 ```rust
 const ABSOLUTE_BLACKLIST: &[&str] = &[
-    "C:\\Windows",
+    // 系统核心目录
+    "C:\\Windows\\System32",
+    "C:\\Windows\\SysWOW64",
+    "C:\\Windows\\WinSxS",
+    
+    // 系统应用
     "C:\\Program Files\\WindowsApps",
+    
+    // 系统数据
     "C:\\ProgramData\\Microsoft\\Windows",
+    
+    // 系统保留
     "C:\\System Volume Information",
     "C:\\$Recycle.Bin",
     "C:\\Recovery",
-    "C:\\Boot",
+    
+    // 启动文件（不是目录，是文件）
     "C:\\bootmgr",
     "C:\\pagefile.sys",
     "C:\\hiberfil.sys",
     "C:\\swapfile.sys",
 ];
+
+// 注意：C:\Windows 整个目录不在黑名单，只有关键子目录
+// 这样 C:\Windows\Temp 等可以迁移
 ```
 
-**白名单（绝对安全）：**
+**白名单（绝对安全）：** 扩大范围
 ```rust
 const SAFE_WHITELIST: &[&str] = &[
+    // 用户数据目录
     "C:\\Users\\*\\Downloads",
     "C:\\Users\\*\\Documents",
     "C:\\Users\\*\\Videos",
     "C:\\Users\\*\\Pictures",
     "C:\\Users\\*\\Music",
     "C:\\Users\\*\\Desktop",
+    
+    // 临时目录
     "C:\\Temp",
     "C:\\tmp",
+    "C:\\Windows\\Temp",  // Windows 临时文件
+    
+    // 常见游戏目录
+    "C:\\Games",
+    "C:\\SteamLibrary",
+    "C:\\Program Files\\Steam\\steamapps",
+    "C:\\Program Files (x86)\\Steam\\steamapps",
+    
+    // 便携式应用目录
+    "C:\\PortableApps",
+    
+    // 下载工具目录
+    "C:\\Downloads",
 ];
 ```
 
@@ -199,65 +228,123 @@ fn is_process_running(path: &Path) -> bool {
 
 ---
 
-## 📊 评分系统
+## 📊 评分系统（优化版 - 更宽松）
 
-### 评分规则
+### 核心思路调整
+
+**原则：只有明确危险的才拦截，其他都允许但提示风险**
+
+- 🔴 **危险**：只有系统关键目录（极少数）
+- 🟠 **高风险**：正在运行的程序、文件被占用
+- 🟡 **中风险**：有注册表依赖的程序（但可以迁移）
+- 🟢 **安全**：用户数据、便携式应用、普通文件
+
+### 评分规则（重新设计）
 
 ```rust
 fn calculate_safety_score(checks: &DetectionResults) -> u8 {
-    let mut score = 50;  // 基础分 50
+    let mut score = 70;  // 基础分提高到 70（默认偏向安全）
     
-    // 黑名单：-50（直接归零）
+    // 黑名单：直接归零（只有极少数系统目录）
     if checks.in_blacklist {
         return 0;
     }
     
-    // 白名单：+40
+    // 白名单：+30（用户数据目录）
     if checks.in_whitelist {
-        score += 40;
-    }
-    
-    // 注册表依赖：-20
-    if checks.has_registry_entry {
-        score -= 20;
-    }
-    
-    // 文件被占用：-30
-    if checks.is_locked {
-        score -= 30;
-    }
-    
-    // 进程运行中：-25
-    if checks.process_running {
-        score -= 25;
-    }
-    
-    // 便携式应用：+30
-    if checks.is_portable {
         score += 30;
     }
     
-    // Program Files 目录：-15
-    if checks.in_program_files {
+    // 便携式应用：+20（很安全）
+    if checks.is_portable {
+        score += 20;
+    }
+    
+    // 注册表依赖：-15（降低惩罚，很多程序有注册表但可以迁移）
+    if checks.has_registry_entry {
         score -= 15;
+    }
+    
+    // 文件被占用：-40（这个比较危险）
+    if checks.is_locked {
+        score -= 40;
+    }
+    
+    // 进程运行中：-35（正在运行的程序不建议迁移）
+    if checks.process_running {
+        score -= 35;
+    }
+    
+    // Program Files 目录：-10（降低惩罚，很多游戏在这里）
+    if checks.in_program_files {
+        score -= 10;
+    }
+    
+    // 大文件夹（>10GB）：+5（通常是游戏或媒体，可以迁移）
+    if checks.size > 10 * 1024 * 1024 * 1024 {
+        score += 5;
     }
     
     score.clamp(0, 100)
 }
 ```
 
-### 风险等级映射
+### 风险等级映射（调整阈值）
 
 ```rust
 fn score_to_risk_level(score: u8) -> RiskLevel {
     match score {
-        0..=20 => RiskLevel::Dangerous,   // 🔴
-        21..=40 => RiskLevel::Risky,      // 🟠
-        41..=70 => RiskLevel::Moderate,   // 🟡
-        71..=100 => RiskLevel::Safe,      // 🟢
+        0..=30 => RiskLevel::Dangerous,   // 🔴 只有系统目录和被占用的文件
+        31..=50 => RiskLevel::Risky,      // 🟠 正在运行的程序
+        51..=75 => RiskLevel::Moderate,   // 🟡 有注册表的程序（但可以迁移）
+        76..=100 => RiskLevel::Safe,      // 🟢 用户数据、便携式应用
     }
 }
 ```
+
+### 实际案例分析
+
+| 路径 | 检测结果 | 评分 | 风险等级 | 说明 |
+|------|---------|------|---------|------|
+| `C:\Windows\System32\` | 黑名单 | 0 | 🔴 危险 | 绝对禁止 |
+| `C:\Program Files\Adobe\` (运行中) | 进程运行 | 70-35=35 | 🟠 高风险 | 建议关闭后迁移 |
+| `C:\Program Files\Adobe\` (未运行) | 注册表依赖 | 70-15-10=45 | 🟠 高风险 | 可以迁移，但有风险 |
+| `C:\Program Files\Steam\steamapps\` | 注册表依赖 | 70-15-10=45 | 🟠 高风险 | 游戏可以迁移 |
+| `C:\Games\MyGame\` (>10GB) | 大文件夹 | 70+5=75 | 🟡 中风险 | 推荐迁移 |
+| `C:\Users\Admin\Downloads\` | 白名单 | 70+30=100 | 🟢 安全 | 完全安全 |
+| `C:\PortableApps\7-Zip\` | 便携式 | 70+20=90 | 🟢 安全 | 完全安全 |
+
+### 关键改进
+
+1. **基础分从 50 提高到 70**
+   - 默认倾向于"可以迁移"
+   
+2. **降低注册表依赖的惩罚**
+   - 从 -20 降到 -15
+   - 很多程序有注册表但可以安全迁移（如游戏）
+   
+3. **降低 Program Files 的惩罚**
+   - 从 -15 降到 -10
+   - Steam、Epic 游戏都在这里
+   
+4. **大文件夹加分**
+   - >10GB 的文件夹通常是游戏或媒体
+   - 这些是用户最想迁移的
+   
+5. **调整风险阈值**
+   - 危险：0-30（只有极少数）
+   - 高风险：31-50（正在运行的）
+   - 中风险：51-75（大部分程序）
+   - 安全：76-100（用户数据）
+
+### 用户体验优化
+
+**所有风险等级都允许迁移，只是提示不同：**
+
+- 🔴 **危险**：禁用迁移按钮
+- 🟠 **高风险**：需要勾选"我了解风险"
+- 🟡 **中风险**：显示提示，但可以直接迁移
+- 🟢 **安全**：推荐迁移，无需确认
 
 ---
 
@@ -503,34 +590,38 @@ anyhow = "1.0"
   "rules": {
     "blacklist": {
       "paths": [
-        "C:\\Windows",
-        "C:\\Program Files\\WindowsApps",
-        "C:\\ProgramData\\Microsoft\\Windows"
+        "C:\\Windows\\System32",
+        "C:\\Windows\\SysWOW64",
+        "C:\\Program Files\\WindowsApps"
       ],
-      "description": "系统关键目录，绝对禁止迁移"
+      "description": "系统关键目录，绝对禁止迁移（精简列表）"
     },
     "whitelist": {
       "paths": [
         "C:\\Users\\*\\Downloads",
         "C:\\Users\\*\\Documents",
-        "C:\\Users\\*\\Videos"
+        "C:\\Users\\*\\Videos",
+        "C:\\Games",
+        "C:\\SteamLibrary",
+        "C:\\Program Files\\Steam\\steamapps"
       ],
-      "description": "用户数据目录，安全迁移"
+      "description": "用户数据和游戏目录，安全迁移（扩大范围）"
     },
     "scoring": {
-      "base_score": 50,
-      "blacklist": -50,
-      "whitelist": 40,
-      "registry_dependency": -20,
-      "file_locked": -30,
-      "process_running": -25,
-      "portable_app": 30,
-      "program_files": -15
+      "base_score": 70,
+      "blacklist": -70,
+      "whitelist": 30,
+      "registry_dependency": -15,
+      "file_locked": -40,
+      "process_running": -35,
+      "portable_app": 20,
+      "program_files": -10,
+      "large_folder": 5
     },
     "thresholds": {
-      "dangerous": 20,
-      "risky": 40,
-      "moderate": 70,
+      "dangerous": 30,
+      "risky": 50,
+      "moderate": 75,
       "safe": 100
     }
   }
@@ -541,13 +632,34 @@ anyhow = "1.0"
 
 ## 🎯 成功标准
 
-1. ✅ 系统关键目录 100% 被拦截
+1. ✅ 系统关键目录（System32 等）100% 被拦截
 2. ✅ 用户数据目录 100% 标记为安全
-3. ✅ 已安装程序正确识别并提示风险
-4. ✅ 便携式应用正确识别
-5. ✅ 运行中程序被拦截或高风险提示
-6. ✅ 用户界面清晰易懂
-7. ✅ 性能影响 < 100ms
+3. ✅ 游戏目录（Steam、Epic）标记为安全或中风险
+4. ✅ 已安装程序正确识别并提示风险（但允许迁移）
+5. ✅ 便携式应用正确识别为安全
+6. ✅ 运行中程序标记为高风险（但允许迁移）
+7. ✅ 大部分文件/目录都能迁移（只有极少数被禁止）
+8. ✅ 用户界面清晰易懂
+9. ✅ 性能影响 < 100ms
+
+### 预期结果
+
+**禁止迁移（🔴）：** < 5% 的扫描结果
+- 只有系统关键目录
+
+**高风险（🟠）：** ~10-15% 的扫描结果
+- 正在运行的程序
+- 被占用的文件
+
+**中风险（🟡）：** ~30-40% 的扫描结果
+- 大部分已安装程序
+- 有注册表依赖的应用
+
+**安全（🟢）：** ~40-55% 的扫描结果
+- 用户数据
+- 游戏
+- 便携式应用
+- 媒体文件
 
 ---
 
