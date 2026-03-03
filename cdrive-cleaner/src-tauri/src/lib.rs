@@ -4,6 +4,7 @@ pub mod migration;
 mod database;
 mod commands;
 mod safety;
+mod cache;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

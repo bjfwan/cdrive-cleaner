@@ -32,11 +32,29 @@ pub struct ScanProgress {
     pub progress_percent: f64,
 }
 
-pub struct DiskScanner;
+use crate::cache::ScanCache;
+
+pub struct DiskScanner {
+    cache: ScanCache,
+}
 
 impl DiskScanner {
     pub fn new() -> Self {
-        Self
+        Self {
+            cache: ScanCache::new(),
+        }
+    }
+
+    pub fn new_with_cache(cache: ScanCache) -> Self {
+        Self { cache }
+    }
+
+    pub fn clear_cache(&self) {
+        self.cache.clear();
+    }
+
+    pub fn cache_size(&self) -> usize {
+        self.cache.size()
     }
 
     #[cfg(windows)]
@@ -308,6 +326,36 @@ impl DiskScanner {
         total_files_counter: Arc<AtomicUsize>,
         total_size_counter: Arc<AtomicU64>,
     ) -> (u64, usize, usize) {
+        Self::calculate_dir_size_with_cache(
+            path,
+            large_file_threshold,
+            large_files,
+            total_files_counter,
+            total_size_counter,
+            None,
+        )
+    }
+
+    fn calculate_dir_size_with_cache(
+        path: &Path, 
+        large_file_threshold: u64,
+        large_files: Arc<Mutex<Vec<super::file_info::FileInfo>>>,
+        total_files_counter: Arc<AtomicUsize>,
+        total_size_counter: Arc<AtomicU64>,
+        cache: Option<&ScanCache>,
+    ) -> (u64, usize, usize) {
+        // 检查缓存
+        if let Some(cache) = cache {
+            if !cache.needs_rescan(path) {
+                if let Some(cached) = cache.get(path) {
+                    // 使用缓存数据
+                    total_files_counter.fetch_add(cached.file_count, Ordering::Relaxed);
+                    total_size_counter.fetch_add(cached.size, Ordering::Relaxed);
+                    return (cached.size, cached.file_count, 0);
+                }
+            }
+        }
+
         let start = Instant::now();
         let size = Arc::new(AtomicU64::new(0));
         let files = Arc::new(AtomicUsize::new(0));
@@ -363,6 +411,22 @@ impl DiskScanner {
         let final_size = size.load(Ordering::Relaxed);
         let final_files = files.load(Ordering::Relaxed);
         let final_inaccessible = inaccessible.load(Ordering::Relaxed);
+
+        // 保存到缓存
+        if let Some(cache) = cache {
+            if let Ok(metadata) = std::fs::metadata(path) {
+                if let Ok(modified_time) = metadata.modified() {
+                    let cached_node = crate::cache::CachedNode {
+                        path: path.to_path_buf(),
+                        size: final_size,
+                        file_count: final_files,
+                        modified_time,
+                        children: vec![],
+                    };
+                    cache.insert(path.to_path_buf(), cached_node);
+                }
+            }
+        }
 
         (final_size, final_files, final_inaccessible)
     }
