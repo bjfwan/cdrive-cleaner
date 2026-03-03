@@ -79,29 +79,32 @@ const treemapOption = computed(() => {
       },
       upperLabel: {
         show: true,
-        height: 32,
+        height: 28,
         color: '#fff',
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: 600
       },
       itemStyle: {
         borderColor: '#fff',
-        borderWidth: 3,
-        gapWidth: 3,
-        shadowBlur: 8,
-        shadowColor: 'rgba(0, 0, 0, 0.1)'
+        borderWidth: 2,
+        borderRadius: 8,
+        gapWidth: 2,
+        shadowBlur: 6,
+        shadowColor: 'rgba(0, 0, 0, 0.08)'
       },
       emphasis: {
         itemStyle: {
-          shadowBlur: 12,
-          shadowColor: 'rgba(0, 0, 0, 0.2)'
+          shadowBlur: 10,
+          shadowColor: 'rgba(0, 0, 0, 0.15)',
+          borderWidth: 2
         }
       },
       levels: [
         {
           itemStyle: {
             borderWidth: 0,
-            gapWidth: 5
+            borderRadius: 12,
+            gapWidth: 4
           }
         }
       ]
@@ -182,35 +185,35 @@ function handleItemClick(dir: DirectoryNode) {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 1fr 380px;
-  gap: 2rem;
+  grid-template-columns: 1fr 320px;
+  gap: 1.5rem;
   overflow: hidden;
 }
 
 .treemap-card {
   background: white;
   border: 1px solid #e7e5e4;
-  border-radius: 16px;
+  border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  min-height: 400px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
+  min-height: 320px;
 }
 
 .treemap-container {
   width: 100%;
   height: 100%;
   position: relative;
-  padding: 1.5rem;
+  padding: 1rem;
 }
 
 .chart {
   position: absolute;
-  top: 1.5rem;
-  left: 1.5rem;
-  right: 1.5rem;
-  bottom: 1.5rem;
-  width: calc(100% - 3rem);
-  height: calc(100% - 3rem);
+  top: 1rem;
+  left: 1rem;
+  right: 1rem;
+  bottom: 1rem;
+  width: calc(100% - 2rem);
+  height: calc(100% - 2rem);
 }
 
 .list-preview {
@@ -220,10 +223,10 @@ function handleItemClick(dir: DirectoryNode) {
 }
 
 .preview-title {
-  font-size: 1rem;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: #2c2c2c;
-  margin-bottom: 1rem;
+  margin-bottom: 0.875rem;
   letter-spacing: -0.01em;
 }
 
@@ -232,36 +235,36 @@ function handleItemClick(dir: DirectoryNode) {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.625rem;
 }
 
 .preview-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.875rem;
+  gap: 0.875rem;
+  padding: 0.75rem;
   background: white;
   border: 1px solid #e7e5e4;
   border-radius: 10px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .preview-item:hover {
   border-color: #007aff;
-  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.1);
-  transform: translateX(4px);
+  box-shadow: 0 2px 6px rgba(0, 122, 255, 0.08);
+  transform: translateX(3px);
 }
 
 .preview-rank {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: #f5f5f4;
   border-radius: 6px;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: #78716c;
   flex-shrink: 0;
@@ -273,31 +276,31 @@ function handleItemClick(dir: DirectoryNode) {
 }
 
 .preview-name {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: #2c2c2c;
-  margin-bottom: 0.375rem;
+  margin-bottom: 0.3125rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .preview-bar-container {
-  height: 4px;
+  height: 3px;
   background: #f5f5f4;
-  border-radius: 2px;
+  border-radius: 1.5px;
   overflow: hidden;
 }
 
 .preview-bar {
   height: 100%;
   background: linear-gradient(90deg, #007aff 0%, #5856d6 100%);
-  border-radius: 2px;
-  transition: width 0.3s ease;
+  border-radius: 1.5px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .preview-size {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: #2c2c2c;
   flex-shrink: 0;
@@ -307,28 +310,28 @@ function handleItemClick(dir: DirectoryNode) {
   .treemap-view {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr auto;
-    gap: 1.5rem;
+    gap: 1.25rem;
   }
 
   .treemap-card {
-    min-height: 350px;
+    min-height: 280px;
   }
 
   .list-preview {
-    max-height: 300px;
+    max-height: 280px;
   }
 
   .treemap-container {
-    padding: 1rem;
+    padding: 0.875rem;
   }
 
   .chart {
-    top: 1rem;
-    left: 1rem;
-    right: 1rem;
-    bottom: 1rem;
-    width: calc(100% - 2rem);
-    height: calc(100% - 2rem);
+    top: 0.875rem;
+    left: 0.875rem;
+    right: 0.875rem;
+    bottom: 0.875rem;
+    width: calc(100% - 1.75rem);
+    height: calc(100% - 1.75rem);
   }
 }
 
@@ -338,30 +341,30 @@ function handleItemClick(dir: DirectoryNode) {
   }
 
   .treemap-card {
-    min-height: 250px;
+    min-height: 220px;
   }
 
   .list-preview {
-    max-height: 250px;
+    max-height: 220px;
   }
 
   .preview-item {
-    padding: 0.75rem;
-    gap: 0.75rem;
+    padding: 0.625rem;
+    gap: 0.625rem;
   }
 
   .preview-rank {
     width: 24px;
     height: 24px;
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
   }
 
   .preview-name {
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
   }
 
   .preview-size {
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
   }
 
   .treemap-container {
