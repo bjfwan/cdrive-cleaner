@@ -10,6 +10,7 @@ pub struct ScanProgress {
     pub current_path: String,
     pub elapsed_ms: u64,
     pub files_per_second: f64,
+    pub progress_percent: f64,
 }
 
 #[tauri::command]

@@ -14,11 +14,14 @@ const totalSize = ref(0);
 const currentPath = ref('');
 const elapsedMs = ref(0);
 const filesPerSecond = ref(0);
+const scanType = ref<'quick' | 'deep'>('quick');
+const progressPercent = ref(0);
 
 // 平滑处理的目标值
 const targetFiles = ref(0);
 const targetDirs = ref(0);
 const targetSize = ref(0);
+const targetPercent = ref(0);
 
 const formattedSize = computed(() => formatBytes(totalSize.value));
 const formattedSpeed = computed(() => {
@@ -28,6 +31,7 @@ const formattedSpeed = computed(() => {
   return `${Math.round(speed)} 文件/秒`;
 });
 const formattedTime = computed(() => formatTime(elapsedMs.value));
+const scanTypeText = computed(() => scanType.value === 'quick' ? '快速扫描' : '深度扫描');
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -53,15 +57,18 @@ function smoothUpdate() {
   const fileDiff = Math.abs(targetFiles.value - scannedFiles.value);
   const dirDiff = Math.abs(targetDirs.value - scannedDirs.value);
   const sizeDiff = Math.abs(targetSize.value - totalSize.value);
+  const percentDiff = Math.abs(targetPercent.value - progressPercent.value);
   
   // 根据差距大小动态调整平滑系数
   const fileSmoothFactor = fileDiff > 10000 ? 0.3 : fileDiff > 1000 ? 0.2 : 0.1;
   const dirSmoothFactor = dirDiff > 100 ? 0.3 : 0.15;
   const sizeSmoothFactor = sizeDiff > 1024 * 1024 * 1024 ? 0.3 : 0.15; // 1GB
+  const percentSmoothFactor = 0.2;
   
   scannedFiles.value += (targetFiles.value - scannedFiles.value) * fileSmoothFactor;
   scannedDirs.value += (targetDirs.value - scannedDirs.value) * dirSmoothFactor;
   totalSize.value += (targetSize.value - totalSize.value) * sizeSmoothFactor;
+  progressPercent.value += (targetPercent.value - progressPercent.value) * percentSmoothFactor;
   
   // 如果接近目标值，直接设置为目标值
   if (fileDiff < 50) {
@@ -73,9 +80,13 @@ function smoothUpdate() {
   if (sizeDiff < 10 * 1024 * 1024) { // 10MB
     totalSize.value = targetSize.value;
   }
+  if (percentDiff < 1) {
+    progressPercent.value = targetPercent.value;
+  }
 }
 
 let unlisten: (() => void) | null = null;
+let unlistenDeep: (() => void) | null = null;
 let animationFrame: number | null = null;
 
 function startAnimation() {
@@ -96,17 +107,34 @@ function stopAnimation() {
 onMounted(async () => {
   startAnimation();
   
-  // 只监听快速扫描的进度事件
+  // 监听快速扫描的进度事件
   unlisten = await listen('quick-scan-progress', (event: any) => {
     const progress = event.payload;
     console.log('[前端] 收到快速扫描进度:', progress.scanned_files, '文件');
     
+    scanType.value = 'quick';
     targetFiles.value = progress.scanned_files;
     targetDirs.value = progress.scanned_dirs;
     targetSize.value = progress.total_size;
     currentPath.value = progress.current_path;
     elapsedMs.value = progress.elapsed_ms;
     filesPerSecond.value = progress.files_per_second;
+    targetPercent.value = progress.progress_percent || 0;
+  });
+  
+  // 监听深度扫描的进度事件
+  unlistenDeep = await listen('deep-scan-progress', (event: any) => {
+    const progress = event.payload;
+    console.log('[前端] 收到深度扫描进度:', progress.scanned_files, '文件');
+    
+    scanType.value = 'deep';
+    targetFiles.value = progress.scanned_files;
+    targetDirs.value = progress.scanned_dirs;
+    targetSize.value = progress.total_size;
+    currentPath.value = progress.current_path;
+    elapsedMs.value = progress.elapsed_ms;
+    filesPerSecond.value = progress.files_per_second;
+    targetPercent.value = progress.progress_percent || 0;
   });
 });
 
@@ -114,6 +142,9 @@ onUnmounted(() => {
   stopAnimation();
   if (unlisten) {
     unlisten();
+  }
+  if (unlistenDeep) {
+    unlistenDeep();
   }
 });
 </script>
@@ -128,7 +159,7 @@ onUnmounted(() => {
           </svg>
         </div>
         <div class="progress-title">
-          <h3>正在扫描磁盘</h3>
+          <h3>{{ scanTypeText }}</h3>
           <p class="current-path">{{ currentPath || '准备中...' }}</p>
         </div>
       </div>
@@ -187,10 +218,11 @@ onUnmounted(() => {
       
       <div class="progress-bar-section">
         <div class="progress-bar-track">
-          <div class="progress-bar-fill"></div>
+          <div class="progress-bar-fill" :style="{ width: `${Math.min(progressPercent, 100)}%` }"></div>
         </div>
         <div class="progress-info">
           <span class="progress-size">{{ formattedSize }}</span>
+          <span class="progress-percent">{{ Math.round(progressPercent) }}%</span>
         </div>
       </div>
     </div>
@@ -354,15 +386,9 @@ onUnmounted(() => {
 
 .progress-bar-fill {
   height: 100%;
-  width: 100%;
   background: linear-gradient(90deg, #0ea5e9 0%, #06b6d4 100%);
   border-radius: 4px;
-  animation: indeterminate 1.5s ease-in-out infinite;
-}
-
-@keyframes indeterminate {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  transition: width 0.3s ease-out;
 }
 
 .progress-info {
@@ -372,6 +398,12 @@ onUnmounted(() => {
 }
 
 .progress-size {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0c4a6e;
+}
+
+.progress-percent {
   font-size: 1rem;
   font-weight: 600;
   color: #0c4a6e;

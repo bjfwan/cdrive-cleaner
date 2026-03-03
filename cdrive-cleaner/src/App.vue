@@ -92,7 +92,8 @@ async function startScan() {
 async function startDeepScan() {
   if (!selectedDisk.value) return;
   deepScanning.value = true;
-  console.log('[前端] 深度扫描开始（后台静默）');
+  scanning.value = true; // 显示进度对话框
+  console.log('[前端] 深度扫描开始');
 
   try {
     const result = await invoke<ScanResult>('scan_disk_deep', { path: selectedDisk.value });
@@ -106,6 +107,7 @@ async function startDeepScan() {
     console.error('深度扫描失败:', err);
   } finally {
     deepScanning.value = false;
+    scanning.value = false; // 关闭进度对话框
   }
 }
 
