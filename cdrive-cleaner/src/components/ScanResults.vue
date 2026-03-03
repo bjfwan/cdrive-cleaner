@@ -341,8 +341,7 @@ async function openFile(file: FileInfo) {
   font-size: 0.875rem;
   backdrop-filter: blur(8px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  z-index: 5;
-  pointer-events: none;
+  z-index: 10;
 }
 
 @media (max-width: 900px) {
