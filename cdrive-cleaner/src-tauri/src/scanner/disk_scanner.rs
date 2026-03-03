@@ -126,8 +126,8 @@ impl DiskScanner {
         let large_files: Arc<Mutex<Vec<super::file_info::FileInfo>>> = Arc::new(Mutex::new(Vec::new()));
         let large_file_threshold = 100 * 1024 * 1024; // 100 MB
 
-        // 发送初始进度
-        let _ = app.emit("scan-progress", ScanProgress {
+        // 发送初始进度（快速扫描专用事件）
+        let _ = app.emit("quick-scan-progress", ScanProgress {
             scanned_files: 0,
             scanned_dirs: 0,
             total_size: 0,
@@ -135,7 +135,7 @@ impl DiskScanner {
             elapsed_ms: 0,
             files_per_second: 0.0,
         });
-        println!("[调试] 已发送初始进度事件");
+        println!("[调试] 已发送快速扫描初始进度事件");
 
         let step1 = Instant::now();
         let entries: Vec<_> = match fs::read_dir(path) {
@@ -195,7 +195,7 @@ impl DiskScanner {
                     files_per_second,
                 };
                 
-                if app_clone.emit("scan-progress", progress).is_err() {
+                if app_clone.emit("quick-scan-progress", progress).is_err() {
                     println!("[调试] 快速扫描进度报告线程退出（emit失败）");
                     break;
                 }

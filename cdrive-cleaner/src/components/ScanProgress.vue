@@ -77,7 +77,6 @@ function smoothUpdate() {
 
 let unlisten: (() => void) | null = null;
 let animationFrame: number | null = null;
-let isQuickScanComplete = ref(false);
 
 function startAnimation() {
   const animate = () => {
@@ -97,20 +96,10 @@ function stopAnimation() {
 onMounted(async () => {
   startAnimation();
   
-  unlisten = await listen('scan-progress', (event: any) => {
+  // 只监听快速扫描的进度事件
+  unlisten = await listen('quick-scan-progress', (event: any) => {
     const progress = event.payload;
-    
-    // 只接收快速扫描的进度，忽略深度扫描的进度
-    if (progress.current_path.includes('深度扫描')) {
-      console.log('[前端] 忽略深度扫描进度事件');
-      return;
-    }
-    
-    // 如果快速扫描已完成，不再更新进度
-    if (isQuickScanComplete.value) {
-      console.log('[前端] 快速扫描已完成，忽略后续进度事件');
-      return;
-    }
+    console.log('[前端] 收到快速扫描进度:', progress.scanned_files, '文件');
     
     targetFiles.value = progress.scanned_files;
     targetDirs.value = progress.scanned_dirs;
@@ -125,13 +114,6 @@ onUnmounted(() => {
   stopAnimation();
   if (unlisten) {
     unlisten();
-  }
-});
-
-// 监听 scanning 变化，当变为 false 时标记快速扫描完成
-defineExpose({
-  markQuickScanComplete: () => {
-    isQuickScanComplete.value = true;
   }
 });
 </script>

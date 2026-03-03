@@ -41,7 +41,6 @@ const error = ref<string>('');
 const viewMode = ref<'treemap' | 'list' | 'large-files'>('treemap');
 const navigationStack = ref<string[]>([]);
 const scanCache = ref<Map<string, ScanResult>>(new Map());
-const scanProgressRef = ref<any>(null);
 
 onMounted(async () => {
   await loadDisks();
@@ -236,7 +235,7 @@ function goBack() {
       <div v-if="error" class="error">{{ error }}</div>
     </main>
 
-    <ScanProgress :scanning="scanning" ref="scanProgressRef" />
+    <ScanProgress :scanning="scanning" />
   </div>
 </template>
 
