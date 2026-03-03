@@ -25,6 +25,7 @@ interface Props {
   show: boolean;
   selectedDir: DirectoryNode | null;
   selectedFile: FileInfo | null;
+  selectedItems: Array<DirectoryNode | FileInfo>;
   availableDisks: DiskInfo[];
 }
 
@@ -39,10 +40,23 @@ const migrating = ref(false);
 const migrationError = ref<string>('');
 const migrationSuccess = ref(false);
 const migrationResult = ref<any>(null);
+const currentMigratingIndex = ref(0);
+const migrationResults = ref<Array<{ path: string; success: boolean; error?: string }>>([]);
 
-const itemName = computed(() => props.selectedFile ? '迁移文件' : '迁移目录');
+const isBatchMode = computed(() => props.selectedItems && props.selectedItems.length > 0);
+const itemName = computed(() => {
+  if (isBatchMode.value) {
+    return `批量迁移 (${props.selectedItems.length} 项)`;
+  }
+  return props.selectedFile ? '迁移文件' : '迁移目录';
+});
 const itemPath = computed(() => props.selectedFile?.path || props.selectedDir?.path);
-const itemSize = computed(() => props.selectedFile?.size || props.selectedDir?.size || 0);
+const itemSize = computed(() => {
+  if (isBatchMode.value) {
+    return props.selectedItems.reduce((sum, item) => sum + (item.size || 0), 0);
+  }
+  return props.selectedFile?.size || props.selectedDir?.size || 0;
+});
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -62,6 +76,8 @@ function close() {
   migrationError.value = '';
   migrationSuccess.value = false;
   migrationResult.value = null;
+  currentMigratingIndex.value = 0;
+  migrationResults.value = [];
   emit('close');
 }
 
@@ -71,6 +87,14 @@ async function startMigration() {
     return;
   }
 
+  if (isBatchMode.value) {
+    await startBatchMigration();
+  } else {
+    await startSingleMigration();
+  }
+}
+
+async function startSingleMigration() {
   if (!itemPath.value) {
     migrationError.value = '未选择要迁移的项目';
     return;
@@ -96,6 +120,48 @@ async function startMigration() {
     migrating.value = false;
   }
 }
+
+async function startBatchMigration() {
+  migrating.value = true;
+  migrationError.value = '';
+  migrationResults.value = [];
+  currentMigratingIndex.value = 0;
+
+  const { invoke } = await import('@tauri-apps/api/core');
+
+  for (let i = 0; i < props.selectedItems.length; i++) {
+    currentMigratingIndex.value = i;
+    const item = props.selectedItems[i];
+    
+    try {
+      await invoke('migrate_file', {
+        source: item.path,
+        targetDisk: targetDisk.value,
+        linkType: null
+      });
+      
+      migrationResults.value.push({
+        path: item.path,
+        success: true
+      });
+    } catch (err) {
+      console.error(`迁移失败 ${item.path}:`, err);
+      migrationResults.value.push({
+        path: item.path,
+        success: false,
+        error: String(err)
+      });
+    }
+  }
+
+  migrating.value = false;
+  migrationSuccess.value = migrationResults.value.some(r => r.success);
+  
+  const failedCount = migrationResults.value.filter(r => !r.success).length;
+  if (failedCount > 0) {
+    migrationError.value = `${failedCount} 项迁移失败`;
+  }
+}
 </script>
 
 <template>
@@ -112,7 +178,27 @@ async function startMigration() {
         </div>
         
         <div class="body">
-          <div class="info-section">
+          <div v-if="isBatchMode" class="info-section">
+            <div class="info-row">
+              <span class="label">选中项目</span>
+              <span class="value">{{ selectedItems.length }} 项</span>
+            </div>
+            <div class="info-row">
+              <span class="label">总大小</span>
+              <span class="value">{{ formatBytes(itemSize) }}</span>
+            </div>
+            <div class="batch-items-preview">
+              <div v-for="(item, index) in selectedItems.slice(0, 5)" :key="item.path" class="batch-item">
+                <span class="batch-item-name">{{ item.name }}</span>
+                <span class="batch-item-size">{{ formatBytes(item.size) }}</span>
+              </div>
+              <div v-if="selectedItems.length > 5" class="batch-more">
+                还有 {{ selectedItems.length - 5 }} 项...
+              </div>
+            </div>
+          </div>
+          
+          <div v-else class="info-section">
             <div class="info-row">
               <span class="label">源路径</span>
               <span class="value">{{ itemPath }}</span>
@@ -164,15 +250,26 @@ async function startMigration() {
           
           <div v-if="migrating" class="progress">
             <div class="progress-header">
-              <span class="progress-label">正在迁移...</span>
+              <span class="progress-label" v-if="isBatchMode">
+                正在迁移 {{ currentMigratingIndex + 1 }} / {{ selectedItems.length }}
+              </span>
+              <span class="progress-label" v-else>正在迁移...</span>
             </div>
-            <div class="progress-bar-wrapper">
+            <div v-if="isBatchMode" class="progress-bar-wrapper">
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" :style="{ width: `${((currentMigratingIndex + 1) / selectedItems.length) * 100}%` }"></div>
+              </div>
+            </div>
+            <div v-else class="progress-bar-wrapper">
               <div class="progress-bar-track">
                 <div class="progress-bar-fill"></div>
               </div>
             </div>
             <div class="progress-info">
-              <span class="progress-text">正在复制文件到目标磁盘</span>
+              <span class="progress-text" v-if="isBatchMode && selectedItems[currentMigratingIndex]">
+                {{ selectedItems[currentMigratingIndex].name }}
+              </span>
+              <span class="progress-text" v-else>正在复制文件到目标磁盘</span>
             </div>
           </div>
         </div>
@@ -199,9 +296,32 @@ async function startMigration() {
             <path d="M20 32L28 40L44 24" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
-        <h3 class="success-title">迁移成功</h3>
-        <p class="success-message">文件已成功迁移到目标磁盘，并在原位置创建了符号链接</p>
-        <div class="success-details">
+        <h3 class="success-title">迁移完成</h3>
+        
+        <div v-if="isBatchMode" class="success-message">
+          <p>成功迁移 {{ migrationResults.filter(r => r.success).length }} 项</p>
+          <p v-if="migrationResults.filter(r => !r.success).length > 0" class="error-text">
+            失败 {{ migrationResults.filter(r => !r.success).length }} 项
+          </p>
+        </div>
+        <p v-else class="success-message">文件已成功迁移到目标磁盘，并在原位置创建了符号链接</p>
+        
+        <div v-if="isBatchMode" class="batch-results">
+          <div v-for="result in migrationResults" :key="result.path" class="batch-result-item" :class="{ 'result-error': !result.success }">
+            <svg v-if="result.success" width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="7" stroke="#10b981" stroke-width="2"/>
+              <path d="M5 8L7 10L11 6" stroke="#10b981" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="7" stroke="#ef4444" stroke-width="2"/>
+              <path d="M5 5L11 11M11 5L5 11" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="result-path">{{ result.path }}</span>
+            <span v-if="result.error" class="result-error-msg">{{ result.error }}</span>
+          </div>
+        </div>
+        
+        <div v-else class="success-details">
           <div class="detail-row">
             <span class="label">源路径</span>
             <span class="value">{{ migrationResult?.source_path }}</span>
@@ -219,6 +339,7 @@ async function startMigration() {
             <span class="value">{{ (migrationResult?.duration_ms / 1000).toFixed(2) }} 秒</span>
           </div>
         </div>
+        
         <button class="btn btn-primary btn-full" @click="close">完成</button>
       </div>
     </div>
