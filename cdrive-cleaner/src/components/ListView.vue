@@ -299,6 +299,18 @@ watch(() => props.currentPath, (newPath) => {
   border-radius: 10px;
   margin-bottom: 1rem;
   flex-shrink: 0;
+  animation: slideDown 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .batch-info {
@@ -322,7 +334,7 @@ watch(() => props.currentPath, (newPath) => {
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .batch-migrate-btn {
@@ -334,6 +346,10 @@ watch(() => props.currentPath, (newPath) => {
   background: #0051d5;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+}
+
+.batch-migrate-btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .batch-migrate-btn:disabled {
@@ -352,19 +368,39 @@ watch(() => props.currentPath, (newPath) => {
   border-color: #d6d3d1;
 }
 
+.batch-clear-btn:active {
+  transform: scale(0.98);
+}
+
 .checkbox {
   width: 18px;
   height: 18px;
   cursor: pointer;
   accent-color: #007aff;
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.checkbox:hover:not(:disabled) {
+  transform: scale(1.1);
+}
+
+.checkbox:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.checkbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .td-checkbox {
   justify-content: center;
+  cursor: pointer;
 }
 
 .row-selected {
-  background: rgba(0, 122, 255, 0.05);
+  background: linear-gradient(90deg, rgba(0, 122, 255, 0.08) 0%, rgba(0, 122, 255, 0.03) 100%);
+  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .empty {
@@ -445,8 +481,9 @@ watch(() => props.currentPath, (newPath) => {
   gap: 1.5rem;
   padding: 1rem 0;
   border-bottom: 1px solid #f5f5f4;
-  transition: all 0.2s ease;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
+  will-change: transform, background;
 }
 
 .table-row:hover {
@@ -582,7 +619,11 @@ watch(() => props.currentPath, (newPath) => {
   border-radius: 6px;
   color: #78716c;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.action-btn:active {
+  transform: scale(0.95);
 }
 
 .open-btn:hover {
