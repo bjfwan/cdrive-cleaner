@@ -7,6 +7,7 @@ import { TreemapChart } from 'echarts/charts';
 import { TitleComponent, TooltipComponent } from 'echarts/components';
 import DiskCard from './components/DiskCard.vue';
 import ScanResults from './components/ScanResults.vue';
+import ScanProgress from './components/ScanProgress.vue';
 
 use([CanvasRenderer, TreemapChart, TitleComponent, TooltipComponent]);
 
@@ -212,12 +213,6 @@ function goBack() {
         <p>分析空间占用情况</p>
       </div>
 
-      <div v-if="scanning" class="empty">
-        <div class="spinner"></div>
-        <h2>正在扫描</h2>
-        <p>分析文件系统</p>
-      </div>
-
       <ScanResults
         v-if="scanResult"
         :result="scanResult"
@@ -233,6 +228,8 @@ function goBack() {
 
       <div v-if="error" class="error">{{ error }}</div>
     </main>
+
+    <ScanProgress :scanning="scanning" />
   </div>
 </template>
 
