@@ -64,6 +64,8 @@ const selectedFile = ref<FileInfo | null>(null);
 const loadingFiles = ref(false);
 const currentFiles = ref<FileInfo[]>([]);
 const targetDisk = ref<string>('');
+const migrating = ref(false);
+const migrationError = ref<string>('');
 
 console.log('ScanResults 接收到的数据:', props.result);
 console.log('directories 数量:', props.result?.directories?.length || 0);
@@ -99,6 +101,42 @@ function closeMigrateDialog() {
   selectedDir.value = null;
   selectedFile.value = null;
   targetDisk.value = '';
+  migrating.value = false;
+  migrationError.value = '';
+}
+
+async function startMigration() {
+  if (!targetDisk.value) {
+    migrationError.value = '请选择目标磁盘';
+    return;
+  }
+
+  const sourcePath = selectedFile.value?.path || selectedDir.value?.path;
+  if (!sourcePath) {
+    migrationError.value = '未选择要迁移的项目';
+    return;
+  }
+
+  migrating.value = true;
+  migrationError.value = '';
+
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const result = await invoke('migrate_file', {
+      source: sourcePath,
+      targetDisk: targetDisk.value,
+      linkType: null
+    });
+    
+    console.log('迁移成功:', result);
+    alert('迁移成功！');
+    closeMigrateDialog();
+  } catch (err) {
+    console.error('迁移失败:', err);
+    migrationError.value = String(err);
+  } finally {
+    migrating.value = false;
+  }
 }
 
 const treemapOption = computed(() => {
@@ -603,10 +641,20 @@ watch(() => props.viewMode, (newMode) => {
             </svg>
             <span>迁移后将在原位置创建符号链接，程序可正常访问</span>
           </div>
+          <div v-if="migrationError" class="error-section">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="10" r="8" stroke="#ef4444" stroke-width="2"/>
+              <path d="M10 6V10M10 14H10.01" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span>{{ migrationError }}</span>
+          </div>
         </div>
         <div class="dialog-footer">
-          <button class="btn btn-secondary" @click="closeMigrateDialog">取消</button>
-          <button class="btn btn-primary">开始迁移</button>
+          <button class="btn btn-secondary" @click="closeMigrateDialog" :disabled="migrating">取消</button>
+          <button class="btn btn-primary" @click="startMigration" :disabled="!targetDisk || migrating">
+            <span v-if="migrating">迁移中...</span>
+            <span v-else>开始迁移</span>
+          </button>
         </div>
       </div>
     </div>
@@ -1274,6 +1322,17 @@ watch(() => props.viewMode, (newMode) => {
   border-radius: 10px;
   font-size: 0.875rem;
   color: #92400e;
+}
+
+.error-section {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  color: #991b1b;
 }
 
 .dialog-footer {
