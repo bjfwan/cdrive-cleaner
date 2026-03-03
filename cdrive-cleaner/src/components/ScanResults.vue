@@ -365,9 +365,7 @@ async function openFile(file: FileInfo) {
   }
 
   .notice {
-    bottom: 0.75rem;
-    font-size: 0.8125rem;
-    padding: 0.625rem 1rem;
+    display: none;
   }
 }
 
