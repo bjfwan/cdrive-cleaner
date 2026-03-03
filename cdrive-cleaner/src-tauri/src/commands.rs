@@ -194,3 +194,10 @@ pub struct DiskInfo {
     pub used_space: u64,
     pub usage_percent: f64,
 }
+
+#[tauri::command]
+pub async fn analyze_migration_safety(path: String, size: u64) -> Result<crate::safety::MigrationSafety, String> {
+    use std::path::Path;
+    let path_obj = Path::new(&path);
+    crate::safety::analyze_migration_safety(path_obj, size)
+}

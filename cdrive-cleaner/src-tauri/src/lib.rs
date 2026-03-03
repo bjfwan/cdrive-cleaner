@@ -3,6 +3,7 @@ mod scanner;
 pub mod migration;
 mod database;
 mod commands;
+mod safety;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -14,6 +15,7 @@ pub fn run() {
             commands::scan_directory_files,
             commands::migrate_file,
             commands::get_disk_info,
+            commands::analyze_migration_safety,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
