@@ -771,19 +771,22 @@ impl DiskScanner {
             total_size.load(Ordering::Relaxed) as f64 / 1024.0 / 1024.0 / 1024.0);
         
         // 检查根目录的直接文件
-        let root_direct_files = {
+        let (root_direct_files_count, root_direct_files_size) = {
             let map = file_map.lock().unwrap();
-            map.get(path).map(|files| {
-                let count = files.len();
-                let size: u64 = files.iter().sum();
-                (count, size)
-            })
+            match map.get(path) {
+                Some(files) => {
+                    let count = files.len();
+                    let size: u64 = files.iter().sum();
+                    (count, size)
+                }
+                None => (0, 0),
+            }
         };
         
-        if let Some((count, size)) = root_direct_files {
+        if root_direct_files_count > 0 {
             println!("[阶段1] 根目录直接文件: {} 个, 大小: {:.2} GB", 
-                count, 
-                size as f64 / 1024.0 / 1024.0 / 1024.0);
+                root_direct_files_count, 
+                root_direct_files_size as f64 / 1024.0 / 1024.0 / 1024.0);
         } else {
             println!("[阶段1] 根目录没有直接文件");
         }
@@ -839,10 +842,18 @@ impl DiskScanner {
         println!("[阶段2] file_map 统计 - 文件: {}, 大小: {:.2} GB", 
             total_files_in_map,
             total_size_in_map as f64 / 1024.0 / 1024.0 / 1024.0);
+        println!("[阶段2] 根目录直接文件计数: {} 个, 大小: {:.2} GB",
+            root_direct_files_count,
+            root_direct_files_size as f64 / 1024.0 / 1024.0 / 1024.0);
         
         // 检查差异
         let files_diff = scan_total_files as i64 - total_files_in_map as i64;
         let size_diff = scan_total_size as i64 - total_size_in_map as i64;
+        let files_diff_without_root = files_diff + root_direct_files_count as i64;
+        let size_diff_without_root = size_diff + root_direct_files_size as i64;
+        println!("[阶段2] 差异去除根目录直接文件后: 文件 {} 个, 大小 {:.2} GB",
+            files_diff_without_root,
+            size_diff_without_root as f64 / 1024.0 / 1024.0 / 1024.0);
         
         if files_diff != 0 || size_diff != 0 {
             println!("[阶段2] ⚠️  遍历统计与 file_map 不一致:");
@@ -956,6 +967,13 @@ impl DiskScanner {
         let tree_total_size: u64 = directories.iter().map(|d| d.size).sum();
         let tree_total_files: usize = directories.iter().map(|d| d.file_count).sum();
         let tree_total_dirs = directories.len();
+        let tree_total_size_with_root = tree_total_size + root_direct_files_size;
+        let tree_total_files_with_root = tree_total_files + root_direct_files_count;
+        println!("[阶段4] 根目录直接文件累加:");
+        println!("  文件数: {} 个", tree_total_files_with_root);
+        println!("  总大小: {:.2} GB ({} bytes)", 
+            tree_total_size_with_root as f64 / 1024.0 / 1024.0 / 1024.0,
+            tree_total_size_with_root);
         
         // 获取磁盘真实使用情况（用于校准）
         let disk_used_for_calibration = Self::get_disk_usage(path).map(|(_, used, _)| used);
