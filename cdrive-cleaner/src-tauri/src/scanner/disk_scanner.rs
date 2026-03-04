@@ -15,7 +15,7 @@ use std::os::windows::io::AsRawHandle;
 #[cfg(windows)]
 use windows::Win32::Foundation::HANDLE;
 #[cfg(windows)]
-use windows::Win32::Storage::FileSystem::{GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, GetDiskFreeSpaceExW};
+use windows::Win32::Storage::FileSystem::{GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, GetDiskFreeSpaceExW, GetCompressedFileSizeW};
 #[cfg(windows)]
 use windows::core::PCWSTR;
 
@@ -129,6 +129,28 @@ impl DiskScanner {
 
     #[cfg(not(windows))]
     fn get_disk_usage(_path: &Path) -> Option<(u64, u64, u64)> {
+        None
+    }
+
+    #[cfg(windows)]
+    fn get_allocated_size(path: &Path) -> Option<u64> {
+        let path_str = path.to_string_lossy().to_string();
+        let mut wide_path: Vec<u16> = path_str.encode_utf16().collect();
+        wide_path.push(0);
+
+        unsafe {
+            let mut high = 0u32;
+            let low = GetCompressedFileSizeW(PCWSTR(wide_path.as_ptr()), Some(&mut high));
+            if low == u32::MAX && high == 0 {
+                return None;
+            }
+            let size = ((high as u64) << 32) | (low as u64);
+            Some(size)
+        }
+    }
+
+    #[cfg(not(windows))]
+    fn get_allocated_size(_path: &Path) -> Option<u64> {
         None
     }
 
@@ -584,6 +606,10 @@ impl DiskScanner {
         let total_files = Arc::new(AtomicUsize::new(0));
         let total_dirs = Arc::new(AtomicUsize::new(0));
         let total_size = Arc::new(AtomicU64::new(0));
+        let mut hardlink_map: HashMap<(u32, u64), (u64, usize, String)> = HashMap::new();
+        let mut allocated_total_size = 0u64;
+        let mut allocated_missing_count = 0usize;
+        let mut allocated_count = 0usize;
         
         // 发送初始进度
         let _ = app.emit("deep-scan-progress", ScanProgress {
@@ -686,6 +712,20 @@ impl DiskScanner {
                             let file_size = metadata.len();
                             total_files.fetch_add(1, Ordering::Relaxed);
                             total_size.fetch_add(file_size, Ordering::Relaxed);
+                            
+                            if let Some(allocated_size) = Self::get_allocated_size(entry_path) {
+                                allocated_total_size += allocated_size;
+                                allocated_count += 1;
+                            } else {
+                                allocated_missing_count += 1;
+                            }
+                            
+                            if let Some((vol, file_id)) = Self::get_file_id(entry_path) {
+                                let key = (vol, file_id);
+                                let path_str = entry_path.to_string_lossy().to_string();
+                                let entry = hardlink_map.entry(key).or_insert((file_size, 0, path_str));
+                                entry.1 += 1;
+                            }
                             
                             if file_size >= large_file_threshold {
                                 let file_name = entry_path.file_name()
@@ -911,11 +951,24 @@ impl DiskScanner {
         
         println!("[阶段3] 移动了 {} 个子目录到父目录", moved_count);
         
-        let root_children: Vec<DirectoryNode> = nodes_map
+        let mut root_children: Vec<DirectoryNode> = nodes_map
             .into_iter()
             .filter(|(p, _)| p.parent() == Some(path))
             .map(|(_, node)| node)
             .collect();
+        
+        if root_direct_files_count > 0 {
+            root_children.push(DirectoryNode {
+                path: path.to_string_lossy().to_string(),
+                name: "根目录文件".to_string(),
+                size: root_direct_files_size,
+                file_count: root_direct_files_count,
+                children: Vec::new(),
+                is_symlink: false,
+                link_target: None,
+                safety: None,
+            });
+        }
         
         println!("[阶段3] 根目录有 {} 个直接子目录", root_children.len());
         println!("[阶段3] 目录树构建完成 (耗时: {:.2}ms)", tree_start.elapsed().as_secs_f64() * 1000.0);
@@ -974,6 +1027,54 @@ impl DiskScanner {
         println!("  总大小: {:.2} GB ({} bytes)", 
             tree_total_size_with_root as f64 / 1024.0 / 1024.0 / 1024.0,
             tree_total_size_with_root);
+        
+        let mut hardlink_duplicate_bytes = 0u64;
+        let mut hardlink_duplicate_files = 0usize;
+        let mut hardlink_unique_bytes = 0u64;
+        let mut hardlink_groups: Vec<(u64, usize, u64, String)> = Vec::new();
+        
+        for (_key, (size, count, sample)) in hardlink_map.into_iter() {
+            hardlink_unique_bytes += size;
+            if count > 1 {
+                let duplicate_bytes = size * (count as u64 - 1);
+                hardlink_duplicate_bytes += duplicate_bytes;
+                hardlink_duplicate_files += count - 1;
+                hardlink_groups.push((duplicate_bytes, count, size, sample));
+            }
+        }
+        
+        hardlink_groups.sort_by(|a, b| b.0.cmp(&a.0));
+        
+        println!("[阶段4] 硬链接重复统计:");
+        println!("  可能重复文件数: {} 个", hardlink_duplicate_files);
+        println!("  可能重复大小: {:.2} GB ({} bytes)", 
+            hardlink_duplicate_bytes as f64 / 1024.0 / 1024.0 / 1024.0,
+            hardlink_duplicate_bytes);
+        println!("  硬链接唯一大小估计: {:.2} GB ({} bytes)", 
+            hardlink_unique_bytes as f64 / 1024.0 / 1024.0 / 1024.0,
+            hardlink_unique_bytes);
+        
+        let top_count = hardlink_groups.len().min(20);
+        if top_count > 0 {
+            println!("[阶段4] 硬链接重复 Top{}:", top_count);
+            for (i, (dup_bytes, count, size, sample)) in hardlink_groups.into_iter().take(top_count).enumerate() {
+                println!("  {}. 重复大小: {:.2} GB, 链接数: {}, 单文件大小: {:.2} GB, 示例: {}", 
+                    i + 1,
+                    dup_bytes as f64 / 1024.0 / 1024.0 / 1024.0,
+                    count,
+                    size as f64 / 1024.0 / 1024.0 / 1024.0,
+                    sample);
+            }
+        }
+        
+        println!("[阶段4] 实际占用估算:");
+        println!("  已估算文件: {} 个, 缺失: {} 个", allocated_count, allocated_missing_count);
+        println!("  实际占用估算: {:.2} GB ({} bytes)", 
+            allocated_total_size as f64 / 1024.0 / 1024.0 / 1024.0,
+            allocated_total_size);
+        let allocated_diff = scan_total_size as i64 - allocated_total_size as i64;
+        println!("  逻辑大小与实际占用差异: {:.2} GB", 
+            allocated_diff as f64 / 1024.0 / 1024.0 / 1024.0);
         
         // 获取磁盘真实使用情况（用于校准）
         let disk_used_for_calibration = Self::get_disk_usage(path).map(|(_, used, _)| used);
