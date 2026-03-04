@@ -91,9 +91,7 @@ impl LinkCreator {
         }
     }
 
-    fn determine_link_type<P: AsRef<Path>>(&self, target: P, is_directory: bool) -> Result<LinkType> {
-        let target = target.as_ref();
-
+    fn determine_link_type<P: AsRef<Path>>(&self, _target: P, is_directory: bool) -> Result<LinkType> {
         if is_directory {
             Ok(LinkType::Junction)
         } else {

@@ -6,10 +6,13 @@ mod commands;
 pub mod safety;
 pub mod cache;
 
+use scanner::DiskScanner;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .manage(DiskScanner::new()) // 添加全局状态
         .invoke_handler(tauri::generate_handler![
             commands::scan_disk,
             commands::scan_disk_deep,

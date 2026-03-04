@@ -13,6 +13,14 @@ interface DirectoryNode {
   children: DirectoryNode[];
   is_symlink: boolean;
   link_target?: string;
+  safety?: {
+    risk_level: 'safe' | 'moderate' | 'risky' | 'dangerous';
+    safety_score: number;
+    can_migrate: boolean;
+    reasons: string[];
+    recommendations: string[];
+    app_type: string;
+  };
 }
 
 interface FileInfo {
@@ -127,8 +135,8 @@ function closeMigrateDialog() {
 
 async function openFile(file: FileInfo) {
   try {
-    const { open } = await import('@tauri-apps/plugin-opener');
-    await open(file.path);
+    const { openPath } = await import('@tauri-apps/plugin-opener');
+    await openPath(file.path);
   } catch (err) {
     console.error('打开文件失败:', err);
     alert('无法打开文件');

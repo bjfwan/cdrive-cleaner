@@ -19,7 +19,6 @@
   width: 90%;
   max-width: 540px;
   max-height: 90vh;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
   animation: slideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -40,6 +39,8 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .header {
@@ -49,6 +50,7 @@
   justify-content: space-between;
   align-items: center;
   background: linear-gradient(to bottom, #fafaf9 0%, #ffffff 100%);
+  flex-shrink: 0;
 }
 
 .header h3 {
@@ -82,6 +84,27 @@
   padding: 2rem;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
+}
+
+/* 自定义滚动条样式 */
+.body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.body::-webkit-scrollbar-track {
+  background: #f5f5f4;
+  border-radius: 4px;
+}
+
+.body::-webkit-scrollbar-thumb {
+  background: #d6d3d1;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.body::-webkit-scrollbar-thumb:hover {
+  background: #a8a29e;
 }
 
 .info-section {
@@ -238,6 +261,8 @@
   display: flex;
   gap: 1rem;
   justify-content: flex-end;
+  flex-shrink: 0;
+  background: white;
 }
 
 .btn {
@@ -385,6 +410,25 @@
   overflow-y: auto;
 }
 
+/* 批量预览滚动条样式 */
+.batch-items-preview::-webkit-scrollbar {
+  width: 6px;
+}
+
+.batch-items-preview::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 3px;
+}
+
+.batch-items-preview::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 3px;
+}
+
+.batch-items-preview::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
 .batch-item {
   display: flex;
   justify-content: space-between;
@@ -429,6 +473,25 @@
   padding: 1rem;
   background: #f9fafb;
   border-radius: 12px;
+}
+
+/* 批量结果滚动条样式 */
+.batch-results::-webkit-scrollbar {
+  width: 6px;
+}
+
+.batch-results::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 3px;
+}
+
+.batch-results::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 3px;
+}
+
+.batch-results::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
 }
 
 .batch-result-item {
@@ -512,4 +575,168 @@
   font-size: 0.9375rem;
   color: #2c2c2c;
   font-weight: 600;
+}
+
+/* 安全性分析样式 */
+.safety-analysis {
+  background: #f0f9ff;
+  border: 1.5px solid #bfdbfe;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  transition: all 0.3s ease;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+    padding-top: 1.25rem;
+    padding-bottom: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+}
+
+.safety-analysis.risk-safe {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.safety-analysis.risk-moderate {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.safety-analysis.risk-risky {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.safety-analysis.risk-dangerous {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.safety-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.safety-header svg {
+  flex-shrink: 0;
+  color: #3b82f6;
+}
+
+.risk-safe .safety-header svg {
+  color: #10b981;
+}
+
+.risk-moderate .safety-header svg {
+  color: #f59e0b;
+}
+
+.risk-risky .safety-header svg {
+  color: #f97316;
+}
+
+.risk-dangerous .safety-header svg {
+  color: #ef4444;
+}
+
+.safety-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.safety-level {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.safety-score {
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.safety-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.safety-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+}
+
+.safety-label {
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.safety-value {
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.safety-reasons,
+.safety-recommendations {
+  display: flex;
+  flex-direction: column;
+}
+
+.safety-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.safety-list li {
+  font-size: 0.875rem;
+  color: #475569;
+  padding-left: 1.25rem;
+  position: relative;
+  line-height: 1.5;
+}
+
+.safety-list li::before {
+  content: '•';
+  position: absolute;
+  left: 0.5rem;
+  color: #94a3b8;
+}
+
+.analyzing {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.analyzing .spinner {
+  animation: spin 1s linear infinite;
 }

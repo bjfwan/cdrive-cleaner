@@ -15,6 +15,7 @@ pub struct CachedNode {
 }
 
 /// 扫描缓存管理器
+#[derive(Clone)]
 pub struct ScanCache {
     cache: Arc<Mutex<HashMap<PathBuf, CachedNode>>>,
 }

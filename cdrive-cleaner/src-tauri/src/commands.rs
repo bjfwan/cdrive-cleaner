@@ -1,6 +1,6 @@
 use crate::scanner::{DiskScanner, file_info::{ScanResult, FileInfo}};
 use crate::migration::{FileMigrator, LinkType, file_migrator::MigrationResult};
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 #[derive(Clone, serde::Serialize)]
 pub struct ScanProgress {
@@ -14,14 +14,12 @@ pub struct ScanProgress {
 }
 
 #[tauri::command]
-pub async fn scan_disk(path: String, app: AppHandle) -> Result<ScanResult, String> {
-    let scanner = DiskScanner::new();
+pub async fn scan_disk(path: String, app: AppHandle, scanner: tauri::State<'_, DiskScanner>) -> Result<ScanResult, String> {
     scanner.scan(&path, app).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn scan_disk_deep(path: String, app: AppHandle, estimated_files: Option<usize>) -> Result<ScanResult, String> {
-    let scanner = DiskScanner::new();
+pub async fn scan_disk_deep(path: String, app: AppHandle, estimated_files: Option<usize>, scanner: tauri::State<'_, DiskScanner>) -> Result<ScanResult, String> {
     let estimated = estimated_files.unwrap_or(800000); // 默认估算值
     scanner.scan_deep(&path, app, estimated).await.map_err(|e| e.to_string())
 }

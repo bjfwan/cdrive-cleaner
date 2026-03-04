@@ -1,11 +1,22 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 
 interface DirectoryNode {
   path: string;
   name: string;
   size: number;
   file_count: number;
+  children: DirectoryNode[];
+  is_symlink: boolean;
+  link_target?: string;
+  safety?: {
+    risk_level: 'safe' | 'moderate' | 'risky' | 'dangerous';
+    safety_score: number;
+    can_migrate: boolean;
+    reasons: string[];
+    recommendations: string[];
+    app_type: string;
+  };
 }
 
 interface FileInfo {
@@ -13,12 +24,23 @@ interface FileInfo {
   name: string;
   size: number;
   extension: string;
+  modified_at: string;
+  is_readonly: boolean;
 }
 
 interface DiskInfo {
   drive_letter: string;
   label: string;
   free_space: number;
+}
+
+interface MigrationSafety {
+  risk_level: 'safe' | 'moderate' | 'risky' | 'dangerous';
+  safety_score: number;
+  can_migrate: boolean;
+  reasons: string[];
+  recommendations: string[];
+  app_type: string;
 }
 
 interface Props {
@@ -49,6 +71,91 @@ const migrationSpeed = ref(0);
 const estimatedTimeRemaining = ref(0);
 const elapsedTime = ref(0);
 const updateTimer = ref<number | null>(null);
+
+// 安全性分析
+const safetyAnalysis = ref<MigrationSafety | null>(null);
+const analyzingSafety = ref(false);
+
+// 监听对话框打开，进行安全性分析和加载默认设置
+watch(() => props.show, async (newShow) => {
+  if (newShow) {
+    // 加载默认目标磁盘
+    loadDefaultTargetDisk();
+    
+    // 进行安全性分析
+    if (!isBatchMode.value && itemPath.value) {
+      await analyzeSafety();
+    }
+  }
+});
+
+function loadDefaultTargetDisk() {
+  const saved = localStorage.getItem('cdrive-cleaner-settings');
+  if (saved) {
+    try {
+      const settings = JSON.parse(saved);
+      if (settings.defaultTargetDisk) {
+        targetDisk.value = settings.defaultTargetDisk;
+      }
+    } catch (e) {
+      console.error('Failed to load default target disk:', e);
+    }
+  }
+}
+
+async function analyzeSafety() {
+  if (!itemPath.value) return;
+  
+  analyzingSafety.value = true;
+  safetyAnalysis.value = null;
+  
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const result = await invoke<MigrationSafety>('analyze_migration_safety', {
+      path: itemPath.value,
+      size: itemSize.value
+    });
+    safetyAnalysis.value = result;
+  } catch (err) {
+    console.error('安全性分析失败:', err);
+  } finally {
+    analyzingSafety.value = false;
+  }
+}
+
+const canMigrate = computed(() => {
+  // 批量模式暂时允许迁移
+  if (isBatchMode.value) return true;
+  
+  // 如果正在分析，不允许迁移
+  if (analyzingSafety.value) return false;
+  
+  // 如果有安全性分析结果，根据结果判断
+  if (safetyAnalysis.value) {
+    return safetyAnalysis.value.can_migrate;
+  }
+  
+  // 默认允许
+  return true;
+});
+
+const riskLevelText = computed(() => {
+  if (!safetyAnalysis.value) return '';
+  
+  const levelMap = {
+    safe: '安全',
+    moderate: '中等风险',
+    risky: '高风险',
+    dangerous: '危险'
+  };
+  
+  return levelMap[safetyAnalysis.value.risk_level] || '';
+});
+
+const riskLevelClass = computed(() => {
+  if (!safetyAnalysis.value) return '';
+  return `risk-${safetyAnalysis.value.risk_level}`;
+});
 
 const isBatchMode = computed(() => props.selectedItems && props.selectedItems.length > 0);
 const itemName = computed(() => {
@@ -123,6 +230,8 @@ function close() {
   migrationSpeed.value = 0;
   estimatedTimeRemaining.value = 0;
   elapsedTime.value = 0;
+  safetyAnalysis.value = null;
+  analyzingSafety.value = false;
   emit('close');
 }
 
@@ -294,6 +403,49 @@ async function startBatchMigration() {
             </select>
           </div>
           
+          <!-- 安全性分析结果 -->
+          <div v-if="!isBatchMode && safetyAnalysis" class="safety-analysis" :class="riskLevelClass">
+            <div class="safety-header">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M10 2L3 5V9C3 13.5 6 17 10 18C14 17 17 13.5 17 9V5L10 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                <path v-if="safetyAnalysis.risk_level === 'safe'" d="M7 10L9 12L13 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path v-else-if="safetyAnalysis.risk_level === 'dangerous'" d="M10 7V11M10 13H10.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              <div class="safety-title">
+                <span class="safety-level">{{ riskLevelText }}</span>
+                <span class="safety-score">安全评分: {{ safetyAnalysis.safety_score }}/100</span>
+              </div>
+            </div>
+            
+            <div class="safety-details">
+              <div v-if="safetyAnalysis.app_type !== '未知类型'" class="safety-item">
+                <span class="safety-label">应用类型</span>
+                <span class="safety-value">{{ safetyAnalysis.app_type }}</span>
+              </div>
+              
+              <div v-if="safetyAnalysis.reasons.length > 0" class="safety-reasons">
+                <div class="safety-label">分析结果</div>
+                <ul class="safety-list">
+                  <li v-for="(reason, index) in safetyAnalysis.reasons" :key="index">{{ reason }}</li>
+                </ul>
+              </div>
+              
+              <div v-if="safetyAnalysis.recommendations.length > 0" class="safety-recommendations">
+                <div class="safety-label">建议</div>
+                <ul class="safety-list">
+                  <li v-for="(rec, index) in safetyAnalysis.recommendations" :key="index">{{ rec }}</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          
+          <div v-if="analyzingSafety" class="analyzing">
+            <svg class="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="30 10"/>
+            </svg>
+            <span>正在分析安全性...</span>
+          </div>
+          
           <div class="warning">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
               <path d="M10 2L2 17H18L10 2Z" stroke="#ff9500" stroke-width="2" stroke-linejoin="round"/>
@@ -355,13 +507,20 @@ async function startBatchMigration() {
         
         <div class="footer">
           <button class="btn btn-secondary" @click="close" :disabled="migrating">取消</button>
-          <button class="btn btn-primary" @click="startMigration" :disabled="!targetDisk || migrating">
+          <button 
+            class="btn btn-primary" 
+            @click="startMigration" 
+            :disabled="!targetDisk || migrating || !canMigrate || analyzingSafety"
+            :title="!canMigrate ? '此项目不允许迁移' : ''"
+          >
             <span v-if="migrating">
               <svg class="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="30 10"/>
               </svg>
               迁移中
             </span>
+            <span v-else-if="analyzingSafety">分析中...</span>
+            <span v-else-if="!canMigrate">不允许迁移</span>
             <span v-else>开始迁移</span>
           </button>
         </div>

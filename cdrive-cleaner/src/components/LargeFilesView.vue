@@ -1,9 +1,13 @@
 <script setup lang="ts">
+import { ref, computed, onMounted } from 'vue';
+
 interface FileInfo {
   path: string;
   name: string;
   size: number;
+  extension: string;
   modified_at: string;
+  is_readonly: boolean;
 }
 
 interface Props {
@@ -11,11 +15,37 @@ interface Props {
   deepScanning?: boolean;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 const emit = defineEmits<{
   'migrate-file': [file: FileInfo];
   'open-file': [file: FileInfo];
 }>();
+
+const largeFileThreshold = ref(100); // 默认 100 MB
+
+onMounted(() => {
+  loadThreshold();
+});
+
+function loadThreshold() {
+  const saved = localStorage.getItem('cdrive-cleaner-settings');
+  if (saved) {
+    try {
+      const settings = JSON.parse(saved);
+      if (settings.largeFileThreshold) {
+        largeFileThreshold.value = settings.largeFileThreshold;
+      }
+    } catch (e) {
+      console.error('Failed to load threshold:', e);
+    }
+  }
+}
+
+// 根据设置的阈值过滤文件
+const filteredFiles = computed(() => {
+  const thresholdBytes = largeFileThreshold.value * 1024 * 1024;
+  return props.files.filter(file => file.size >= thresholdBytes);
+});
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -43,13 +73,13 @@ function formatDate(dateStr: string): string {
 
 <template>
   <div class="large-files-view">
-    <div v-if="!files || files.length === 0" class="empty">
+    <div v-if="!filteredFiles || filteredFiles.length === 0" class="empty">
       <svg width="48" height="48" viewBox="0 0 48 48" fill="none" class="empty-icon">
         <rect x="10" y="8" width="28" height="32" rx="2" stroke="currentColor" stroke-width="2"/>
         <path d="M16 16H32M16 22H32M16 28H24" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
       <h3>没有找到大文件</h3>
-      <p>扫描中未发现大于 100MB 的文件</p>
+      <p>扫描中未发现大于 {{ largeFileThreshold }}MB 的文件</p>
     </div>
     
     <template v-else>
@@ -62,7 +92,7 @@ function formatDate(dateStr: string): string {
       </div>
       <div class="table-body">
         <div 
-          v-for="file in files" 
+          v-for="file in filteredFiles" 
           :key="file.path"
           class="table-row"
         >

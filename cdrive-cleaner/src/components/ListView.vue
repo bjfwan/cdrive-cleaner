@@ -7,6 +7,8 @@ interface DirectoryNode {
   size: number;
   file_count: number;
   children: DirectoryNode[];
+  is_symlink: boolean;
+  link_target?: string;
   safety?: {
     risk_level: 'safe' | 'moderate' | 'risky' | 'dangerous';
     safety_score: number;
@@ -22,6 +24,7 @@ interface FileInfo {
   name: string;
   size: number;
   extension: string;
+  modified_at: string;
   is_readonly: boolean;
 }
 
