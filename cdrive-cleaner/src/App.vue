@@ -9,7 +9,6 @@ import DiskCard from './components/DiskCard.vue';
 import ScanResults from './components/ScanResults.vue';
 import ScanProgress from './components/ScanProgress.vue';
 import DeepScanProgress from './components/DeepScanProgress.vue';
-import IncrementalScanProgress from './components/IncrementalScanProgress.vue';
 import Toast from './components/Toast.vue';
 import Settings from './components/Settings.vue';
 import History from './components/History.vue';
@@ -63,7 +62,6 @@ const disks = ref<DiskInfo[]>([]);
 const selectedDisk = ref<string>('');
 const scanning = ref(false);
 const deepScanning = ref(false);
-const incrementalScanning = ref(false);
 const scanResult = ref<ScanResult | null>(null);
 const deepScanResult = ref<ScanResult | null>(null);
 const error = ref<string>('');
@@ -112,36 +110,6 @@ async function loadDisks() {
 
 async function startScan() {
   if (!selectedDisk.value) return;
-  
-  try {
-    const cached = await invoke<ScanResult | null>('get_scan_cache', { 
-      diskPath: selectedDisk.value,
-      scanType: 'quick'
-    });
-    
-    if (cached) {
-      incrementalScanning.value = true;
-      
-      try {
-        const result = await invoke<ScanResult>('scan_disk_incremental', { path: selectedDisk.value });
-        scanResult.value = result;
-        navigationStack.value = [selectedDisk.value];
-        scanCache.value.set(selectedDisk.value, result);
-        hasDeepScanned.value = false;
-        
-        showToastNotification(
-          '增量扫描完成',
-          `发现 ${result.total_files.toLocaleString()} 个文件 · ${formatBytes(result.total_size)}`,
-          'success'
-        );
-      } finally {
-        incrementalScanning.value = false;
-      }
-      return;
-    }
-  } catch (err) {
-    console.log('无缓存，开始全量扫描');
-  }
   
   scanning.value = true;
   deepScanning.value = false;
@@ -245,13 +213,6 @@ async function startDeepScan() {
     } else if (navigationStack.value[navigationStack.value.length - 1] === selectedDisk.value) {
       scanResult.value = result;
     }
-    
-    // 保存深度扫描缓存
-    await invoke('save_scan_cache', {
-      diskPath: selectedDisk.value,
-      scanType: 'deep',
-      result: result
-    });
     
     showToastNotification(
       '深度扫描完成',
@@ -488,7 +449,6 @@ function loadUserSettings() {
     </main>
 
     <ScanProgress :scanning="scanning" />
-    <IncrementalScanProgress :scanning="incrementalScanning" />
     
     <Toast 
       :show="showToast"

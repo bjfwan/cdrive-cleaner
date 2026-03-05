@@ -119,59 +119,33 @@ pub fn detect_new_directories(
     cached_tree: &[DirectoryNode],
     current_path: &Path
 ) -> Result<Vec<PathBuf>> {
-    use rayon::prelude::*;
+    // For incremental scan, we only check direct children of the root
+    // to avoid scanning the entire drive which would be too slow
     
     let mut cached_paths: HashSet<PathBuf> = HashSet::new();
     
-    fn collect_cached_paths(nodes: &[DirectoryNode], set: &mut HashSet<PathBuf>) {
-        for node in nodes {
-            set.insert(PathBuf::from(&node.path));
-            collect_cached_paths(&node.children, set);
-        }
+    // Only collect direct children paths from cache
+    for node in cached_tree {
+        cached_paths.insert(PathBuf::from(&node.path));
     }
-    
-    collect_cached_paths(cached_tree, &mut cached_paths);
 
-    let new_dirs = Arc::new(Mutex::new(Vec::new()));
+    let mut new_dirs = Vec::new();
 
-    fn scan_for_new(
-        path: &Path,
-        cached: &HashSet<PathBuf>,
-        new_dirs: &Arc<Mutex<Vec<PathBuf>>>
-    ) -> Result<()> {
-        if !path.is_dir() {
-            return Ok(());
-        }
-
-        if !cached.contains(path) {
-            new_dirs.lock().unwrap().push(path.to_path_buf());
-        }
-
-        if let Ok(entries) = std::fs::read_dir(path) {
-            let subdirs: Vec<_> = entries
-                .flatten()
-                .filter_map(|entry| {
-                    if let Ok(metadata) = entry.metadata() {
-                        if metadata.is_dir() {
-                            return Some(entry.path());
-                        }
+    // Only scan direct children of current_path
+    if let Ok(entries) = std::fs::read_dir(current_path) {
+        for entry in entries.flatten() {
+            if let Ok(metadata) = entry.metadata() {
+                if metadata.is_dir() {
+                    let entry_path = entry.path();
+                    if !cached_paths.contains(&entry_path) {
+                        new_dirs.push(entry_path);
                     }
-                    None
-                })
-                .collect();
-
-            // 并行扫描子目录
-            subdirs.par_iter().try_for_each(|subdir| {
-                scan_for_new(subdir, cached, new_dirs)
-            })?;
+                }
+            }
         }
-
-        Ok(())
     }
 
-    scan_for_new(current_path, &cached_paths, &new_dirs)?;
-
-    Ok(Arc::try_unwrap(new_dirs).unwrap().into_inner().unwrap())
+    Ok(new_dirs)
 }
 
 pub async fn scan_incremental(
