@@ -418,6 +418,7 @@ function loadUserSettings() {
         @update:view-mode="viewMode = $event"
         @navigate="navigateToPath"
         @go-back="goBack"
+        @start-deep-scan="startDeepScan"
       />
 
       <div v-if="error" class="error">{{ error }}</div>
