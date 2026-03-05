@@ -411,8 +411,6 @@ function closeMigrateDialog() {
     padding: 1rem;
   }
 }
-</style>
-
 
 .deep-scan-notice {
   display: flex;
@@ -504,3 +502,4 @@ function closeMigrateDialog() {
 .notice-action:active {
   transform: translateY(0);
 }
+</style>
