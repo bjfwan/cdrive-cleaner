@@ -21,7 +21,7 @@
 </template>
 
 <script setup lang="ts">
-import type { IconProps } from '../types'
+import type { IconProps } from './types'
 
 withDefaults(defineProps<IconProps>(), {
   size: 24,

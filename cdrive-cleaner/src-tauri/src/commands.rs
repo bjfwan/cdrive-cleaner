@@ -114,6 +114,7 @@ pub async fn migrate_file(
             LinkType::Symlink => "Symlink",
             LinkType::Hardlink => "Hardlink",
             LinkType::Auto => "Auto",
+            LinkType::None => "None",
         };
         
         let migration_id = db.insert_migration(

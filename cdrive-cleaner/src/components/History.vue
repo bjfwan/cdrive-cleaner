@@ -99,7 +99,7 @@
 
         <div class="record-details">
           <div class="detail-item">
-            <IconSize :size="16" />
+            <IconSizeIcon :size="16" />
             <span>{{ formatSize(record.file_size) }}</span>
           </div>
           <div class="detail-item">
@@ -170,7 +170,7 @@
 import { ref, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { 
-  IconRefresh, IconChart, IconSize, IconSuccess, IconRollback, 
+  IconRefresh, IconChart, IconSizeIcon, IconSuccess, IconRollback, 
   IconDocument, IconArrowRight, IconDisk, IconClose, IconWarning 
 } from './icons'
 

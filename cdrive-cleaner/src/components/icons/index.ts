@@ -28,7 +28,7 @@ export { default as IconScan } from './scan/IconScan.vue'
 export { default as IconSpeed } from './scan/IconSpeed.vue'
 
 export { default as IconChart } from './stats/IconChart.vue'
-export { default as IconSize } from './stats/IconSize.vue'
+export { default as IconSizeIcon } from './stats/IconSize.vue'
 export { default as IconCount } from './stats/IconCount.vue'
 export { default as IconDisk } from './stats/IconDisk.vue'
 export { default as IconShield } from './stats/IconShield.vue'

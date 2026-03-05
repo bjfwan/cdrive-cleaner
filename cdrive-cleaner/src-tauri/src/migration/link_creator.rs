@@ -61,6 +61,9 @@ impl LinkCreator {
                     fs::hard_link(target, source)?;
                 }
                 LinkType::Auto => unreachable!(),
+                LinkType::None => {
+                    return Err(anyhow!("Cannot create link with type None"));
+                }
             }
         }
 

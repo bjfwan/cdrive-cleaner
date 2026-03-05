@@ -12,6 +12,7 @@ import DeepScanProgress from './components/DeepScanProgress.vue';
 import Toast from './components/Toast.vue';
 import Settings from './components/Settings.vue';
 import History from './components/History.vue';
+import Welcome from './components/Welcome.vue';
 
 use([CanvasRenderer, TreemapChart, TitleComponent, TooltipComponent]);
 
@@ -76,11 +77,24 @@ const toastType = ref<'success' | 'info' | 'warning' | 'error'>('success');
 // 设置
 const showSettings = ref(false);
 const showHistory = ref(false);
+const showWelcome = ref(false);
 
 onMounted(async () => {
   await loadDisks();
   loadUserSettings();
+  checkFirstLaunch();
 });
+
+function checkFirstLaunch() {
+  const hasShown = localStorage.getItem('cdrive-cleaner-welcome-shown');
+  if (!hasShown) {
+    showWelcome.value = true;
+  }
+}
+
+function closeWelcome() {
+  showWelcome.value = false;
+}
 
 async function loadDisks() {
   try {
@@ -408,9 +422,49 @@ function loadUserSettings() {
 
     <main class="main">
       <div v-if="!scanResult && !scanning" class="empty">
-        <svg width="64" height="64" viewBox="0 0 64 64" fill="none" class="empty-icon">
-          <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="2"/>
-          <path d="M32 16v16l12 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <svg width="80" height="80" viewBox="0 0 120 120" fill="none" class="empty-icon">
+          <defs>
+            <linearGradient id="emptyBgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#f97316;stop-opacity:1" />
+              <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+            </linearGradient>
+            <linearGradient id="emptyBgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
+              <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+            </linearGradient>
+            <linearGradient id="emptyDiskCGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.95" />
+              <stop offset="100%" style="stop-color:#fecaca;stop-opacity:0.85" />
+            </linearGradient>
+            <linearGradient id="emptyDiskDGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" style="stop-color:#dbeafe;stop-opacity:0.95" />
+              <stop offset="100%" style="stop-color:#93c5fd;stop-opacity:0.85" />
+            </linearGradient>
+            <linearGradient id="emptyLightningGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" style="stop-color:#f87171;stop-opacity:1" />
+              <stop offset="100%" style="stop-color:#60a5fa;stop-opacity:1" />
+            </linearGradient>
+            <!-- 稀疏条纹图案 - 空间感 -->
+            <pattern id="emptySparseStripePattern" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+              <rect width="8" height="8" fill="none"/>
+              <rect width="3" height="8" fill="#3b82f6" opacity="0.4"/>
+            </pattern>
+          </defs>
+          <rect x="8" y="8" width="104" height="104" rx="22" fill="url(#emptyBgGradient)"/>
+          <g transform="translate(60, 60)">
+            <g transform="translate(-18, 0)">
+              <path d="M 8 -22 A 22 22 0 1 0 8 22 L 8 15 A 15 15 0 1 1 8 -15 Z" fill="url(#emptyDiskCGradient)"/>
+            </g>
+            <g transform="translate(0, 0)">
+              <path d="M -12 1 L 0 -4 L 0 0 L 12 -1 L 0 5 L 0 1 Z" fill="url(#emptyLightningGradient)"/>
+            </g>
+            <g transform="translate(22, 0)">
+              <path d="M -8 -22 L -8 22 A 22 22 0 0 0 -8 -22 Z" fill="url(#emptyDiskDGradient)"/>
+              <path d="M -8 -15 L -8 15 A 15 15 0 0 0 -8 -15 Z" fill="url(#emptySparseStripePattern)"/>
+              <!-- 分离线 -->
+              <path d="M -8 -15 L -8 15 A 15 15 0 0 0 -8 -15" stroke="#3b82f6" stroke-width="1" fill="none" opacity="0.6"/>
+            </g>
+          </g>
         </svg>
         <h2>选择磁盘开始扫描</h2>
         <p>分析空间占用情况</p>
@@ -456,6 +510,8 @@ function loadUserSettings() {
         <History />
       </div>
     </div>
+
+    <Welcome v-if="showWelcome" @close="closeWelcome" />
   </div>
 </template>
 
