@@ -283,6 +283,12 @@ onMounted(() => {
   align-items: flex-start;
   border-bottom: 1px solid #e7e5e4;
   background: white;
+  gap: 2rem;
+}
+
+.header-content {
+  flex: 1;
+  min-width: 0;
 }
 
 .header-content h1 {
@@ -314,6 +320,8 @@ onMounted(() => {
   cursor: pointer;
   transition: all 0.2s ease;
   font-family: inherit;
+  flex-shrink: 0;
+  margin-right: 3rem;
 }
 
 .refresh-btn:hover:not(:disabled) {
@@ -834,7 +842,13 @@ onMounted(() => {
   .history-header {
     padding: 2rem 1.5rem 1.5rem;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .refresh-btn {
+    margin-right: 0;
+    align-self: flex-start;
   }
 
   .stats-grid {
