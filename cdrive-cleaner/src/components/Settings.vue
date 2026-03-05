@@ -108,12 +108,10 @@ async function confirmRestartAsAdmin() {
 }
 
 function confirmRestartAsStandard() {
-  try {
-    window.location.reload();
-  } catch (e) {
-    console.error('Failed to restart:', e);
-  }
   showDisableAdminConfirm.value = false;
+  setTimeout(() => {
+    window.__TAURI__.process.exit(0);
+  }, 100);
 }
 
 function close() {
