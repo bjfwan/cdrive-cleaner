@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import ConfirmDialog from './ConfirmDialog.vue';
-import { IconClose, IconRefresh, IconLink, IconInfo, IconWarning, IconShield } from './icons';
+import { IconClose, IconRefresh, IconLink, IconInfo, IconWarning } from './icons';
 
 interface DiskInfo {
   drive_letter: string;
@@ -212,40 +212,32 @@ function formatBytes(bytes: number): string {
           </div>
         </div>
 
-        <div class="setting-section">
+        <div class="setting-section admin-section">
           <div class="section-header">
-            <h3>权限管理</h3>
-            <p>某些操作可能需要管理员权限</p>
+            <h3>权限</h3>
+            <p v-if="!isCheckingElevation">{{ isElevated ? '应用当前以管理员权限运行' : '应用当前以标准权限运行' }}</p>
           </div>
 
-          <div v-if="!isCheckingElevation" class="admin-status">
-            <div v-if="isElevated" class="status-badge status-elevated">
-              <IconShield :size="16" />
-              <span>当前以管理员身份运行</span>
+          <div v-if="!isCheckingElevation" class="admin-card">
+            <div class="admin-card-content">
+              <div class="admin-status-indicator">
+                <div :class="['status-dot', isElevated ? 'elevated' : 'standard']"></div>
+                <span class="status-text">{{ isElevated ? '管理员模式' : '标准模式' }}</span>
+              </div>
+              
+              <div v-if="!isElevated" class="admin-description">
+                <p>管理员权限允许访问系统保护的文件和文件夹，执行需要提升权限的操作。</p>
+              </div>
+
+              <button 
+                v-if="!isElevated"
+                @click.stop="showRestartConfirm = true" 
+                class="admin-action-btn"
+              >
+                以管理员身份重启
+              </button>
             </div>
-            <div v-else class="status-badge status-normal">
-              <IconInfo :size="16" />
-              <span>当前以普通用户身份运行</span>
-            </div>
           </div>
-
-          <div v-if="!isElevated && !isCheckingElevation" class="admin-info">
-            <p>以管理员身份运行可以：</p>
-            <ul>
-              <li>访问系统保护的文件和文件夹</li>
-              <li>迁移需要特殊权限的文件</li>
-              <li>执行某些高级操作</li>
-            </ul>
-          </div>
-
-          <button 
-            v-if="!isElevated && !isCheckingElevation"
-            @click.stop="showRestartConfirm = true" 
-            class="admin-restart-btn"
-          >
-            <IconRefresh :size="16" />
-            以管理员身份重启
-          </button>
         </div>
 
         <div class="setting-section">
