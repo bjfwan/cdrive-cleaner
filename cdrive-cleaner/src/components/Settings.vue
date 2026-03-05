@@ -320,7 +320,7 @@ function formatBytes(bytes: number): string {
       title="以管理员身份重启"
       message="应用将关闭并以管理员权限重新启动。请在弹出的 UAC 提示中点击「是」。"
       confirm-text="立即重启"
-      cancel-text="取消"
+      cancel-text="稍后手动重启"
       type="warning"
       @confirm="confirmRestartAsAdmin"
       @cancel="showRestartConfirm = false"
