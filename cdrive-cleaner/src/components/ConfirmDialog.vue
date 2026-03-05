@@ -32,7 +32,7 @@ const emit = defineEmits<{
       <h3>{{ title }}</h3>
       <p>{{ message }}</p>
       <div class="confirm-actions">
-        <button class="btn btn-secondary" @click="emit('cancel')">{{ cancelText }}</button>
+        <button v-if="cancelText" class="btn btn-secondary" @click="emit('cancel')">{{ cancelText }}</button>
         <button class="btn" :class="`btn-${type}`" @click="emit('confirm')">{{ confirmText }}</button>
       </div>
     </div>
