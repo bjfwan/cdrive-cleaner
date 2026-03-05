@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import ConfirmDialog from './ConfirmDialog.vue';
+import { IconClose, IconRefresh } from './icons';
 
 interface DiskInfo {
   drive_letter: string;
@@ -83,9 +84,7 @@ function formatBytes(bytes: number): string {
       <div class="panel-header">
         <h2>设置</h2>
         <button class="close-btn" @click="close">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
+          <IconClose :size="20" />
         </button>
       </div>
 
@@ -145,10 +144,7 @@ function formatBytes(bytes: number): string {
           </div>
 
           <button @click.stop="showResetConfirm = true" class="reset-btn">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M2 8a6 6 0 0 1 10.392-4.243M14 8a6 6 0 0 1-10.392 4.243" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <path d="M12 2v3h-3M4 14v-3h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            <IconRefresh :size="16" />
             重置所有设置
           </button>
         </div>

@@ -20,6 +20,12 @@ pub fn run() {
             commands::migrate_file,
             commands::get_disk_info,
             commands::analyze_migration_safety,
+            commands::get_migration_history,
+            commands::get_migration_stats,
+            commands::rollback_migration,
+            commands::save_scan_cache,
+            commands::get_scan_cache,
+            commands::clear_scan_cache,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

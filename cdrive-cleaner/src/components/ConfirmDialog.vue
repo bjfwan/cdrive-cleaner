@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconError, IconWarning, IconInfo } from './icons';
 interface Props {
   show: boolean;
   title: string;
@@ -24,18 +25,9 @@ const emit = defineEmits<{
   <div v-if="show" class="confirm-overlay" @click.self="emit('cancel')">
     <div class="confirm-dialog" @click.stop>
       <div class="confirm-icon" :class="`icon-${type}`">
-        <svg v-if="type === 'danger'" width="48" height="48" viewBox="0 0 48 48" fill="none">
-          <circle cx="24" cy="24" r="22" stroke="#ef4444" stroke-width="2"/>
-          <path d="M24 16v12m0 4h.01" stroke="#ef4444" stroke-width="3" stroke-linecap="round"/>
-        </svg>
-        <svg v-else-if="type === 'warning'" width="48" height="48" viewBox="0 0 48 48" fill="none">
-          <path d="M24 4L4 40h40L24 4z" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round"/>
-          <path d="M24 18v12m0 4h.01" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
-        </svg>
-        <svg v-else width="48" height="48" viewBox="0 0 48 48" fill="none">
-          <circle cx="24" cy="24" r="22" stroke="#3b82f6" stroke-width="2"/>
-          <path d="M24 16v12m0 4h.01" stroke="#3b82f6" stroke-width="3" stroke-linecap="round"/>
-        </svg>
+        <IconError v-if="type === 'danger'" :size="48" />
+        <IconWarning v-else-if="type === 'warning'" :size="48" />
+        <IconInfo v-else :size="48" />
       </div>
       <h3>{{ title }}</h3>
       <p>{{ message }}</p>

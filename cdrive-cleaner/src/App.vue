@@ -11,6 +11,7 @@ import ScanProgress from './components/ScanProgress.vue';
 import DeepScanProgress from './components/DeepScanProgress.vue';
 import Toast from './components/Toast.vue';
 import Settings from './components/Settings.vue';
+import History from './components/History.vue';
 
 use([CanvasRenderer, TreemapChart, TitleComponent, TooltipComponent]);
 
@@ -64,6 +65,7 @@ const error = ref<string>('');
 const viewMode = ref<'treemap' | 'list' | 'large-files'>('treemap');
 const navigationStack = ref<string[]>([]);
 const scanCache = ref<Map<string, ScanResult>>(new Map());
+const hasDeepScanned = ref(false);
 
 // Toast 通知
 const showToast = ref(false);
@@ -73,6 +75,7 @@ const toastType = ref<'success' | 'info' | 'warning' | 'error'>('success');
 
 // 设置
 const showSettings = ref(false);
+const showHistory = ref(false);
 
 onMounted(async () => {
   await loadDisks();
@@ -93,6 +96,30 @@ async function loadDisks() {
 
 async function startScan() {
   if (!selectedDisk.value) return;
+  
+  try {
+    const cached = await invoke<ScanResult | null>('get_scan_cache', { 
+      diskPath: selectedDisk.value,
+      scanType: 'quick'
+    });
+    
+    if (cached) {
+      scanResult.value = cached;
+      navigationStack.value = [selectedDisk.value];
+      scanCache.value.set(selectedDisk.value, cached);
+      hasDeepScanned.value = false;
+      
+      showToastNotification(
+        '已加载缓存',
+        `发现 ${cached.total_files.toLocaleString()} 个文件 · ${formatBytes(cached.total_size)}`,
+        'info'
+      );
+      return;
+    }
+  } catch (err) {
+    console.log('无缓存，开始扫描');
+  }
+  
   scanning.value = true;
   deepScanning.value = false;
   error.value = '';
@@ -100,12 +127,19 @@ async function startScan() {
   deepScanResult.value = null;
   navigationStack.value = [];
   scanCache.value.clear();
+  hasDeepScanned.value = false;
 
   try {
     const result = await invoke<ScanResult>('scan_disk', { path: selectedDisk.value });
     scanResult.value = result;
     navigationStack.value = [selectedDisk.value];
     scanCache.value.set(selectedDisk.value, result);
+    
+    await invoke('save_scan_cache', {
+      diskPath: selectedDisk.value,
+      scanType: 'quick',
+      result: result
+    });
     
     showToastNotification(
       '快速扫描完成',
@@ -134,6 +168,7 @@ async function startDeepScan() {
     });
     deepScanResult.value = result;
     scanCache.value.set(selectedDisk.value, result);
+    hasDeepScanned.value = true;
     if (navigationStack.value.length === 0) {
       navigationStack.value = [selectedDisk.value];
       scanResult.value = result;
@@ -249,6 +284,14 @@ function closeSettings() {
   showSettings.value = false;
 }
 
+function openHistory() {
+  showHistory.value = true;
+}
+
+function closeHistory() {
+  showHistory.value = false;
+}
+
 function saveSettings(newSettings: any) {
   // 应用大文件阈值设置
   if (newSettings.largeFileThreshold) {
@@ -296,12 +339,21 @@ function loadUserSettings() {
     <aside class="sidebar">
       <div class="brand">
         <h1>存储空间</h1>
-        <button class="settings-icon-btn" @click="openSettings" title="设置">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M17.5 10.833v-1.666a1.667 1.667 0 0 0-1.25-1.617l-.833-.208a.833.833 0 0 1-.584-.584l-.208-.833a1.667 1.667 0 0 0-1.617-1.25H11.34a1.667 1.667 0 0 0-1.617 1.25l-.208.833a.833.833 0 0 1-.584.584l-.833.208a1.667 1.667 0 0 0-1.25 1.617v1.666a1.667 1.667 0 0 0 1.25 1.617l.833.208a.833.833 0 0 1 .584.584l.208.833a1.667 1.667 0 0 0 1.617 1.25h1.667a1.667 1.667 0 0 0 1.617-1.25l.208-.833a.833.833 0 0 1 .584-.584l.833-.208a1.667 1.667 0 0 0 1.25-1.617z" stroke="currentColor" stroke-width="1.5"/>
-          </svg>
-        </button>
+        <div class="header-actions">
+          <button class="settings-icon-btn" @click="openHistory" title="迁移历史">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M10 5v5l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M3 10a7 7 0 0 1 12-4.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M17 10a7 7 0 0 1-12 4.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button class="settings-icon-btn" @click="openSettings" title="设置">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M17.5 10.833v-1.666a1.667 1.667 0 0 0-1.25-1.617l-.833-.208a.833.833 0 0 1-.584-.584l-.208-.833a1.667 1.667 0 0 0-1.617-1.25H11.34a1.667 1.667 0 0 0-1.617 1.25l-.208.833a.833.833 0 0 1-.584.584l-.833.208a1.667 1.667 0 0 0-1.25 1.617v1.666a1.667 1.667 0 0 0 1.25 1.617l.833.208a.833.833 0 0 1 .584.584l.208.833a1.667 1.667 0 0 0 1.617 1.25h1.667a1.667 1.667 0 0 0 1.617-1.25l.208-.833a.833.833 0 0 1 .584-.584l.833-.208a1.667 1.667 0 0 0 1.25-1.617z" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div class="disks-container">
@@ -317,7 +369,7 @@ function loadUserSettings() {
       <div class="action">
         <button 
           @click="startScan" 
-          :disabled="scanning || !selectedDisk"
+          :disabled="scanning || deepScanning || !selectedDisk"
           class="scan-btn primary"
         >
           <div class="btn-content">
@@ -332,7 +384,7 @@ function loadUserSettings() {
         
         <button 
           @click="startDeepScan" 
-          :disabled="deepScanning || !selectedDisk"
+          :disabled="deepScanning || scanning || !selectedDisk"
           class="scan-btn deep"
         >
           <div class="btn-content">
@@ -372,6 +424,7 @@ function loadUserSettings() {
         :current-path="navigationStack[navigationStack.length - 1]"
         :deep-scanning="deepScanning"
         :available-disks="disks"
+        :has-deep-scanned="hasDeepScanned"
         @update:view-mode="viewMode = $event"
         @navigate="navigateToPath"
         @go-back="goBack"
@@ -396,6 +449,13 @@ function loadUserSettings() {
       @close="closeSettings"
       @save="saveSettings"
     />
+
+    <div v-if="showHistory" class="modal-overlay" @click="closeHistory">
+      <div class="modal-content" @click.stop>
+        <button class="modal-close" @click="closeHistory">✕</button>
+        <History />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -446,6 +506,11 @@ body {
   letter-spacing: -0.02em;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .settings-icon-btn {
   width: 36px;
   height: 36px;
@@ -463,6 +528,14 @@ body {
 .settings-icon-btn:hover {
   background: #e7e5e4;
   color: #1c1917;
+  transform: scale(1.05);
+}
+
+.settings-icon-btn:first-child:hover {
+  transform: rotate(-15deg) scale(1.05);
+}
+
+.settings-icon-btn:last-child:hover {
   transform: rotate(45deg) scale(1.05);
 }
 
@@ -722,4 +795,60 @@ body {
     grid-template-columns: 1fr;
     padding: 1.5rem 1rem;
   }
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: white;
+  border-radius: 20px;
+  width: 90%;
+  max-width: 1200px;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: #f5f5f4;
+  color: #57534e;
+  border-radius: 50%;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.modal-close:hover {
+  background: #e7e5e4;
+  color: #1c1917;
+  transform: rotate(90deg);
+}
+
+.modal-content > * {
+  overflow-y: auto;
 }

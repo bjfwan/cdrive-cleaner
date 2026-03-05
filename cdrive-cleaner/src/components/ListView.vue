@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
+import { IconRiskSafe, IconRiskLow, IconRiskMedium, IconRiskDanger, IconRiskUnknown, IconFolder, IconFile, IconMigrate } from './icons';
 
 interface DirectoryNode {
   path: string;
@@ -33,6 +34,7 @@ interface Props {
   totalSize: number;
   deepScanning: boolean;
   currentPath: string;
+  hasDeepScanned: boolean;
 }
 
 const props = defineProps<Props>();
@@ -40,7 +42,6 @@ const emit = defineEmits<{
   'navigate': [path: string];
   'migrate-dir': [dir: DirectoryNode];
   'migrate-file': [file: FileInfo];
-  'open-file': [file: FileInfo];
   'batch-migrate': [items: Array<DirectoryNode | FileInfo>];
 }>();
 
@@ -128,7 +129,7 @@ function formatNumber(num: number): string {
 }
 
 function handleItemClick(dir: DirectoryNode) {
-  if (props.deepScanning && (!dir.children || dir.children.length === 0)) {
+  if (!props.hasDeepScanned) {
     return;
   }
   emit('navigate', dir.path);
@@ -153,22 +154,11 @@ watch(() => props.currentPath, (newPath) => {
   clearSelection();
 }, { immediate: true });
 
-// 风险等级辅助函数
-function getRiskIcon(riskLevel?: string): string {
-  switch (riskLevel) {
-    case 'safe': return '🟢';
-    case 'moderate': return '🟡';
-    case 'risky': return '🟠';
-    case 'dangerous': return '🔴';
-    default: return '⚪';
-  }
-}
-
 function getRiskLabel(riskLevel?: string): string {
   switch (riskLevel) {
     case 'safe': return '安全';
-    case 'moderate': return '中风险';
-    case 'risky': return '高风险';
+    case 'moderate': return '低风险';
+    case 'risky': return '中风险';
     case 'dangerous': return '危险';
     default: return '未知';
   }
@@ -188,10 +178,7 @@ function getRiskClass(riskLevel?: string): string {
 <template>
   <div class="list-view">
     <div v-if="directories.length === 0 && currentFiles.length === 0 && !loadingFiles" class="empty">
-      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" class="empty-icon">
-        <path d="M8 12C8 9.79086 9.79086 8 12 8H20L24 12H36C38.2091 12 40 13.7909 40 16V36C40 38.2091 38.2091 40 36 40H12C9.79086 40 8 38.2091 8 36V12Z" stroke="currentColor" stroke-width="2"/>
-        <path d="M18 24H30M24 18V30" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      </svg>
+      <IconFolder class="empty-icon" :size="48" />
       <h3>此目录为空</h3>
       <p>没有子目录和文件</p>
     </div>
@@ -205,11 +192,8 @@ function getRiskClass(riskLevel?: string): string {
       <div v-if="hasSelection" class="batch-toolbar">
         <span class="batch-info">已选择 {{ selectedItems.length }} 项</span>
         <div class="batch-actions">
-          <button class="batch-btn batch-migrate-btn" @click="handleBatchMigrate" :disabled="deepScanning">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M8 2L12 6H9V10H7V6H4L8 2Z" fill="currentColor"/>
-              <path d="M3 12H13V14H3V12Z" fill="currentColor"/>
-            </svg>
+          <button class="batch-btn batch-migrate-btn" @click="handleBatchMigrate" :disabled="!hasDeepScanned">
+            <IconMigrate :size="16" />
             批量迁移
           </button>
           <button class="batch-btn batch-clear-btn" @click="clearSelection">清除选择</button>
@@ -247,30 +231,29 @@ function getRiskClass(riskLevel?: string): string {
               @change="toggleDirSelection(dir)"
             />
           </div>
-          <div class="td td-name" @click="handleItemClick(dir)">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path d="M2 4.5C2 3.67157 2.67157 3 3.5 3H6L7.5 4.5H14.5C15.3284 4.5 16 5.17157 16 6V13.5C16 14.3284 15.3284 15 14.5 15H3.5C2.67157 15 2 14.3284 2 13.5V4.5Z" fill="#2c2c2c"/>
-            </svg>
+          <div class="td td-name" @click="handleItemClick(dir)" :class="{ 'disabled': !hasDeepScanned }" :title="!hasDeepScanned ? '请先进行深度扫描以查看子目录' : ''">
+            <IconFolder :size="18" />
             <span>{{ dir.name }}</span>
             <span v-if="dir.safety" class="risk-badge" :class="getRiskClass(dir.safety.risk_level)" :title="`${getRiskLabel(dir.safety.risk_level)} - ${dir.safety.app_type}`">
-              {{ getRiskIcon(dir.safety.risk_level) }}
+              <IconRiskSafe v-if="dir.safety.risk_level === 'safe'" :size="16" />
+              <IconRiskLow v-else-if="dir.safety.risk_level === 'moderate'" :size="16" />
+              <IconRiskMedium v-else-if="dir.safety.risk_level === 'risky'" :size="16" />
+              <IconRiskDanger v-else-if="dir.safety.risk_level === 'dangerous'" :size="16" />
+              <IconRiskUnknown v-else :size="16" />
             </span>
             <span v-if="deepScanning && (!dir.children || dir.children.length === 0)" class="badge">扫描中</span>
           </div>
-          <div class="td td-size" @click="handleItemClick(dir)">{{ formatBytes(dir.size) }}</div>
-          <div class="td td-percent" @click="handleItemClick(dir)">
+          <div class="td td-size" @click="handleItemClick(dir)" :class="{ 'disabled': !hasDeepScanned }">{{ formatBytes(dir.size) }}</div>
+          <div class="td td-percent" @click="handleItemClick(dir)" :class="{ 'disabled': !hasDeepScanned }">
             <div class="percent-container">
               <div class="percent-bar" :style="{ width: `${(dir.size / totalSize) * 100}%` }"></div>
               <span class="percent-text">{{ ((dir.size / totalSize) * 100).toFixed(1) }}%</span>
             </div>
           </div>
-          <div class="td td-files" @click="handleItemClick(dir)">{{ formatNumber(dir.file_count) }}</div>
+          <div class="td td-files" @click="handleItemClick(dir)" :class="{ 'disabled': !hasDeepScanned }">{{ formatNumber(dir.file_count) }}</div>
           <div class="td td-actions">
-            <button class="action-btn migrate-btn" @click.stop="$emit('migrate-dir', dir)" :disabled="deepScanning" :title="deepScanning ? '深度扫描完成后可迁移' : '迁移到其他磁盘'">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M8 2L12 6H9V10H7V6H4L8 2Z" fill="currentColor"/>
-                <path d="M3 12H13V14H3V12Z" fill="currentColor"/>
-              </svg>
+            <button class="action-btn migrate-btn" @click.stop="$emit('migrate-dir', dir)" :disabled="!hasDeepScanned" :title="!hasDeepScanned ? '请先进行深度扫描' : '迁移到其他磁盘'">
+              <IconMigrate :size="16" />
             </button>
           </div>
         </div>
@@ -290,10 +273,7 @@ function getRiskClass(riskLevel?: string): string {
             />
           </div>
           <div class="td td-name">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path d="M4 2H10L14 6V14C14 15.1046 13.1046 16 12 16H4C2.89543 16 2 15.1046 2 14V4C2 2.89543 2.89543 2 4 2Z" fill="#78716c"/>
-              <path d="M10 2V6H14" stroke="#78716c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            <IconFile :size="18" />
             <span>{{ file.name }}</span>
             <span v-if="file.is_readonly" class="badge readonly">只读</span>
           </div>
@@ -306,17 +286,8 @@ function getRiskClass(riskLevel?: string): string {
           </div>
           <div class="td td-files">{{ file.extension || '-' }}</div>
           <div class="td td-actions">
-            <button class="action-btn open-btn" @click.stop="$emit('open-file', file)" title="打开文件">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M14 9V13C14 13.5523 13.5523 14 13 14H3C2.44772 14 2 13.5523 2 13V9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                <path d="M8 2V10M8 10L5 7M8 10L11 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
             <button class="action-btn migrate-btn" @click.stop="$emit('migrate-file', file)" :disabled="deepScanning" :title="deepScanning ? '深度扫描完成后可迁移' : '迁移到其他磁盘'">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M8 2L12 6H9V10H7V6H4L8 2Z" fill="currentColor"/>
-                <path d="M3 12H13V14H3V12Z" fill="currentColor"/>
-              </svg>
+              <IconMigrate :size="16" />
             </button>
           </div>
         </div>
@@ -499,7 +470,7 @@ function getRiskClass(riskLevel?: string): string {
 
 .table-header {
   display: grid;
-  grid-template-columns: 40px minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px) 80px;
+  grid-template-columns: 40px minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px) 50px;
   gap: 1.5rem;
   padding: 0 0 1rem;
   border-bottom: 1px solid #e7e5e4;
@@ -522,7 +493,7 @@ function getRiskClass(riskLevel?: string): string {
 
 .table-row {
   display: grid;
-  grid-template-columns: 40px minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px) 80px;
+  grid-template-columns: 40px minmax(200px, 1fr) minmax(100px, 140px) minmax(120px, 160px) minmax(80px, 120px) 50px;
   gap: 1.5rem;
   padding: 1rem 0;
   border-bottom: 1px solid #f5f5f4;
@@ -576,6 +547,14 @@ function getRiskClass(riskLevel?: string): string {
   font-weight: 500;
   color: #2c2c2c;
   overflow: hidden;
+}
+
+.td-name.disabled,
+.td-size.disabled,
+.td-percent.disabled,
+.td-files.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .td-name span {
@@ -671,13 +650,6 @@ function getRiskClass(riskLevel?: string): string {
   transform: scale(0.95);
 }
 
-.open-btn:hover {
-  background: #10b981;
-  color: white;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.2);
-}
-
 .migrate-btn:hover {
   background: #007aff;
   color: white;
@@ -688,7 +660,7 @@ function getRiskClass(riskLevel?: string): string {
 @media (max-width: 900px) {
   .table-header,
   .table-row {
-    grid-template-columns: 40px 1fr 100px 120px 80px;
+    grid-template-columns: 40px 1fr 100px 120px 50px;
     gap: 1rem;
   }
 
@@ -716,7 +688,7 @@ function getRiskClass(riskLevel?: string): string {
 @media (max-width: 600px) {
   .table-header,
   .table-row {
-    grid-template-columns: 40px 1fr 90px;
+    grid-template-columns: 40px 1fr 50px;
     gap: 0.75rem;
   }
 

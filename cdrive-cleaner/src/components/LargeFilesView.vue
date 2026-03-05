@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { IconFile, IconDocument, IconMigrate } from './icons';
 
 interface FileInfo {
   path: string;
@@ -13,12 +14,12 @@ interface FileInfo {
 interface Props {
   files: FileInfo[];
   deepScanning?: boolean;
+  hasDeepScanned: boolean;
 }
 
 const props = defineProps<Props>();
 const emit = defineEmits<{
   'migrate-file': [file: FileInfo];
-  'open-file': [file: FileInfo];
 }>();
 
 const largeFileThreshold = ref(100); // 默认 100 MB
@@ -74,10 +75,7 @@ function formatDate(dateStr: string): string {
 <template>
   <div class="large-files-view">
     <div v-if="!filteredFiles || filteredFiles.length === 0" class="empty">
-      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" class="empty-icon">
-        <rect x="10" y="8" width="28" height="32" rx="2" stroke="currentColor" stroke-width="2"/>
-        <path d="M16 16H32M16 22H32M16 28H24" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      </svg>
+      <IconDocument class="empty-icon" :size="48" />
       <h3>没有找到大文件</h3>
       <p>扫描中未发现大于 {{ largeFileThreshold }}MB 的文件</p>
     </div>
@@ -97,27 +95,15 @@ function formatDate(dateStr: string): string {
           class="table-row"
         >
           <div class="td td-name">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path d="M4 2H10L14 6V14C14 15.1046 13.1046 16 12 16H4C2.89543 16 2 15.1046 2 14V4C2 2.89543 2.89543 2 4 2Z" fill="#78716c"/>
-              <path d="M10 2V6H14" stroke="#78716c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            <IconFile :size="18" />
             <span :title="file.name">{{ file.name }}</span>
           </div>
           <div class="td td-path" :title="file.path">{{ file.path }}</div>
           <div class="td td-size">{{ formatBytes(file.size) }}</div>
           <div class="td td-modified">{{ formatDate(file.modified_at) }}</div>
           <div class="td td-actions">
-            <button class="action-btn open-btn" @click.stop="$emit('open-file', file)" title="打开文件">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M14 9V13C14 13.5523 13.5523 14 13 14H3C2.44772 14 2 13.5523 2 13V9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                <path d="M8 2V10M8 10L5 7M8 10L11 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <button class="action-btn migrate-btn" @click.stop="$emit('migrate-file', file)" :disabled="deepScanning" :title="deepScanning ? '深度扫描完成后可迁移' : '迁移到其他磁盘'">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M8 2L12 6H9V10H7V6H4L8 2Z" fill="currentColor"/>
-                <path d="M3 12H13V14H3V12Z" fill="currentColor"/>
-              </svg>
+            <button class="action-btn migrate-btn" @click.stop="$emit('migrate-file', file)" :disabled="!hasDeepScanned" :title="!hasDeepScanned ? '请先进行深度扫描' : '迁移到其他磁盘'">
+              <IconMigrate :size="16" />
             </button>
           </div>
         </div>
@@ -163,7 +149,7 @@ function formatDate(dateStr: string): string {
 
 .table-header {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) minmax(200px, 2fr) minmax(100px, 140px) minmax(120px, 160px) 80px;
+  grid-template-columns: minmax(150px, 1fr) minmax(200px, 2fr) minmax(100px, 140px) minmax(120px, 160px) 50px;
   gap: 1.5rem;
   padding: 0 0 1rem;
   border-bottom: 1px solid #e7e5e4;
@@ -186,7 +172,7 @@ function formatDate(dateStr: string): string {
 
 .table-row {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) minmax(200px, 2fr) minmax(100px, 140px) minmax(120px, 160px) 80px;
+  grid-template-columns: minmax(150px, 1fr) minmax(200px, 2fr) minmax(100px, 140px) minmax(120px, 160px) 50px;
   gap: 1.5rem;
   padding: 1rem 0;
   border-bottom: 1px solid #f5f5f4;
@@ -255,13 +241,6 @@ function formatDate(dateStr: string): string {
   color: #78716c;
   cursor: pointer;
   transition: all 0.2s ease;
-}
-
-.open-btn:hover {
-  background: #10b981;
-  color: white;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.2);
 }
 
 .migrate-btn:hover {

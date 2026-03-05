@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
+import { IconClose, IconWarning, IconError, IconShield } from './icons';
 
 interface DirectoryNode {
   path: string;
@@ -343,9 +344,7 @@ async function startBatchMigration() {
         <div class="header">
           <h3>{{ itemName }}</h3>
           <button class="close-btn" @click="close">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
+            <IconClose :size="20" />
           </button>
         </div>
         
@@ -406,11 +405,7 @@ async function startBatchMigration() {
           <!-- 安全性分析结果 -->
           <div v-if="!isBatchMode && safetyAnalysis" class="safety-analysis" :class="riskLevelClass">
             <div class="safety-header">
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <path d="M10 2L3 5V9C3 13.5 6 17 10 18C14 17 17 13.5 17 9V5L10 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                <path v-if="safetyAnalysis.risk_level === 'safe'" d="M7 10L9 12L13 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                <path v-else-if="safetyAnalysis.risk_level === 'dangerous'" d="M10 7V11M10 13H10.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
+              <IconShield :size="20" />
               <div class="safety-title">
                 <span class="safety-level">{{ riskLevelText }}</span>
                 <span class="safety-score">安全评分: {{ safetyAnalysis.safety_score }}/100</span>
@@ -447,19 +442,12 @@ async function startBatchMigration() {
           </div>
           
           <div class="warning">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M10 2L2 17H18L10 2Z" stroke="#ff9500" stroke-width="2" stroke-linejoin="round"/>
-              <path d="M10 8V12" stroke="#ff9500" stroke-width="2" stroke-linecap="round"/>
-              <circle cx="10" cy="15" r="0.5" fill="#ff9500"/>
-            </svg>
+            <IconWarning :size="20" />
             <span>迁移后将在原位置创建符号链接，程序可正常访问</span>
           </div>
           
           <div v-if="migrationError" class="error">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="10" r="8" stroke="#ef4444" stroke-width="2"/>
-              <path d="M10 6V10M10 14H10.01" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/>
-            </svg>
+            <IconError :size="20" />
             <span>{{ migrationError }}</span>
           </div>
           

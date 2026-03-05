@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { listen } from '@tauri-apps/api/event';
+import { IconSpinner, IconArrowDown } from './icons';
 
 interface Props {
   scanning: boolean;
@@ -54,9 +55,7 @@ onUnmounted(() => {
     <div class="progress-header" @click="expanded = !expanded">
       <div class="header-left">
         <div class="spinner-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="60 20"/>
-          </svg>
+          <IconSpinner :size="16" />
         </div>
         <div class="header-text">
           <div class="title">深度扫描中</div>
@@ -64,9 +63,7 @@ onUnmounted(() => {
         </div>
       </div>
       <div class="expand-icon" :class="{ expanded }">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+        <IconArrowDown :size="16" />
       </div>
     </div>
     

@@ -4,6 +4,7 @@ import TreemapView from './TreemapView.vue';
 import ListView from './ListView.vue';
 import LargeFilesView from './LargeFilesView.vue';
 import MigrateDialog from './MigrateDialog.vue';
+import { IconWarning, IconArrowLeft } from './icons';
 
 interface DirectoryNode {
   path: string;
@@ -60,6 +61,7 @@ interface Props {
   currentPath: string;
   deepScanning: boolean;
   availableDisks: DiskInfo[];
+  hasDeepScanned: boolean;
 }
 
 const props = defineProps<Props>();
@@ -133,15 +135,7 @@ function closeMigrateDialog() {
   selectedItems.value = [];
 }
 
-async function openFile(file: FileInfo) {
-  try {
-    const { openPath } = await import('@tauri-apps/plugin-opener');
-    await openPath(file.path);
-  } catch (err) {
-    console.error('打开文件失败:', err);
-    alert('无法打开文件');
-  }
-}
+
 </script>
 
 <template>
@@ -154,9 +148,7 @@ async function openFile(file: FileInfo) {
             @click="emit('goBack')"
             class="back-btn"
           >
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            <IconArrowLeft :size="20" />
           </button>
           <h2>{{ currentPath }}</h2>
         </div>
@@ -194,11 +186,22 @@ async function openFile(file: FileInfo) {
     </header>
 
     <div class="body">
+      <div v-if="!hasDeepScanned" class="deep-scan-notice">
+        <div class="notice-icon">
+          <IconWarning :size="24" />
+        </div>
+        <div class="notice-content">
+          <div class="notice-title">需要深度扫描</div>
+          <div class="notice-text">快速扫描仅显示顶层目录。请点击"深度扫描"按钮以查看完整目录树并启用迁移功能。</div>
+        </div>
+      </div>
+
       <TreemapView
         v-if="viewMode === 'treemap'"
         :directories="sortedDirectories"
         :total-size="result.total_size"
         :deep-scanning="deepScanning"
+        :has-deep-scanned="hasDeepScanned"
         @navigate="$emit('navigate', $event)"
       />
 
@@ -208,19 +211,19 @@ async function openFile(file: FileInfo) {
         :total-size="result.total_size"
         :deep-scanning="deepScanning"
         :current-path="currentPath"
+        :has-deep-scanned="hasDeepScanned"
         @navigate="$emit('navigate', $event)"
         @migrate-dir="showMigrateDialog"
         @migrate-file="showMigrateFileDialog"
         @batch-migrate="showBatchMigrateDialog"
-        @open-file="openFile"
       />
 
       <LargeFilesView
         v-if="viewMode === 'large-files'"
         :files="sortedLargeFiles"
         :deep-scanning="deepScanning"
+        :has-deep-scanned="hasDeepScanned"
         @migrate-file="showMigrateFileDialog"
-        @open-file="openFile"
       />
     </div>
 
@@ -403,3 +406,39 @@ async function openFile(file: FileInfo) {
   }
 }
 </style>
+
+
+.deep-scan-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #fff9e6 0%, #fff3d6 100%);
+  border: 1.5px solid #ffd966;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.1);
+}
+
+.notice-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.notice-content {
+  flex: 1;
+}
+
+.notice-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #b8860b;
+  margin-bottom: 6px;
+}
+
+.notice-text {
+  font-size: 14px;
+  color: #8b6914;
+  line-height: 1.5;
+}

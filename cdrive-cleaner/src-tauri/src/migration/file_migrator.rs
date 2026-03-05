@@ -282,3 +282,74 @@ pub struct MigrationResult {
     pub migration_id: i64,
     pub error: Option<String>,
 }
+
+impl FileMigrator {
+    pub async fn rollback<P: AsRef<Path>>(
+        &self,
+        source: P,
+        target: P,
+    ) -> Result<RollbackResult> {
+        let start = Instant::now();
+        let source = source.as_ref();
+        let target = target.as_ref();
+
+        if !target.exists() {
+            return Ok(RollbackResult {
+                success: false,
+                source_path: source.to_string_lossy().to_string(),
+                target_path: target.to_string_lossy().to_string(),
+                duration_ms: start.elapsed().as_millis() as u64,
+                error: Some("Target not found".to_string()),
+            });
+        }
+
+        if source.exists() {
+            if let Err(e) = fs::remove_file(source).or_else(|_| fs::remove_dir_all(source)) {
+                return Ok(RollbackResult {
+                    success: false,
+                    source_path: source.to_string_lossy().to_string(),
+                    target_path: target.to_string_lossy().to_string(),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    error: Some(format!("Failed to remove link: {}", e)),
+                });
+            }
+        }
+
+        if let Err(e) = self.copy_to_target(target, source) {
+            return Ok(RollbackResult {
+                success: false,
+                source_path: source.to_string_lossy().to_string(),
+                target_path: target.to_string_lossy().to_string(),
+                duration_ms: start.elapsed().as_millis() as u64,
+                error: Some(format!("Failed to restore: {}", e)),
+            });
+        }
+
+        if let Err(e) = self.cleanup_target(target) {
+            return Ok(RollbackResult {
+                success: false,
+                source_path: source.to_string_lossy().to_string(),
+                target_path: target.to_string_lossy().to_string(),
+                duration_ms: start.elapsed().as_millis() as u64,
+                error: Some(format!("Failed to cleanup target: {}", e)),
+            });
+        }
+
+        Ok(RollbackResult {
+            success: true,
+            source_path: source.to_string_lossy().to_string(),
+            target_path: target.to_string_lossy().to_string(),
+            duration_ms: start.elapsed().as_millis() as u64,
+            error: None,
+        })
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct RollbackResult {
+    pub success: bool,
+    pub source_path: String,
+    pub target_path: String,
+    pub duration_ms: u64,
+    pub error: Option<String>,
+}

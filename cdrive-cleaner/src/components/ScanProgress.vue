@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { listen } from '@tauri-apps/api/event';
+import { IconFolder, IconFile, IconClock, IconSpeed } from './icons';
 
 interface Props {
   scanning: boolean;
@@ -144,9 +145,7 @@ onUnmounted(() => {
       <div class="progress-stats">
         <div class="stat-card">
           <div class="stat-icon">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M4 4H10L12 6H16C17.1046 6 18 6.89543 18 8V14C18 15.1046 17.1046 16 16 16H4C2.89543 16 2 15.1046 2 14V6C2 4.89543 2.89543 4 4 4Z" stroke="currentColor" stroke-width="1.5"/>
-            </svg>
+            <IconFolder :size="20" />
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ Math.round(scannedDirs).toLocaleString() }}</div>
@@ -156,10 +155,7 @@ onUnmounted(() => {
         
         <div class="stat-card">
           <div class="stat-icon">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M6 3H11L14 6V15C14 16.1046 13.1046 17 12 17H6C4.89543 17 4 16.1046 4 15V5C4 3.89543 4.89543 3 6 3Z" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M11 3V6H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            <IconFile :size="20" />
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ Math.round(scannedFiles).toLocaleString() }}</div>
@@ -169,10 +165,7 @@ onUnmounted(() => {
         
         <div class="stat-card">
           <div class="stat-icon">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M10 2C14.4183 2 18 5.58172 18 10C18 14.4183 14.4183 18 10 18C5.58172 18 2 14.4183 2 10C2 5.58172 5.58172 2 10 2Z" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M10 6V10L13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            <IconClock :size="20" />
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ formattedTime }}</div>
@@ -182,9 +175,7 @@ onUnmounted(() => {
         
         <div class="stat-card">
           <div class="stat-icon">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M3 10H17M17 10L13 6M17 10L13 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            <IconSpeed :size="20" />
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ formattedSpeed }}</div>

@@ -14,6 +14,7 @@ interface Props {
   directories: DirectoryNode[];
   totalSize: number;
   deepScanning: boolean;
+  hasDeepScanned: boolean;
 }
 
 const props = defineProps<Props>();
@@ -126,7 +127,7 @@ function formatBytes(bytes: number): string {
 
 function handleChartClick(params: any) {
   if (params.data && params.data.path) {
-    if (props.deepScanning && params.data.hasChildren === false) {
+    if (!props.hasDeepScanned) {
       return;
     }
     emit('navigate', params.data.path);
@@ -134,7 +135,7 @@ function handleChartClick(params: any) {
 }
 
 function handleItemClick(dir: DirectoryNode) {
-  if (props.deepScanning && (!dir.children || dir.children.length === 0)) {
+  if (!props.hasDeepScanned) {
     return;
   }
   emit('navigate', dir.path);

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue';
+import { IconSuccess, IconInfo, IconWarning, IconError } from './icons';
 
 interface Props {
   message: string;
@@ -59,14 +60,10 @@ onMounted(() => {
     <div v-if="visible" class="toast-container" @click="close">
       <div class="toast" :class="`toast-${type}`">
         <div class="toast-icon">
-          <svg v-if="type === 'success'" width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.1"/>
-            <path d="M8 12.5l3 3 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <svg v-else-if="type === 'info'" width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.1"/>
-            <path d="M12 16v-4m0-4h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
+          <IconSuccess v-if="type === 'success'" :size="24" />
+          <IconInfo v-else-if="type === 'info'" :size="24" />
+          <IconWarning v-else-if="type === 'warning'" :size="24" />
+          <IconError v-else :size="24" />
         </div>
         
         <div class="toast-content">

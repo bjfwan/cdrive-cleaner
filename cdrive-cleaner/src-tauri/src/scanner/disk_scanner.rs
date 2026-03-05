@@ -749,6 +749,11 @@ impl DiskScanner {
         println!("[阶段2] 计算目录大小");
         let calc_start = Instant::now();
         
+        // 先获取统计数据
+        let scan_total_size = total_size.load(Ordering::Relaxed);
+        let scan_total_files = total_files.load(Ordering::Relaxed);
+        let scan_total_dirs = total_dirs.load(Ordering::Relaxed);
+        
         let mut nodes_map = Arc::try_unwrap(nodes_map).unwrap().into_inner().unwrap();
         let file_map = Arc::try_unwrap(file_map).unwrap().into_inner().unwrap();
         
@@ -768,10 +773,6 @@ impl DiskScanner {
                 }
             }
         }
-        
-        let scan_total_size = total_size.load(Ordering::Relaxed);
-        let scan_total_files = total_files.load(Ordering::Relaxed);
-        let scan_total_dirs = total_dirs.load(Ordering::Relaxed);
         
         let mut total_files_in_map = 0;
         let mut total_size_in_map = 0u64;
