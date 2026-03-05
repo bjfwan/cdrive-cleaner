@@ -151,12 +151,13 @@ const emit = defineEmits<{
 
 .btn-secondary {
   color: var(--color-text-primary);
-  background: rgba(139, 92, 46, 0.08);
-  border: 1px solid var(--color-border-medium);
+  background: rgba(139, 92, 46, 0.12);
+  border: 1px solid var(--color-border-strong);
+  font-weight: 600;
 }
 
 .btn-secondary:hover {
-  background: rgba(139, 92, 46, 0.14);
+  background: rgba(139, 92, 46, 0.18);
   border-color: var(--color-border-strong);
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);

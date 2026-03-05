@@ -1,37 +1,38 @@
 <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <!-- 主背景渐变 - 从红到蓝 -->
+    <!-- 主背景渐变 - 温暖的棕色调 -->
     <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="0%" style="stop-color:#d4a574;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#b8956a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b7355;stop-opacity:1" />
     </linearGradient>
     
-    <!-- C 形状渐变 - 红色调 -->
+    <!-- C 形状渐变 - 浅色调 -->
     <linearGradient id="diskCGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.95" />
-      <stop offset="100%" style="stop-color:#fecaca;stop-opacity:0.85" />
+      <stop offset="0%" style="stop-color:#fffcf5;stop-opacity:0.98" />
+      <stop offset="100%" style="stop-color:#fef3e2;stop-opacity:0.92" />
     </linearGradient>
     
-    <!-- D 形状渐变 - 蓝色调 -->
+    <!-- D 形状渐变 - 中性色调 -->
     <linearGradient id="diskDGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#dbeafe;stop-opacity:0.95" />
-      <stop offset="100%" style="stop-color:#93c5fd;stop-opacity:0.85" />
+      <stop offset="0%" style="stop-color:#f5f0e8;stop-opacity:0.95" />
+      <stop offset="100%" style="stop-color:#e8dcc8;stop-opacity:0.88" />
     </linearGradient>
     
-    <!-- 闪电渐变 - 从红到蓝 -->
+    <!-- 闪电渐变 - 柔和的强调色 -->
     <linearGradient id="lightningGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#f87171;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#60a5fa;stop-opacity:1" />
+      <stop offset="0%" style="stop-color:#c9a66b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a88d5f;stop-opacity:1" />
     </linearGradient>
     
-    <!-- 稀疏条纹图案 - 空间感 -->
+    <!-- 稀疏条纹图案 - 柔和纹理 -->
     <pattern id="sparseStripePattern" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
       <rect width="8" height="8" fill="none"/>
-      <rect width="3" height="8" fill="#3b82f6" opacity="0.4"/>
+      <rect width="3" height="8" fill="#8b7355" opacity="0.25"/>
     </pattern>
   </defs>
   
-  <!-- 圆角背景 - 橙到蓝渐变 -->
+  <!-- 圆角背景 - 温暖渐变 -->
   <rect 
     x="8" 
     y="8" 
@@ -85,10 +86,10 @@
         d="M -8 -15 
            L -8 15
            A 15 15 0 0 0 -8 -15"
-        stroke="#3b82f6"
+        stroke="#8b7355"
         stroke-width="1"
         fill="none"
-        opacity="0.6"
+        opacity="0.4"
       />
     </g>
   </g>
