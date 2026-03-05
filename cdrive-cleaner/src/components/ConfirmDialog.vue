@@ -150,7 +150,7 @@ const emit = defineEmits<{
 }
 
 .btn-secondary {
-  color: var(--color-text-primary);
+  color: #1a1a1a;
   background: rgba(139, 92, 46, 0.12);
   border: 1px solid var(--color-border-strong);
   font-weight: 600;
