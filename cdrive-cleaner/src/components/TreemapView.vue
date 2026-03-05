@@ -23,10 +23,11 @@ const emit = defineEmits<{
 }>();
 
 const treemapOption = computed(() => {
+  // 温暖、优雅的色调，与整体设计一致
   const colors = [
-    '#007aff', '#5856d6', '#af52de', '#ff2d55', 
-    '#ff3b30', '#ff9500', '#ffcc00', '#34c759',
-    '#00c7be', '#30b0c7', '#32ade6'
+    '#8b7355', '#a88d5f', '#c9a66b', '#d4a574', '#e8b86d',
+    '#b8956a', '#9d8264', '#c4a57b', '#dbb98a', '#f0d5a8',
+    '#8b6f47', '#a68a5c'
   ];
 
   return {
@@ -35,13 +36,18 @@ const treemapOption = computed(() => {
         const status = props.deepScanning && !info.data.hasChildren ? '<br/>(扫描中...)' : '';
         return `${info.name}<br/>${formatBytes(info.value)}${status}`;
       },
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-      borderColor: '#e7e5e4',
+      backgroundColor: 'rgba(255, 252, 245, 0.98)',
+      borderColor: 'rgba(139, 92, 46, 0.15)',
       borderWidth: 1,
       textStyle: {
-        color: '#2c2c2c',
-        fontSize: 13
-      }
+        color: '#2d2d2d',
+        fontSize: 13,
+        fontFamily: 'Inter, -apple-system, sans-serif'
+      },
+      padding: [10, 14],
+      borderRadius: 10,
+      shadowBlur: 12,
+      shadowColor: 'rgba(139, 92, 46, 0.12)'
     },
     series: [{
       type: 'treemap',
@@ -49,9 +55,9 @@ const treemapOption = computed(() => {
       right: 0,
       top: 0,
       bottom: 0,
-      squareRatio: 0.6,
+      squareRatio: 0.7,
       leafDepth: 1,
-      visibleMin: 100,
+      visibleMin: 120,
       data: props.directories.map((dir, index) => ({
         name: dir.name,
         value: dir.size,
@@ -59,7 +65,7 @@ const treemapOption = computed(() => {
         hasChildren: dir.children && dir.children.length > 0,
         itemStyle: {
           color: colors[index % colors.length],
-          opacity: props.deepScanning && (!dir.children || dir.children.length === 0) ? 0.5 : 1
+          opacity: props.deepScanning && (!dir.children || dir.children.length === 0) ? 0.6 : 0.92
         }
       })),
       roam: false,
@@ -69,42 +75,48 @@ const treemapOption = computed(() => {
         show: true,
         formatter: (params: any) => {
           const area = params.width * params.height;
-          if (area < 1500) return '';
-          if (area < 4000) return params.name.substring(0, 8);
+          if (area < 2000) return '';
+          if (area < 5000) return params.name.substring(0, 10);
           return params.name;
         },
-        fontSize: 12,
-        color: '#fff',
-        fontWeight: 500,
-        overflow: 'truncate'
+        fontSize: 13,
+        color: 'rgba(255, 255, 255, 0.95)',
+        fontWeight: 600,
+        fontFamily: 'Inter, -apple-system, sans-serif',
+        overflow: 'truncate',
+        padding: [4, 8],
+        backgroundColor: 'rgba(45, 35, 25, 0.15)',
+        borderRadius: 6
       },
       upperLabel: {
         show: true,
-        height: 28,
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: 600
+        height: 32,
+        color: 'rgba(255, 255, 255, 0.98)',
+        fontSize: 13,
+        fontWeight: 600,
+        fontFamily: 'Inter, -apple-system, sans-serif'
       },
       itemStyle: {
-        borderColor: '#fff',
+        borderColor: 'rgba(255, 252, 245, 0.4)',
         borderWidth: 2,
-        borderRadius: 8,
-        gapWidth: 2,
-        shadowBlur: 6,
-        shadowColor: 'rgba(0, 0, 0, 0.08)'
+        borderRadius: 12,
+        gapWidth: 3,
+        shadowBlur: 8,
+        shadowColor: 'rgba(139, 92, 46, 0.1)'
       },
       emphasis: {
         itemStyle: {
-          shadowBlur: 10,
-          shadowColor: 'rgba(0, 0, 0, 0.15)',
-          borderWidth: 2
+          shadowBlur: 16,
+          shadowColor: 'rgba(139, 92, 46, 0.25)',
+          borderWidth: 3,
+          borderColor: 'rgba(255, 252, 245, 0.6)'
         }
       },
       levels: [
         {
           itemStyle: {
             borderWidth: 0,
-            borderRadius: 12,
+            borderRadius: 14,
             gapWidth: 4
           }
         }
@@ -186,18 +198,23 @@ function handleItemClick(dir: DirectoryNode) {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 1fr 360px;
-  gap: 1.5rem;
+  grid-template-columns: 1fr 340px;
+  gap: 1.25rem;
   overflow: hidden;
 }
 
 .treemap-card {
-  background: white;
-  border: 1px solid #e7e5e4;
-  border-radius: 14px;
+  background: linear-gradient(to bottom, var(--color-bg-primary) 0%, var(--color-bg-secondary) 100%);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
-  min-height: 320px;
+  box-shadow: var(--shadow-sm);
+  min-height: 280px;
+  transition: all var(--transition-base);
+}
+
+.treemap-card:hover {
+  box-shadow: var(--shadow-md);
 }
 
 .treemap-container {
@@ -225,10 +242,11 @@ function handleItemClick(dir: DirectoryNode) {
 }
 
 .preview-title {
-  font-size: 0.9375rem;
+  font-family: var(--font-serif);
+  font-size: 1rem;
   font-weight: 600;
-  color: #2c2c2c;
-  margin-bottom: 0.875rem;
+  color: var(--color-text-primary);
+  margin-bottom: 1rem;
   letter-spacing: -0.01em;
 }
 
@@ -251,44 +269,46 @@ function handleItemClick(dir: DirectoryNode) {
 }
 
 .preview-items::-webkit-scrollbar-thumb {
-  background: #d4d4d8;
+  background: rgba(139, 92, 46, 0.15);
   border-radius: 3px;
 }
 
 .preview-items::-webkit-scrollbar-thumb:hover {
-  background: #a1a1aa;
+  background: rgba(139, 92, 46, 0.25);
 }
 
 .preview-item {
   display: flex;
   align-items: center;
   gap: 0.875rem;
-  padding: 0.75rem;
-  background: white;
-  border: 1px solid #e7e5e4;
-  border-radius: 10px;
+  padding: 0.875rem 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--transition-base);
 }
 
 .preview-item:hover {
-  border-color: #007aff;
-  box-shadow: 0 2px 6px rgba(0, 122, 255, 0.08);
-  transform: translateX(3px);
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-medium);
+  box-shadow: var(--shadow-md);
+  transform: translateX(4px);
 }
 
 .preview-rank {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f5f4;
-  border-radius: 6px;
+  background: linear-gradient(135deg, rgba(139, 115, 85, 0.08) 0%, rgba(139, 115, 85, 0.12) 100%);
+  border-radius: 8px;
   font-size: 0.8125rem;
-  font-weight: 600;
-  color: #78716c;
+  font-weight: 700;
+  color: var(--color-accent-primary);
   flex-shrink: 0;
+  font-family: var(--font-serif);
 }
 
 .preview-info {
@@ -297,45 +317,48 @@ function handleItemClick(dir: DirectoryNode) {
 }
 
 .preview-name {
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: #2c2c2c;
-  margin-bottom: 0.3125rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 0.375rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  letter-spacing: -0.01em;
 }
 
 .preview-bar-container {
-  height: 3px;
-  background: #f5f5f4;
-  border-radius: 1.5px;
+  height: 4px;
+  background: rgba(139, 92, 46, 0.08);
+  border-radius: 2px;
   overflow: hidden;
 }
 
 .preview-bar {
   height: 100%;
-  background: linear-gradient(90deg, #007aff 0%, #5856d6 100%);
-  border-radius: 1.5px;
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(90deg, var(--color-accent-primary) 0%, var(--color-accent-secondary) 100%);
+  border-radius: 2px;
+  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 8px rgba(139, 115, 85, 0.3);
 }
 
 .preview-size {
   font-size: 0.8125rem;
-  font-weight: 600;
-  color: #2c2c2c;
+  font-weight: 700;
+  color: var(--color-text-primary);
   flex-shrink: 0;
+  font-family: var(--font-serif);
 }
 
 @media (max-width: 900px) {
   .treemap-view {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr;
-    gap: 1.25rem;
+    gap: 1rem;
   }
 
   .treemap-card {
-    min-height: 280px;
+    min-height: 260px;
   }
 
   .list-preview {
@@ -358,7 +381,7 @@ function handleItemClick(dir: DirectoryNode) {
 
 @media (max-width: 600px) {
   .treemap-view {
-    gap: 1rem;
+    gap: 0.875rem;
   }
 
   .treemap-card {

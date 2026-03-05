@@ -4,7 +4,7 @@ import TreemapView from './TreemapView.vue';
 import ListView from './ListView.vue';
 import LargeFilesView from './LargeFilesView.vue';
 import MigrateDialog from './MigrateDialog.vue';
-import { IconWarning, IconArrowLeft } from './icons';
+import { IconWarning, IconArrowLeft, IconInfo, IconDeepScan } from './icons';
 
 interface DirectoryNode {
   path: string;
@@ -187,13 +187,19 @@ function closeMigrateDialog() {
 
     <div class="body">
       <div v-if="!hasDeepScanned" class="deep-scan-notice">
-        <div class="notice-icon">
-          <IconWarning :size="24" />
+        <div class="notice-icon-wrapper">
+          <IconInfo :size="28" />
         </div>
         <div class="notice-content">
-          <div class="notice-title">需要深度扫描</div>
-          <div class="notice-text">快速扫描仅显示顶层目录。请点击"深度扫描"按钮以查看完整目录树并启用迁移功能。</div>
+          <div class="notice-title">深度扫描解锁完整功能</div>
+          <div class="notice-text">
+            快速扫描仅显示顶层目录概览。点击顶部「深度扫描」按钮，即可查看完整目录树、精确文件统计，并启用迁移功能。
+          </div>
         </div>
+        <button class="notice-action" @click="$emit('start-deep-scan')">
+          <IconDeepScan :size="18" />
+          <span>开始深度扫描</span>
+        </button>
       </div>
 
       <TreemapView
@@ -410,35 +416,91 @@ function closeMigrateDialog() {
 
 .deep-scan-notice {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 20px 24px;
-  background: linear-gradient(135deg, #fff9e6 0%, #fff3d6 100%);
-  border: 1.5px solid #ffd966;
-  border-radius: 16px;
-  margin-bottom: 24px;
-  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.1);
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.75rem 2rem;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.04) 0%, rgba(37, 99, 235, 0.02) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: var(--radius-lg);
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.06);
+  transition: all var(--transition-base);
+  position: relative;
+  overflow: hidden;
 }
 
-.notice-icon {
-  font-size: 28px;
+.deep-scan-notice::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(to bottom, var(--color-info) 0%, #2563eb 100%);
+}
+
+.deep-scan-notice:hover {
+  border-color: rgba(59, 130, 246, 0.25);
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.12);
+  transform: translateY(-1px);
+}
+
+.notice-icon-wrapper {
   flex-shrink: 0;
-  line-height: 1;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.08) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--radius-md);
+  color: var(--color-info);
 }
 
 .notice-content {
   flex: 1;
+  min-width: 0;
 }
 
 .notice-title {
-  font-size: 16px;
+  font-family: var(--font-serif);
+  font-size: 1rem;
   font-weight: 600;
-  color: #b8860b;
-  margin-bottom: 6px;
+  color: var(--color-text-primary);
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.01em;
 }
 
 .notice-text {
-  font-size: 14px;
-  color: #8b6914;
-  line-height: 1.5;
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.notice-action {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--color-info) 0%, #2563eb 100%);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  letter-spacing: -0.01em;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+}
+
+.notice-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
+}
+
+.notice-action:active {
+  transform: translateY(0);
 }
