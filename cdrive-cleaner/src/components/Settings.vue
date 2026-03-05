@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import ConfirmDialog from './ConfirmDialog.vue';
-import { IconClose, IconRefresh } from './icons';
+import { IconClose, IconRefresh, IconLink, IconInfo, IconWarning } from './icons';
 
 interface DiskInfo {
   drive_letter: string;
@@ -23,11 +23,13 @@ const emit = defineEmits<{
 interface Settings {
   defaultTargetDisk: string;
   largeFileThreshold: number;
+  createSymlink: boolean;
 }
 
 const settings = ref<Settings>({
   defaultTargetDisk: '',
-  largeFileThreshold: 100
+  largeFileThreshold: 100,
+  createSymlink: true
 });
 
 const showResetConfirm = ref(false);
@@ -60,7 +62,8 @@ function saveSettings() {
 function confirmReset() {
   settings.value = {
     defaultTargetDisk: '',
-    largeFileThreshold: 100
+    largeFileThreshold: 100,
+    createSymlink: true
   };
   showResetConfirm.value = false;
 }
@@ -133,6 +136,53 @@ function formatBytes(bytes: number): string {
                 @click.stop
               />
               <span class="input-suffix">MB</span>
+            </div>
+          </div>
+
+          <div class="setting-item symlink-setting">
+            <div class="setting-label">
+              <div class="label-with-icon">
+                <IconLink :size="20" />
+                <label for="symlink">创建符号链接</label>
+              </div>
+              <span class="setting-description">迁移后在原位置创建符号链接，保持路径可访问</span>
+            </div>
+            <label class="toggle-switch">
+              <input 
+                id="symlink"
+                type="checkbox" 
+                v-model="settings.createSymlink"
+                @click.stop
+              />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div v-if="settings.createSymlink" class="info-card info-card-enabled">
+            <div class="info-icon">
+              <IconInfo :size="20" />
+            </div>
+            <div class="info-content">
+              <div class="info-title">符号链接的作用</div>
+              <ul class="info-list">
+                <li>保持原路径可访问，应用程序无需修改配置</li>
+                <li>透明重定向到新位置，用户体验无感知</li>
+                <li>支持回滚操作，可随时恢复原状</li>
+              </ul>
+            </div>
+          </div>
+
+          <div v-if="!settings.createSymlink" class="info-card info-card-warning">
+            <div class="info-icon warning">
+              <IconWarning :size="20" />
+            </div>
+            <div class="info-content">
+              <div class="info-title">不创建符号链接的影响</div>
+              <ul class="info-list">
+                <li>文件将被完全移动，原路径将不再存在</li>
+                <li>依赖此路径的程序可能无法正常运行</li>
+                <li>需要手动更新应用程序的配置路径</li>
+              </ul>
             </div>
           </div>
         </div>

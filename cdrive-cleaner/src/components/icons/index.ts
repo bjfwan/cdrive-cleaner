@@ -20,6 +20,7 @@ export { default as IconMigrate } from './action/IconMigrate.vue'
 export { default as IconRollback } from './action/IconRollback.vue'
 export { default as IconDelete } from './action/IconDelete.vue'
 export { default as IconOpen } from './action/IconOpen.vue'
+export { default as IconLink } from './action/IconLink.vue'
 
 export { default as IconSpinner } from './scan/IconSpinner.vue'
 export { default as IconClock } from './scan/IconClock.vue'

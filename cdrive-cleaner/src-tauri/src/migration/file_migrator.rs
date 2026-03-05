@@ -106,6 +106,21 @@ impl FileMigrator {
             });
         }
 
+        // 如果用户选择不创建链接，直接返回成功
+        if link_type == LinkType::None {
+            let _ = self.cleanup_backup(&backup_path);
+            return Ok(MigrationResult {
+                success: true,
+                source_path: source.to_string_lossy().to_string(),
+                target_path: target_path.to_string_lossy().to_string(),
+                link_type: LinkType::None,
+                file_size,
+                duration_ms: start.elapsed().as_millis() as u64,
+                migration_id: 0,
+                error: None,
+            });
+        }
+
         let actual_link_type = match self.link_creator.create_link(source, &target_path, link_type.clone(), is_directory) {
             Ok(lt) => lt,
             Err(e) => {

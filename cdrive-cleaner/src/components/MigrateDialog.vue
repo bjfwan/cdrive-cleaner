@@ -264,10 +264,23 @@ async function startSingleMigration() {
 
   try {
     const { invoke } = await import('@tauri-apps/api/core');
+    
+    // 从设置中读取是否创建符号链接
+    const saved = localStorage.getItem('cdrive-cleaner-settings');
+    let createSymlink = true; // 默认创建
+    if (saved) {
+      try {
+        const settings = JSON.parse(saved);
+        createSymlink = settings.createSymlink !== false;
+      } catch (e) {
+        console.error('Failed to load settings:', e);
+      }
+    }
+    
     const result = await invoke('migrate_file', {
       source: itemPath.value,
       targetDisk: targetDisk.value,
-      linkType: null
+      linkType: createSymlink ? null : 'none'
     });
     
     stopProgressTimer();
@@ -293,6 +306,18 @@ async function startBatchMigration() {
   const { invoke } = await import('@tauri-apps/api/core');
   const totalSize = itemSize.value;
 
+  // 从设置中读取是否创建符号链接
+  const saved = localStorage.getItem('cdrive-cleaner-settings');
+  let createSymlink = true; // 默认创建
+  if (saved) {
+    try {
+      const settings = JSON.parse(saved);
+      createSymlink = settings.createSymlink !== false;
+    } catch (e) {
+      console.error('Failed to load settings:', e);
+    }
+  }
+
   for (let i = 0; i < props.selectedItems.length; i++) {
     currentMigratingIndex.value = i;
     const item = props.selectedItems[i];
@@ -301,7 +326,7 @@ async function startBatchMigration() {
       await invoke('migrate_file', {
         source: item.path,
         targetDisk: targetDisk.value,
-        linkType: null
+        linkType: createSymlink ? null : 'none'
       });
       
       migratedSize.value += item.size || 0;

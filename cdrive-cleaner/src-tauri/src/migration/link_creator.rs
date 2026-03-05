@@ -6,13 +6,14 @@ use std::path::Path;
 #[cfg(target_os = "windows")]
 use std::os::windows::fs as windows_fs;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum LinkType {
     Auto,
     Symlink,
     Junction,
     Hardlink,
+    None,
 }
 
 pub struct LinkCreator;
