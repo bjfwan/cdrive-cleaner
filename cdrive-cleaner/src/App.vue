@@ -13,6 +13,8 @@ import Toast from './components/Toast.vue';
 import Settings from './components/Settings.vue';
 import History from './components/History.vue';
 import Welcome from './components/Welcome.vue';
+import appIcon from './assets/app-icon.svg';
+import { IconHistory, IconSettings, IconScan, IconSpinner } from './components/icons';
 
 use([CanvasRenderer, TreemapChart, TitleComponent, TooltipComponent]);
 
@@ -347,17 +349,10 @@ function loadUserSettings() {
         <h1>存储空间</h1>
         <div class="header-actions">
           <button class="settings-icon-btn" @click="openHistory" title="迁移历史">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M10 5v5l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <path d="M3 10a7 7 0 0 1 12-4.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <path d="M17 10a7 7 0 0 1-12 4.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
+            <IconHistory :size="20" />
           </button>
           <button class="settings-icon-btn" @click="openSettings" title="设置">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M17.5 10.833v-1.666a1.667 1.667 0 0 0-1.25-1.617l-.833-.208a.833.833 0 0 1-.584-.584l-.208-.833a1.667 1.667 0 0 0-1.617-1.25H11.34a1.667 1.667 0 0 0-1.617 1.25l-.208.833a.833.833 0 0 1-.584.584l-.833.208a1.667 1.667 0 0 0-1.25 1.617v1.666a1.667 1.667 0 0 0 1.25 1.617l.833.208a.833.833 0 0 1 .584.584l.208.833a1.667 1.667 0 0 0 1.617 1.25h1.667a1.667 1.667 0 0 0 1.617-1.25l.208-.833a.833.833 0 0 1 .584-.584l.833-.208a1.667 1.667 0 0 0 1.25-1.617z" stroke="currentColor" stroke-width="1.5"/>
-            </svg>
+            <IconSettings :size="20" />
           </button>
         </div>
       </div>
@@ -379,10 +374,7 @@ function loadUserSettings() {
           class="scan-btn primary"
         >
           <div class="btn-content">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" class="btn-icon">
-              <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5" opacity="0.3"/>
-              <path d="M10 6v8M6 10h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
+            <IconScan :size="20" class="btn-icon" />
             <span>{{ scanning ? '扫描中...' : '快速扫描' }}</span>
           </div>
           <div class="btn-shimmer"></div>
@@ -394,12 +386,7 @@ function loadUserSettings() {
           class="scan-btn deep"
         >
           <div class="btn-content">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" class="btn-icon">
-              <path d="M10 3L10 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <path d="M6 7L10 3L14 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M6 13L10 17L14 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              <circle cx="10" cy="10" r="2" fill="currentColor" opacity="0.5"/>
-            </svg>
+            <IconSpinner :size="20" class="btn-icon" />
             <div class="btn-text">
               <span class="btn-label">{{ deepScanning ? '深度扫描中...' : '深度扫描' }}</span>
               <span class="btn-hint">完整目录树 · 精确数据</span>
@@ -414,12 +401,7 @@ function loadUserSettings() {
 
     <main class="main">
       <div v-if="!scanResult && !scanning" class="empty">
-        <svg width="80" height="80" viewBox="0 0 120 120" fill="none" class="empty-icon">
-          <circle cx="60" cy="60" r="50" fill="rgba(139, 92, 46, 0.08)" />
-          <path d="M40 60 L50 50 L50 70 Z" fill="var(--color-accent-primary)" opacity="0.6"/>
-          <circle cx="60" cy="60" r="30" stroke="var(--color-accent-primary)" stroke-width="2" fill="none" opacity="0.4"/>
-          <circle cx="60" cy="60" r="20" stroke="var(--color-accent-secondary)" stroke-width="2" fill="none" opacity="0.6"/>
-        </svg>
+        <img :src="appIcon" alt="应用图标" class="empty-icon" width="120" height="120" />
         <h2>选择磁盘开始扫描</h2>
         <p>分析空间占用情况</p>
       </div>
