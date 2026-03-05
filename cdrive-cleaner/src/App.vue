@@ -14,7 +14,7 @@ import Settings from './components/Settings.vue';
 import History from './components/History.vue';
 import Welcome from './components/Welcome.vue';
 import appIcon from './assets/app-icon.svg';
-import { IconHistory, IconSettings, IconScan, IconSpinner } from './components/icons';
+import { IconHistory, IconSettings, IconScan, IconDeepScan } from './components/icons';
 
 use([CanvasRenderer, TreemapChart, TitleComponent, TooltipComponent]);
 
@@ -386,7 +386,7 @@ function loadUserSettings() {
           class="scan-btn deep"
         >
           <div class="btn-content">
-            <IconSpinner :size="20" class="btn-icon" />
+            <IconDeepScan :size="20" class="btn-icon" />
             <div class="btn-text">
               <span class="btn-label">{{ deepScanning ? '深度扫描中...' : '深度扫描' }}</span>
               <span class="btn-hint">完整目录树 · 精确数据</span>

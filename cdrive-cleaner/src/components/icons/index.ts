@@ -26,6 +26,7 @@ export { default as IconSpinner } from './scan/IconSpinner.vue'
 export { default as IconClock } from './scan/IconClock.vue'
 export { default as IconScan } from './scan/IconScan.vue'
 export { default as IconSpeed } from './scan/IconSpeed.vue'
+export { default as IconDeepScan } from './scan/IconDeepScan.vue'
 
 export { default as IconChart } from './stats/IconChart.vue'
 export { default as IconSizeIcon } from './stats/IconSize.vue'

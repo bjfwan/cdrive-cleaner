@@ -35,6 +35,7 @@ const settings = ref<Settings>({
 
 const showResetConfirm = ref(false);
 const showRestartConfirm = ref(false);
+const showDisableAdminConfirm = ref(false);
 const isElevated = ref(false);
 const isCheckingElevation = ref(true);
 
@@ -90,7 +91,7 @@ function handleAdminToggle(event: Event) {
   if (wantsElevated && !isElevated.value) {
     showRestartConfirm.value = true;
   } else if (!wantsElevated && isElevated.value) {
-    alert('关闭管理员模式需要手动重启应用。\n\n请关闭应用后，以标准方式重新启动。');
+    showDisableAdminConfirm.value = true;
   }
   
   target.checked = isElevated.value;
@@ -323,6 +324,17 @@ function formatBytes(bytes: number): string {
       type="warning"
       @confirm="confirmRestartAsAdmin"
       @cancel="showRestartConfirm = false"
+    />
+
+    <ConfirmDialog
+      :show="showDisableAdminConfirm"
+      title="关闭管理员模式"
+      message="关闭管理员模式需要手动重启应用。请关闭应用后，以标准方式重新启动。"
+      confirm-text="我知道了"
+      cancel-text=""
+      type="info"
+      @confirm="showDisableAdminConfirm = false"
+      @cancel="showDisableAdminConfirm = false"
     />
   </div>
 </template>
