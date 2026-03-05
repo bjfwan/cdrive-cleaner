@@ -27,7 +27,9 @@ tokio = { version = "1.35", features = ["full"] }
 windows = { version = "0.52", features = [
     "Win32_Storage_FileSystem",
     "Win32_Foundation",
-    "Win32_System_IO"
+    "Win32_System_IO",
+    "Win32_Security",
+    "Win32_System_Threading"
 ] }
 walkdir = "2.4"
 rayon = "1.8"

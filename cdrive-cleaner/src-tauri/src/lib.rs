@@ -26,6 +26,8 @@ pub fn run() {
             commands::save_scan_cache,
             commands::get_scan_cache,
             commands::clear_scan_cache,
+            commands::is_elevated,
+            commands::restart_as_admin,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 import ConfirmDialog from './ConfirmDialog.vue';
-import { IconClose, IconRefresh, IconLink, IconInfo, IconWarning } from './icons';
+import { IconClose, IconRefresh, IconLink, IconInfo, IconWarning, IconShield } from './icons';
 
 interface DiskInfo {
   drive_letter: string;
@@ -33,10 +34,24 @@ const settings = ref<Settings>({
 });
 
 const showResetConfirm = ref(false);
+const showRestartConfirm = ref(false);
+const isElevated = ref(false);
+const isCheckingElevation = ref(true);
 
 onMounted(() => {
   loadSettings();
+  checkElevation();
 });
+
+async function checkElevation() {
+  try {
+    isElevated.value = await invoke<boolean>('is_elevated');
+  } catch (e) {
+    console.error('Failed to check elevation:', e);
+  } finally {
+    isCheckingElevation.value = false;
+  }
+}
 
 function loadSettings() {
   const saved = localStorage.getItem('cdrive-cleaner-settings');
@@ -66,6 +81,16 @@ function confirmReset() {
     createSymlink: true
   };
   showResetConfirm.value = false;
+}
+
+async function confirmRestartAsAdmin() {
+  try {
+    await invoke('restart_as_admin');
+  } catch (e) {
+    console.error('Failed to restart as admin:', e);
+    alert('重启失败，请手动以管理员身份运行应用');
+  }
+  showRestartConfirm.value = false;
 }
 
 function close() {
@@ -189,6 +214,42 @@ function formatBytes(bytes: number): string {
 
         <div class="setting-section">
           <div class="section-header">
+            <h3>权限管理</h3>
+            <p>某些操作可能需要管理员权限</p>
+          </div>
+
+          <div v-if="!isCheckingElevation" class="admin-status">
+            <div v-if="isElevated" class="status-badge status-elevated">
+              <IconShield :size="16" />
+              <span>当前以管理员身份运行</span>
+            </div>
+            <div v-else class="status-badge status-normal">
+              <IconInfo :size="16" />
+              <span>当前以普通用户身份运行</span>
+            </div>
+          </div>
+
+          <div v-if="!isElevated && !isCheckingElevation" class="admin-info">
+            <p>以管理员身份运行可以：</p>
+            <ul>
+              <li>访问系统保护的文件和文件夹</li>
+              <li>迁移需要特殊权限的文件</li>
+              <li>执行某些高级操作</li>
+            </ul>
+          </div>
+
+          <button 
+            v-if="!isElevated && !isCheckingElevation"
+            @click.stop="showRestartConfirm = true" 
+            class="admin-restart-btn"
+          >
+            <IconRefresh :size="16" />
+            以管理员身份重启
+          </button>
+        </div>
+
+        <div class="setting-section">
+          <div class="section-header">
             <h3>重置设置</h3>
             <p>恢复所有设置到默认值</p>
           </div>
@@ -215,6 +276,17 @@ function formatBytes(bytes: number): string {
       type="danger"
       @confirm="confirmReset"
       @cancel="showResetConfirm = false"
+    />
+
+    <ConfirmDialog
+      :show="showRestartConfirm"
+      title="以管理员身份重启"
+      message="应用将关闭并以管理员权限重新启动。请在弹出的 UAC 提示中点击"是"。"
+      confirm-text="立即重启"
+      cancel-text="取消"
+      type="warning"
+      @confirm="confirmRestartAsAdmin"
+      @cancel="showRestartConfirm = false"
     />
   </div>
 </template>

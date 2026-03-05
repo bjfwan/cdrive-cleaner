@@ -365,3 +365,68 @@ pub async fn clear_scan_cache(app: AppHandle) -> Result<(), String> {
     
     Ok(())
 }
+
+#[tauri::command]
+pub fn is_elevated() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::Foundation::HANDLE;
+        use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
+        use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+        
+        unsafe {
+            let mut token: HANDLE = HANDLE::default();
+            if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token).is_ok() {
+                let mut elevation = TOKEN_ELEVATION { TokenIsElevated: 0 };
+                let mut size = 0u32;
+                
+                if GetTokenInformation(
+                    token,
+                    TokenElevation,
+                    Some(&mut elevation as *mut _ as *mut _),
+                    std::mem::size_of::<TOKEN_ELEVATION>() as u32,
+                    &mut size,
+                ).is_ok() {
+                    return elevation.TokenIsElevated != 0;
+                }
+            }
+        }
+    }
+    
+    false
+}
+
+#[tauri::command]
+pub fn restart_as_admin(app: AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        use std::process::Command;
+        
+        let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
+        
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        let status = Command::new("powershell")
+            .args(&[
+                "-Command",
+                &format!("Start-Process -FilePath '{}' -Verb RunAs", exe_path.display())
+            ])
+            .creation_flags(CREATE_NO_WINDOW)
+            .status()
+            .map_err(|e| e.to_string())?;
+        
+        if status.success() {
+            app.exit(0);
+        } else {
+            return Err("Failed to restart as administrator".to_string());
+        }
+    }
+    
+    #[cfg(not(target_os = "windows"))]
+    {
+        return Err("Not supported on this platform".to_string());
+    }
+    
+    Ok(())
+}

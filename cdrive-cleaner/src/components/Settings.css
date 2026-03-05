@@ -585,3 +585,107 @@
     flex-wrap: wrap;
   }
 }
+
+.admin-status {
+  margin-bottom: 1rem;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.875rem 1.25rem;
+  border-radius: 12px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  border: 1.5px solid;
+}
+
+.status-elevated {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.04) 100%);
+  border-color: rgba(16, 185, 129, 0.24);
+  color: #059669;
+}
+
+.status-normal {
+  background: linear-gradient(135deg, rgba(0, 122, 255, 0.06) 0%, rgba(0, 122, 255, 0.03) 100%);
+  border-color: rgba(0, 122, 255, 0.2);
+  color: #0066cc;
+}
+
+.admin-info {
+  padding: 1.5rem 1.75rem;
+  background: linear-gradient(135deg, rgba(0, 122, 255, 0.03) 0%, rgba(0, 122, 255, 0.01) 100%);
+  border: 1.5px solid rgba(0, 122, 255, 0.12);
+  border-radius: 16px;
+  margin-bottom: 1rem;
+}
+
+.admin-info p {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #0a0a0a;
+  margin-bottom: 0.875rem;
+}
+
+.admin-info ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.admin-info li {
+  font-size: 0.875rem;
+  color: #666;
+  line-height: 1.6;
+  padding-left: 1.25rem;
+  position: relative;
+}
+
+.admin-info li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.5rem;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #007aff;
+  opacity: 0.5;
+}
+
+.admin-restart-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 1rem 1.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(135deg, #007aff 0%, #0051d5 100%);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 
+    0 0 0 1px rgba(0, 122, 255, 0.2),
+    0 4px 16px rgba(0, 122, 255, 0.3);
+}
+
+.admin-restart-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 0 0 1px rgba(0, 122, 255, 0.3),
+    0 8px 24px rgba(0, 122, 255, 0.4);
+}
+
+.admin-restart-btn svg {
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.admin-restart-btn:hover svg {
+  transform: rotate(180deg);
+}
