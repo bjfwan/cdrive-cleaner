@@ -69,6 +69,7 @@ const emit = defineEmits<{
   'update:viewMode': [mode: 'treemap' | 'list' | 'large-files'];
   'navigate': [path: string];
   'goBack': [];
+  'start-deep-scan': [];
 }>();
 
 const showMigrate = ref(false);

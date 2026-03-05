@@ -267,6 +267,11 @@ impl DiskScanner {
                     };
 
                     // 不在扫描时分析安全性，留到迁移时再分析
+                    let modified_time = metadata.modified()
+                        .ok()
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs());
+
                     Some(DirectoryNode {
                         path: path.to_string_lossy().to_string(),
                         name: entry.file_name().to_string_lossy().to_string(),
@@ -276,6 +281,7 @@ impl DiskScanner {
                         is_symlink,
                         link_target,
                         safety: None,
+                        modified_time,
                     })
                 } else if metadata.is_file() {
                     total_files.fetch_add(1, Ordering::Relaxed);
@@ -503,16 +509,16 @@ impl DiskScanner {
 
     /// 递归分析目录树的安全性（已废弃，改为在迁移时按需分析）
     #[allow(dead_code)]
-    fn analyze_directory_safety(dir: &mut DirectoryNode) {
+    fn analyze_directory_safety(dir: &mut DirectoryNode, app: &AppHandle) {
         use std::path::Path;
         
         // 分析当前目录的安全性
         let path = Path::new(&dir.path);
-        dir.safety = crate::safety::analyze_migration_safety(path, dir.size).ok();
+        dir.safety = crate::safety::analyze_migration_safety(path, dir.size, app.clone()).ok();
         
         // 递归分析所有子目录
         for child in &mut dir.children {
-            Self::analyze_directory_safety(child);
+            Self::analyze_directory_safety(child, app);
         }
     }
 
@@ -689,6 +695,11 @@ impl DiskScanner {
                                 None
                             };
                             
+                            let modified_time = metadata.modified()
+                                .ok()
+                                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                                .map(|d| d.as_secs());
+                            
                             let node = DirectoryNode {
                                 path: entry_path.to_string_lossy().to_string(),
                                 name: entry_path.file_name()
@@ -700,7 +711,8 @@ impl DiskScanner {
                                 children: vec![],
                                 is_symlink,
                                 link_target,
-                                safety: None, // 不在扫描时分析，留到迁移时再分析
+                                safety: None,
+                                modified_time,
                             };
                             
                             nodes_map.lock().unwrap().insert(entry_path.to_path_buf(), node);
@@ -879,6 +891,7 @@ impl DiskScanner {
                 is_symlink: false,
                 link_target: None,
                 safety: None,
+                modified_time: None,
             });
         }
         

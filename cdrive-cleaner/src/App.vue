@@ -9,6 +9,7 @@ import DiskCard from './components/DiskCard.vue';
 import ScanResults from './components/ScanResults.vue';
 import ScanProgress from './components/ScanProgress.vue';
 import DeepScanProgress from './components/DeepScanProgress.vue';
+import IncrementalScanProgress from './components/IncrementalScanProgress.vue';
 import Toast from './components/Toast.vue';
 import Settings from './components/Settings.vue';
 import History from './components/History.vue';
@@ -62,6 +63,7 @@ const disks = ref<DiskInfo[]>([]);
 const selectedDisk = ref<string>('');
 const scanning = ref(false);
 const deepScanning = ref(false);
+const incrementalScanning = ref(false);
 const scanResult = ref<ScanResult | null>(null);
 const deepScanResult = ref<ScanResult | null>(null);
 const error = ref<string>('');
@@ -118,20 +120,27 @@ async function startScan() {
     });
     
     if (cached) {
-      scanResult.value = cached;
-      navigationStack.value = [selectedDisk.value];
-      scanCache.value.set(selectedDisk.value, cached);
-      hasDeepScanned.value = false;
+      incrementalScanning.value = true;
       
-      showToastNotification(
-        '已加载缓存',
-        `发现 ${cached.total_files.toLocaleString()} 个文件 · ${formatBytes(cached.total_size)}`,
-        'info'
-      );
+      try {
+        const result = await invoke<ScanResult>('scan_disk_incremental', { path: selectedDisk.value });
+        scanResult.value = result;
+        navigationStack.value = [selectedDisk.value];
+        scanCache.value.set(selectedDisk.value, result);
+        hasDeepScanned.value = false;
+        
+        showToastNotification(
+          '增量扫描完成',
+          `发现 ${result.total_files.toLocaleString()} 个文件 · ${formatBytes(result.total_size)}`,
+          'success'
+        );
+      } finally {
+        incrementalScanning.value = false;
+      }
       return;
     }
   } catch (err) {
-    console.log('无缓存，开始扫描');
+    console.log('无缓存，开始全量扫描');
   }
   
   scanning.value = true;
@@ -144,16 +153,10 @@ async function startScan() {
   hasDeepScanned.value = false;
 
   try {
-    const result = await invoke<ScanResult>('scan_disk', { path: selectedDisk.value });
+    const result = await invoke<ScanResult>('scan_disk_incremental', { path: selectedDisk.value });
     scanResult.value = result;
     navigationStack.value = [selectedDisk.value];
     scanCache.value.set(selectedDisk.value, result);
-    
-    await invoke('save_scan_cache', {
-      diskPath: selectedDisk.value,
-      scanType: 'quick',
-      result: result
-    });
     
     showToastNotification(
       '快速扫描完成',
@@ -171,6 +174,58 @@ async function startScan() {
 
 async function startDeepScan() {
   if (!selectedDisk.value) return;
+  
+  // 如果正在扫描，直接返回
+  if (deepScanning.value) {
+    showToastNotification(
+      '深度扫描进行中',
+      '请等待当前扫描完成',
+      'warning'
+    );
+    return;
+  }
+  
+  // 如果已经有深度扫描结果，提示用户
+  if (hasDeepScanned.value && deepScanResult.value) {
+    showToastNotification(
+      '已完成深度扫描',
+      '当前磁盘已有深度扫描结果',
+      'info'
+    );
+    return;
+  }
+  
+  // 先检查是否有深度扫描缓存
+  try {
+    const cached = await invoke<ScanResult | null>('get_scan_cache', { 
+      diskPath: selectedDisk.value,
+      scanType: 'deep'
+    });
+    
+    if (cached) {
+      deepScanResult.value = cached;
+      scanCache.value.set(selectedDisk.value, cached);
+      hasDeepScanned.value = true;
+      
+      if (navigationStack.value.length === 0) {
+        navigationStack.value = [selectedDisk.value];
+        scanResult.value = cached;
+      } else if (navigationStack.value[navigationStack.value.length - 1] === selectedDisk.value) {
+        scanResult.value = cached;
+      }
+      
+      showToastNotification(
+        '已加载深度扫描缓存',
+        `发现 ${cached.total_files.toLocaleString()} 个文件 · ${formatBytes(cached.total_size)}`,
+        'info'
+      );
+      return;
+    }
+  } catch (err) {
+    console.log('无深度扫描缓存，开始扫描');
+  }
+  
+  // 没有缓存，执行深度扫描
   deepScanning.value = true;
 
   try {
@@ -183,12 +238,20 @@ async function startDeepScan() {
     deepScanResult.value = result;
     scanCache.value.set(selectedDisk.value, result);
     hasDeepScanned.value = true;
+    
     if (navigationStack.value.length === 0) {
       navigationStack.value = [selectedDisk.value];
       scanResult.value = result;
     } else if (navigationStack.value[navigationStack.value.length - 1] === selectedDisk.value) {
       scanResult.value = result;
     }
+    
+    // 保存深度扫描缓存
+    await invoke('save_scan_cache', {
+      diskPath: selectedDisk.value,
+      scanType: 'deep',
+      result: result
+    });
     
     showToastNotification(
       '深度扫描完成',
@@ -425,6 +488,7 @@ function loadUserSettings() {
     </main>
 
     <ScanProgress :scanning="scanning" />
+    <IncrementalScanProgress :scanning="incrementalScanning" />
     
     <Toast 
       :show="showToast"

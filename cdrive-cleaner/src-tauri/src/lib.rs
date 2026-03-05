@@ -5,6 +5,7 @@ mod database;
 mod commands;
 pub mod safety;
 pub mod cache;
+mod utils;
 
 use scanner::DiskScanner;
 
@@ -15,6 +16,7 @@ pub fn run() {
         .manage(DiskScanner::new()) // 添加全局状态
         .invoke_handler(tauri::generate_handler![
             commands::scan_disk,
+            commands::scan_disk_incremental,
             commands::scan_disk_deep,
             commands::scan_directory_files,
             commands::migrate_file,
@@ -26,8 +28,11 @@ pub fn run() {
             commands::save_scan_cache,
             commands::get_scan_cache,
             commands::clear_scan_cache,
+            commands::get_cache_info,
+            commands::delete_cache_entry,
             commands::is_elevated,
             commands::restart_as_admin,
+            commands::exit_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

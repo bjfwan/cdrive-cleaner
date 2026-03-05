@@ -76,6 +76,10 @@ const updateTimer = ref<number | null>(null);
 // 安全性分析
 const safetyAnalysis = ref<MigrationSafety | null>(null);
 const analyzingSafety = ref(false);
+const safetyAnalysisStartTime = ref(0);
+const safetyAnalysisDuration = ref(0);
+const safetyScannedDirs = ref(0);
+const safetyDirsPerSecond = ref(0);
 
 // 监听对话框打开，进行安全性分析和加载默认设置
 watch(() => props.show, async (newShow) => {
@@ -109,14 +113,31 @@ async function analyzeSafety() {
   
   analyzingSafety.value = true;
   safetyAnalysis.value = null;
+  safetyAnalysisStartTime.value = Date.now();
+  safetyScannedDirs.value = 0;
+  safetyDirsPerSecond.value = 0;
   
   try {
     const { invoke } = await import('@tauri-apps/api/core');
+    const { listen } = await import('@tauri-apps/api/event');
+    
+    // 监听进度事件
+    const unlisten = await listen('safety-analysis-progress', (event: any) => {
+      const progress = event.payload;
+      safetyScannedDirs.value = progress.scanned_dirs;
+      safetyDirsPerSecond.value = progress.dirs_per_second;
+    });
+    
     const result = await invoke<MigrationSafety>('analyze_migration_safety', {
       path: itemPath.value,
       size: itemSize.value
     });
+    
+    safetyAnalysisDuration.value = Date.now() - safetyAnalysisStartTime.value;
     safetyAnalysis.value = result;
+    
+    // 取消监听
+    unlisten();
   } catch (err) {
     console.error('安全性分析失败:', err);
   } finally {
@@ -463,7 +484,14 @@ async function startBatchMigration() {
             <svg class="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="30 10"/>
             </svg>
-            <span>正在分析安全性...</span>
+            <div class="analyzing-content">
+              <span class="analyzing-text">正在分析安全性（扫描3层子目录）...</span>
+              <div class="analyzing-stats">
+                <span class="stat-item">已扫描: {{ safetyScannedDirs }} 个目录</span>
+                <span class="stat-divider">•</span>
+                <span class="stat-item">速度: {{ Math.round(safetyDirsPerSecond) }} 目录/秒</span>
+              </div>
+            </div>
           </div>
           
           <div class="warning">
@@ -1337,18 +1365,51 @@ async function startBatchMigration() {
 
 .analyzing {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.75rem;
-  padding: 1rem;
+  padding: 1rem 1.25rem;
   background: rgba(139, 115, 85, 0.04);
   border-radius: var(--radius-sm);
   margin-bottom: 1.5rem;
   font-size: 0.875rem;
   color: var(--color-text-tertiary);
+  border: 1px solid var(--color-border-light);
 }
 
 .analyzing .spinner {
   animation: spin 1s linear infinite;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.analyzing-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.analyzing-text {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.analyzing-stats {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+}
+
+.stat-divider {
+  opacity: 0.3;
 }
 
 @media (max-width: 768px) {

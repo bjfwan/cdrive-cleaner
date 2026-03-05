@@ -22,6 +22,8 @@ pub struct DirectoryNode {
     pub link_target: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub safety: Option<MigrationSafety>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modified_time: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

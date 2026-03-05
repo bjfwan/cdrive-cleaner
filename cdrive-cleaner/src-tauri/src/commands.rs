@@ -1,6 +1,8 @@
 use crate::scanner::{DiskScanner, file_info::{ScanResult, FileInfo}};
 use crate::migration::{FileMigrator, LinkType, file_migrator::MigrationResult};
-use tauri::{AppHandle, Manager};
+use crate::utils;
+use tauri::AppHandle;
+use rusqlite;
 
 #[derive(Clone, serde::Serialize)]
 pub struct ScanProgress {
@@ -19,9 +21,100 @@ pub async fn scan_disk(path: String, app: AppHandle, scanner: tauri::State<'_, D
 }
 
 #[tauri::command]
+pub async fn scan_disk_incremental(
+    path: String,
+    app: AppHandle,
+    scanner: tauri::State<'_, DiskScanner>
+) -> Result<ScanResult, String> {
+    use crate::database::ScanCacheDb;
+    use crate::scanner::incremental;
+    
+    let scan_path = std::path::Path::new(&path);
+    
+    let db_path = utils::get_scan_cache_db_path().map_err(|e| e.to_string())?;
+    
+    if !db_path.exists() {
+        return scanner.scan(scan_path, app).await.map_err(|e| e.to_string());
+    }
+    
+    let db = ScanCacheDb::new(db_path.to_str().unwrap()).map_err(|e| e.to_string())?;
+    
+    let cached = match db.get_scan_result(&path, "quick").map_err(|e| e.to_string())? {
+        Some(c) => c,
+        None => return scanner.scan(scan_path, app).await.map_err(|e| e.to_string()),
+    };
+    
+    let cached_result: ScanResult = serde_json::from_str(&cached.result_json)
+        .map_err(|e| e.to_string())?;
+    
+    let result = incremental::scan_incremental(scan_path, cached_result, app.clone())
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    let result_json = serde_json::to_string(&result).map_err(|e| e.to_string())?;
+    db.save_scan_result(
+        &path,
+        "quick",
+        &result_json,
+        result.total_files as i64,
+        result.total_size as i64,
+    ).map_err(|e| e.to_string())?;
+    
+    Ok(result)
+}
+
+#[tauri::command]
 pub async fn scan_disk_deep(path: String, app: AppHandle, estimated_files: Option<usize>, scanner: tauri::State<'_, DiskScanner>) -> Result<ScanResult, String> {
-    let estimated = estimated_files.unwrap_or(800000); // 默认估算值
-    scanner.scan_deep(&path, app, estimated).await.map_err(|e| e.to_string())
+    use crate::database::ScanCacheDb;
+    use crate::scanner::incremental;
+    
+    let scan_path = std::path::Path::new(&path);
+    
+    // 尝试使用增量扫描
+    let db_path = utils::get_scan_cache_db_path().map_err(|e| e.to_string())?;
+    
+    if db_path.exists() {
+        let db = ScanCacheDb::new(db_path.to_str().unwrap()).map_err(|e| e.to_string())?;
+        
+        if let Some(cached) = db.get_scan_result(&path, "deep").map_err(|e| e.to_string())? {
+            let cached_result: ScanResult = serde_json::from_str(&cached.result_json)
+                .map_err(|e| e.to_string())?;
+            
+            let result = incremental::scan_incremental(scan_path, cached_result, app.clone())
+                .await
+                .map_err(|e| e.to_string())?;
+            
+            // 保存更新后的缓存
+            let result_json = serde_json::to_string(&result).map_err(|e| e.to_string())?;
+            db.save_scan_result(
+                &path,
+                "deep",
+                &result_json,
+                result.total_files as i64,
+                result.total_size as i64,
+            ).map_err(|e| e.to_string())?;
+            
+            return Ok(result);
+        }
+    }
+    
+    // 没有缓存，执行完整深度扫描
+    let estimated = estimated_files.unwrap_or(800000);
+    let result = scanner.scan_deep(&path, app.clone(), estimated).await.map_err(|e| e.to_string())?;
+    
+    // 保存深度扫描缓存
+    let db_path = utils::get_scan_cache_db_path().map_err(|e| e.to_string())?;
+    let db = ScanCacheDb::new(db_path.to_str().unwrap()).map_err(|e| e.to_string())?;
+    let result_json = serde_json::to_string(&result).map_err(|e| e.to_string())?;
+    db.save_scan_result(
+        &path,
+        "deep",
+        &result_json,
+        result.total_files as i64,
+        result.total_size as i64,
+    ).map_err(|e| e.to_string())?;
+    
+    Ok(result)
 }
 
 #[tauri::command]
@@ -91,7 +184,7 @@ pub async fn migrate_file(
     source: String,
     target_disk: String,
     link_type: Option<LinkType>,
-    app: AppHandle,
+    _app: AppHandle,
 ) -> Result<MigrationResult, String> {
     use crate::database::MigrationDb;
     
@@ -102,11 +195,7 @@ pub async fn migrate_file(
         .map_err(|e| e.to_string())?;
     
     if result.success {
-        let app_dir = app.path().app_data_dir()
-            .map_err(|e| e.to_string())?;
-        let db_path = app_dir.join("migrations.db");
-        
-        std::fs::create_dir_all(&app_dir).map_err(|e| e.to_string())?;
+        let db_path = utils::get_migrations_db_path().map_err(|e| e.to_string())?;
         
         let db = MigrationDb::new(db_path.to_str().unwrap()).map_err(|e| e.to_string())?;
         let link_type_str = match result.link_type {
@@ -225,48 +314,38 @@ pub struct DiskInfo {
 }
 
 #[tauri::command]
-pub async fn analyze_migration_safety(path: String, size: u64) -> Result<crate::safety::MigrationSafety, String> {
+pub async fn analyze_migration_safety(path: String, size: u64, app: AppHandle) -> Result<crate::safety::MigrationSafety, String> {
     use std::path::Path;
     let path_obj = Path::new(&path);
-    crate::safety::analyze_migration_safety(path_obj, size)
+    crate::safety::analyze_migration_safety(path_obj, size, app)
 }
 
 #[tauri::command]
-pub async fn get_migration_history(app: AppHandle) -> Result<Vec<crate::database::migrations::MigrationRecord>, String> {
+pub async fn get_migration_history(_app: AppHandle) -> Result<Vec<crate::database::migrations::MigrationRecord>, String> {
     use crate::database::MigrationDb;
     
-    let app_dir = app.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-    let db_path = app_dir.join("migrations.db");
-    
-    std::fs::create_dir_all(&app_dir).map_err(|e| e.to_string())?;
+    let db_path = utils::get_migrations_db_path().map_err(|e| e.to_string())?;
     
     let db = MigrationDb::new(db_path.to_str().unwrap()).map_err(|e| e.to_string())?;
     db.get_all_migrations().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn get_migration_stats(app: AppHandle) -> Result<crate::database::migrations::MigrationStats, String> {
+pub async fn get_migration_stats(_app: AppHandle) -> Result<crate::database::migrations::MigrationStats, String> {
     use crate::database::MigrationDb;
     
-    let app_dir = app.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-    let db_path = app_dir.join("migrations.db");
-    
-    std::fs::create_dir_all(&app_dir).map_err(|e| e.to_string())?;
+    let db_path = utils::get_migrations_db_path().map_err(|e| e.to_string())?;
     
     let db = MigrationDb::new(db_path.to_str().unwrap()).map_err(|e| e.to_string())?;
     db.get_stats().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn rollback_migration(migration_id: i64, app: AppHandle) -> Result<crate::migration::file_migrator::RollbackResult, String> {
+pub async fn rollback_migration(migration_id: i64, _app: AppHandle) -> Result<crate::migration::file_migrator::RollbackResult, String> {
     use crate::database::MigrationDb;
     use crate::migration::FileMigrator;
     
-    let app_dir = app.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-    let db_path = app_dir.join("migrations.db");
+    let db_path = utils::get_migrations_db_path().map_err(|e| e.to_string())?;
     
     let db = MigrationDb::new(db_path.to_str().unwrap()).map_err(|e| e.to_string())?;
     
@@ -297,15 +376,11 @@ pub async fn save_scan_cache(
     disk_path: String,
     scan_type: String,
     result: ScanResult,
-    app: AppHandle,
+    _app: AppHandle,
 ) -> Result<(), String> {
     use crate::database::ScanCacheDb;
     
-    let app_dir = app.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-    let db_path = app_dir.join("scan_cache.db");
-    
-    std::fs::create_dir_all(&app_dir).map_err(|e| e.to_string())?;
+    let db_path = utils::get_scan_cache_db_path().map_err(|e| e.to_string())?;
     
     let db = ScanCacheDb::new(db_path.to_str().unwrap()).map_err(|e| e.to_string())?;
     let result_json = serde_json::to_string(&result).map_err(|e| e.to_string())?;
@@ -325,13 +400,11 @@ pub async fn save_scan_cache(
 pub async fn get_scan_cache(
     disk_path: String,
     scan_type: String,
-    app: AppHandle,
+    _app: AppHandle,
 ) -> Result<Option<ScanResult>, String> {
     use crate::database::ScanCacheDb;
     
-    let app_dir = app.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-    let db_path = app_dir.join("scan_cache.db");
+    let db_path = utils::get_scan_cache_db_path().map_err(|e| e.to_string())?;
     
     if !db_path.exists() {
         return Ok(None);
@@ -349,12 +422,10 @@ pub async fn get_scan_cache(
 }
 
 #[tauri::command]
-pub async fn clear_scan_cache(app: AppHandle) -> Result<(), String> {
+pub async fn clear_scan_cache(_app: AppHandle) -> Result<(), String> {
     use crate::database::ScanCacheDb;
     
-    let app_dir = app.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-    let db_path = app_dir.join("scan_cache.db");
+    let db_path = utils::get_scan_cache_db_path().map_err(|e| e.to_string())?;
     
     if !db_path.exists() {
         return Ok(());
@@ -362,6 +433,9 @@ pub async fn clear_scan_cache(app: AppHandle) -> Result<(), String> {
     
     let db = ScanCacheDb::new(db_path.to_str().unwrap()).map_err(|e| e.to_string())?;
     db.clear_all().map_err(|e| e.to_string())?;
+    
+    // 压缩数据库以释放空间
+    db.conn.execute("VACUUM", []).map_err(|e| e.to_string())?;
     
     Ok(())
 }
@@ -427,6 +501,97 @@ pub fn restart_as_admin(app: AppHandle) -> Result<(), String> {
     {
         return Err("Not supported on this platform".to_string());
     }
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub fn exit_app(app: AppHandle) {
+    app.exit(0);
+}
+
+#[derive(serde::Serialize)]
+pub struct CacheInfo {
+    pub cache_path: String,
+    pub total_size: u64,
+    pub caches: Vec<CacheEntry>,
+}
+
+#[derive(serde::Serialize)]
+pub struct CacheEntry {
+    pub disk_path: String,
+    pub scan_type: String,
+    pub file_count: i64,
+    pub total_size: i64,
+    pub created_at: String,
+    pub cache_size: i64,
+}
+
+#[tauri::command]
+pub async fn get_cache_info(_app: AppHandle) -> Result<CacheInfo, String> {
+    use crate::database::ScanCacheDb;
+    
+    let db_path = utils::get_scan_cache_db_path().map_err(|e| e.to_string())?;
+    let cache_path = db_path.to_string_lossy().to_string();
+    
+    if !db_path.exists() {
+        return Ok(CacheInfo {
+            cache_path,
+            total_size: 0,
+            caches: vec![],
+        });
+    }
+    
+    let total_size = std::fs::metadata(&db_path)
+        .map(|m| m.len())
+        .unwrap_or(0);
+    
+    let db = ScanCacheDb::new(db_path.to_str().unwrap()).map_err(|e| e.to_string())?;
+    
+    // 获取所有缓存记录
+    let mut stmt = db.conn.prepare(
+        "SELECT disk_path, scan_type, file_count, total_size, created_at, LENGTH(result_json) FROM scan_cache ORDER BY created_at DESC"
+    ).map_err(|e| e.to_string())?;
+    
+    let caches = stmt.query_map([], |row| {
+        Ok(CacheEntry {
+            disk_path: row.get(0)?,
+            scan_type: row.get(1)?,
+            file_count: row.get(2)?,
+            total_size: row.get(3)?,
+            created_at: row.get(4)?,
+            cache_size: row.get(5)?,
+        })
+    }).map_err(|e| e.to_string())?
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| e.to_string())?;
+    
+    Ok(CacheInfo {
+        cache_path,
+        total_size,
+        caches,
+    })
+}
+
+#[tauri::command]
+pub async fn delete_cache_entry(disk_path: String, scan_type: String, _app: AppHandle) -> Result<(), String> {
+    use crate::database::ScanCacheDb;
+    
+    let db_path = utils::get_scan_cache_db_path().map_err(|e| e.to_string())?;
+    
+    if !db_path.exists() {
+        return Ok(());
+    }
+    
+    let db = ScanCacheDb::new(db_path.to_str().unwrap()).map_err(|e| e.to_string())?;
+    
+    db.conn.execute(
+        "DELETE FROM scan_cache WHERE disk_path = ?1 AND scan_type = ?2",
+        rusqlite::params![disk_path, scan_type],
+    ).map_err(|e| e.to_string())?;
+    
+    // 压缩数据库以释放空间
+    db.conn.execute("VACUUM", []).map_err(|e| e.to_string())?;
     
     Ok(())
 }

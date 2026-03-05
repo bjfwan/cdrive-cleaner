@@ -6,7 +6,16 @@ use winreg::RegKey;
 use winreg::enums::*;
 use rayon::prelude::*;
 use std::time::{Duration, Instant};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Arc;
+use tauri::{AppHandle, Emitter};
+
+#[derive(Clone, serde::Serialize)]
+pub struct SafetyAnalysisProgress {
+    pub scanned_dirs: usize,
+    pub elapsed_ms: u64,
+    pub dirs_per_second: f64,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -37,10 +46,10 @@ struct SubdirRisk {
     reason: String,
 }
 
-const MAX_CHECK_DEPTH: usize = 4;
+const MAX_CHECK_DEPTH: usize = 3;
 const CHECK_TIMEOUT_SECS: u64 = 20;
 
-pub fn analyze_migration_safety(path: &Path, size: u64) -> Result<MigrationSafety, String> {
+pub fn analyze_migration_safety(path: &Path, size: u64, app: AppHandle) -> Result<MigrationSafety, String> {
     let path_str = path.to_string_lossy().to_uppercase();
     
     let mut score: f32 = 70.0;
@@ -65,8 +74,15 @@ pub fn analyze_migration_safety(path: &Path, size: u64) -> Result<MigrationSafet
         }
     }
     
+    // 发送初始进度
+    let _ = app.emit("safety-analysis-progress", SafetyAnalysisProgress {
+        scanned_dirs: 0,
+        elapsed_ms: 0,
+        dirs_per_second: 0.0,
+    });
+    
     let subdir_risks = if path.is_dir() {
-        analyze_subdirs_parallel(path, MAX_CHECK_DEPTH, CHECK_TIMEOUT_SECS)
+        analyze_subdirs_parallel(path, MAX_CHECK_DEPTH, CHECK_TIMEOUT_SECS, app.clone())
     } else {
         vec![]
     };
@@ -213,10 +229,11 @@ pub fn analyze_migration_safety(path: &Path, size: u64) -> Result<MigrationSafet
     })
 }
 
-fn analyze_subdirs_parallel(path: &Path, max_depth: usize, timeout_secs: u64) -> Vec<SubdirRisk> {
+fn analyze_subdirs_parallel(path: &Path, max_depth: usize, timeout_secs: u64, app: AppHandle) -> Vec<SubdirRisk> {
     let start = Instant::now();
     let timeout = Duration::from_secs(timeout_secs);
     let timed_out = AtomicBool::new(false);
+    let scanned_count = Arc::new(AtomicUsize::new(0));
     
     let subdirs = collect_subdirs(path, max_depth, &start, &timeout, &timed_out);
     
@@ -224,15 +241,69 @@ fn analyze_subdirs_parallel(path: &Path, max_depth: usize, timeout_secs: u64) ->
         return vec![];
     }
     
-    subdirs.par_iter()
+    let total_subdirs = subdirs.len();
+    let scanned_count_clone = Arc::clone(&scanned_count);
+    let app_clone = app.clone();
+    
+    // 启动进度报告线程
+    std::thread::spawn(move || {
+        let thread_start = Instant::now();
+        let mut last_count = 0;
+        loop {
+            std::thread::sleep(Duration::from_millis(200));
+            let current_count = scanned_count_clone.load(Ordering::Relaxed);
+            
+            if current_count >= total_subdirs {
+                break;
+            }
+            
+            if current_count != last_count {
+                let elapsed = thread_start.elapsed().as_millis() as u64;
+                let dirs_per_second = if elapsed > 0 {
+                    (current_count as f64) / (elapsed as f64 / 1000.0)
+                } else {
+                    0.0
+                };
+                
+                let _ = app_clone.emit("safety-analysis-progress", SafetyAnalysisProgress {
+                    scanned_dirs: current_count,
+                    elapsed_ms: elapsed,
+                    dirs_per_second,
+                });
+                
+                last_count = current_count;
+            }
+        }
+    });
+    
+    let results: Vec<SubdirRisk> = subdirs.par_iter()
         .filter_map(|subdir| {
             if start.elapsed() > timeout {
                 timed_out.store(true, Ordering::Relaxed);
                 return None;
             }
-            quick_check_subdir(subdir)
+            let result = quick_check_subdir(subdir);
+            scanned_count.fetch_add(1, Ordering::Relaxed);
+            result
         })
-        .collect()
+        .collect();
+    
+    // 发送最终进度
+    let elapsed = start.elapsed().as_millis() as u64;
+    let final_count = scanned_count.load(Ordering::Relaxed);
+    let dirs_per_second = if elapsed > 0 {
+        (final_count as f64) / (elapsed as f64 / 1000.0)
+    } else {
+        0.0
+    };
+    
+    let _ = app.emit("safety-analysis-progress", SafetyAnalysisProgress {
+        scanned_dirs: final_count,
+        elapsed_ms: elapsed,
+        dirs_per_second,
+    });
+    
+    results
 }
 
 fn collect_subdirs(

@@ -10,6 +10,21 @@ interface DiskInfo {
   free_space: number;
 }
 
+interface CacheEntry {
+  disk_path: string;
+  scan_type: string;
+  file_count: number;
+  total_size: number;
+  created_at: string;
+  cache_size: number;
+}
+
+interface CacheInfo {
+  cache_path: string;
+  total_size: number;
+  caches: CacheEntry[];
+}
+
 interface Props {
   show: boolean;
   availableDisks: DiskInfo[];
@@ -33,15 +48,21 @@ const settings = ref<Settings>({
   createSymlink: true
 });
 
-const showResetConfirm = ref(false);
 const showRestartConfirm = ref(false);
 const showDisableAdminConfirm = ref(false);
+const showClearCacheConfirm = ref(false);
+const showDeleteCacheConfirm = ref(false);
+const deletingCacheEntry = ref<CacheEntry | null>(null);
 const isElevated = ref(false);
 const isCheckingElevation = ref(true);
+const cacheInfo = ref<CacheInfo | null>(null);
+const loadingCache = ref(false);
+const activeTab = ref<'general' | 'cache'>('general');
 
 onMounted(() => {
   loadSettings();
   checkElevation();
+  loadCacheInfo();
 });
 
 async function checkElevation() {
@@ -75,15 +96,6 @@ function saveSettings() {
   }
 }
 
-function confirmReset() {
-  settings.value = {
-    defaultTargetDisk: '',
-    largeFileThreshold: 100,
-    createSymlink: true
-  };
-  showResetConfirm.value = false;
-}
-
 function handleAdminToggle(event: Event) {
   const target = event.target as HTMLInputElement;
   const wantsElevated = target.checked;
@@ -107,11 +119,16 @@ async function confirmRestartAsAdmin() {
   showRestartConfirm.value = false;
 }
 
-function confirmRestartAsStandard() {
+async function confirmRestartAsStandard() {
   showDisableAdminConfirm.value = false;
-  setTimeout(() => {
-    window.__TAURI__.process.exit(0);
-  }, 100);
+  try {
+    // 使用后端命令退出应用
+    await invoke('exit_app');
+  } catch (e) {
+    console.error('Failed to exit:', e);
+    // 如果后端命令失败，尝试使用 window.close()
+    window.close();
+  }
 }
 
 function close() {
@@ -125,6 +142,67 @@ function formatBytes(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
 }
+
+async function loadCacheInfo() {
+  loadingCache.value = true;
+  try {
+    cacheInfo.value = await invoke<CacheInfo>('get_cache_info');
+  } catch (e) {
+    console.error('Failed to load cache info:', e);
+  } finally {
+    loadingCache.value = false;
+  }
+}
+
+async function clearAllCache() {
+  try {
+    await invoke('clear_scan_cache');
+    await loadCacheInfo();
+    showClearCacheConfirm.value = false;
+  } catch (e) {
+    console.error('Failed to clear cache:', e);
+    alert('清理缓存失败');
+  }
+}
+
+async function deleteCacheEntry(entry: CacheEntry) {
+  try {
+    await invoke('delete_cache_entry', {
+      diskPath: entry.disk_path,
+      scanType: entry.scan_type
+    });
+    await loadCacheInfo();
+    showDeleteCacheConfirm.value = false;
+    deletingCacheEntry.value = null;
+  } catch (e) {
+    console.error('Failed to delete cache entry:', e);
+    alert('删除缓存失败');
+  }
+}
+
+function confirmDeleteCache(entry: CacheEntry) {
+  deletingCacheEntry.value = entry;
+  showDeleteCacheConfirm.value = true;
+}
+
+function getScanTypeLabel(scanType: string): string {
+  return scanType === 'quick' ? '快速扫描' : '深度扫描';
+}
+
+function formatDate(dateStr: string): string {
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return dateStr;
+  }
+}
 </script>
 
 <template>
@@ -137,7 +215,24 @@ function formatBytes(bytes: number): string {
         </button>
       </div>
 
+      <div class="tabs-container">
+        <button 
+          :class="['tab-btn', { active: activeTab === 'general' }]"
+          @click="activeTab = 'general'"
+        >
+          常规设置
+        </button>
+        <button 
+          :class="['tab-btn', { active: activeTab === 'cache' }]"
+          @click="activeTab = 'cache'; loadCacheInfo()"
+        >
+          缓存管理
+        </button>
+      </div>
+
       <div class="panel-body">
+        <!-- 常规设置 -->
+        <div v-show="activeTab === 'general'" class="tab-content">
         <div class="setting-section">
           <div class="section-header">
             <h3>迁移设置</h3>
@@ -291,18 +386,86 @@ function formatBytes(bytes: number): string {
             </div>
           </div>
         </div>
+        </div>
 
+        <!-- 缓存管理 -->
+        <div v-show="activeTab === 'cache'" class="tab-content">
         <div class="setting-section">
           <div class="section-header">
-            <h3>重置设置</h3>
-            <p>恢复所有设置到默认值</p>
+            <h3>缓存管理</h3>
+            <p>查看和管理扫描缓存数据</p>
           </div>
 
-          <button @click.stop="showResetConfirm = true" class="reset-btn">
-            <IconRefresh :size="16" />
-            重置所有设置
-          </button>
+          <div v-if="loadingCache" class="cache-loading">
+            <div class="loading-spinner"></div>
+            <span>加载缓存信息...</span>
+          </div>
+
+          <div v-else-if="cacheInfo" class="cache-info-container">
+            <div class="cache-summary">
+              <div class="cache-stat">
+                <div class="stat-label">缓存位置</div>
+                <div class="stat-value path">{{ cacheInfo.cache_path }}</div>
+              </div>
+              <div class="cache-stat">
+                <div class="stat-label">数据库大小</div>
+                <div class="stat-value">{{ formatBytes(cacheInfo.total_size) }}</div>
+              </div>
+              <div class="cache-stat">
+                <div class="stat-label">缓存数量</div>
+                <div class="stat-value">{{ cacheInfo.caches.length }} 个</div>
+              </div>
+            </div>
+
+            <div v-if="cacheInfo.caches.length > 0" class="cache-list">
+              <div v-for="cache in cacheInfo.caches" :key="`${cache.disk_path}-${cache.scan_type}`" class="cache-item">
+                <div class="cache-item-header">
+                  <div class="cache-disk">{{ cache.disk_path }}</div>
+                  <div class="cache-type-badge" :class="cache.scan_type">
+                    {{ getScanTypeLabel(cache.scan_type) }}
+                  </div>
+                </div>
+                <div class="cache-item-details">
+                  <div class="cache-detail">
+                    <span class="detail-label">文件数:</span>
+                    <span class="detail-value">{{ cache.file_count.toLocaleString() }}</span>
+                  </div>
+                  <div class="cache-detail">
+                    <span class="detail-label">磁盘大小:</span>
+                    <span class="detail-value">{{ formatBytes(cache.total_size) }}</span>
+                  </div>
+                  <div class="cache-detail">
+                    <span class="detail-label">数据大小:</span>
+                    <span class="detail-value">{{ formatBytes(cache.cache_size) }}</span>
+                  </div>
+                  <div class="cache-detail">
+                    <span class="detail-label">扫描时间:</span>
+                    <span class="detail-value">{{ formatDate(cache.created_at) }}</span>
+                  </div>
+                </div>
+                <button @click.stop="confirmDeleteCache(cache)" class="delete-cache-btn">
+                  删除
+                </button>
+              </div>
+            </div>
+
+            <div v-else class="no-cache">
+              <IconInfo :size="24" />
+              <p>暂无缓存数据</p>
+            </div>
+
+            <button 
+              v-if="cacheInfo.caches.length > 0"
+              @click.stop="showClearCacheConfirm = true" 
+              class="clear-all-cache-btn"
+            >
+              <IconRefresh :size="16" />
+              清空所有缓存
+            </button>
+          </div>
         </div>
+        </div>
+
       </div>
 
       <div class="panel-footer">
@@ -310,17 +473,6 @@ function formatBytes(bytes: number): string {
         <button class="btn btn-primary" @click="saveSettings">保存设置</button>
       </div>
     </div>
-
-    <ConfirmDialog
-      :show="showResetConfirm"
-      title="确定要重置所有设置吗？"
-      message="此操作将恢复所有设置到默认值，且无法撤销"
-      confirm-text="确定重置"
-      cancel-text="取消"
-      type="danger"
-      @confirm="confirmReset"
-      @cancel="showResetConfirm = false"
-    />
 
     <ConfirmDialog
       :show="showRestartConfirm"
@@ -336,12 +488,34 @@ function formatBytes(bytes: number): string {
     <ConfirmDialog
       :show="showDisableAdminConfirm"
       title="关闭管理员模式"
-      message="应用将关闭并以标准权限重新启动。"
-      confirm-text="立即重启"
-      cancel-text="稍后手动重启"
+      message="应用将关闭，请手动以标准权限重新打开应用。"
+      confirm-text="立即关闭"
+      cancel-text="取消"
       type="info"
       @confirm="confirmRestartAsStandard"
       @cancel="showDisableAdminConfirm = false"
+    />
+
+    <ConfirmDialog
+      :show="showClearCacheConfirm"
+      title="确定要清空所有缓存吗？"
+      message="此操作将删除所有扫描缓存，下次扫描将重新生成缓存数据"
+      confirm-text="确定清空"
+      cancel-text="取消"
+      type="warning"
+      @confirm="clearAllCache"
+      @cancel="showClearCacheConfirm = false"
+    />
+
+    <ConfirmDialog
+      :show="showDeleteCacheConfirm"
+      :title="`删除 ${deletingCacheEntry?.disk_path} 的缓存？`"
+      :message="`将删除此磁盘的${getScanTypeLabel(deletingCacheEntry?.scan_type || '')}缓存`"
+      confirm-text="确定删除"
+      cancel-text="取消"
+      type="warning"
+      @confirm="deleteCacheEntry(deletingCacheEntry!)"
+      @cancel="showDeleteCacheConfirm = false; deletingCacheEntry = null"
     />
   </div>
 </template>
@@ -404,6 +578,66 @@ function formatBytes(bytes: number): string {
   padding: 2rem 2rem 1.5rem;
   border-bottom: 1px solid var(--color-border-light);
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0.6) 0%, rgba(255, 252, 245, 0.3) 100%);
+}
+
+.tabs-container {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0 2rem;
+  background: linear-gradient(to bottom, rgba(255, 252, 245, 0.3) 0%, transparent 100%);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 1rem 1.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  letter-spacing: -0.01em;
+  position: relative;
+}
+
+.tab-btn:hover {
+  color: var(--color-text-secondary);
+  background: rgba(139, 92, 46, 0.04);
+}
+
+.tab-btn.active {
+  color: var(--color-accent-primary);
+  border-bottom-color: var(--color-accent-primary);
+  background: rgba(139, 115, 85, 0.06);
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--color-accent-primary), var(--color-accent-secondary));
+  box-shadow: 0 0 8px rgba(139, 115, 85, 0.3);
+}
+
+.tab-content {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .panel-header h2 {
@@ -590,37 +824,6 @@ function formatBytes(bytes: number): string {
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--color-text-tertiary);
-}
-
-.reset-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.625rem;
-  padding: 0.875rem 1.375rem;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--color-error);
-  background: rgba(239, 68, 68, 0.06);
-  border: 1px solid rgba(239, 68, 68, 0.15);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--transition-base);
-  letter-spacing: -0.01em;
-}
-
-.reset-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: rgba(239, 68, 68, 0.25);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
-}
-
-.reset-btn svg {
-  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.reset-btn:hover svg {
-  transform: rotate(180deg);
 }
 
 .panel-footer {
@@ -943,5 +1146,228 @@ function formatBytes(bytes: number): string {
   .label-with-icon {
     flex-wrap: wrap;
   }
+}
+
+.cache-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  color: var(--color-text-tertiary);
+  font-size: 0.9375rem;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(139, 92, 46, 0.15);
+  border-top-color: var(--color-accent-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.cache-info-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.cache-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.cache-stat {
+  padding: 1.25rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+}
+
+.cache-stat:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-medium);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  color: var(--color-text-tertiary);
+  margin-bottom: 0.5rem;
+}
+
+.stat-value {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  word-break: break-all;
+}
+
+.stat-value.path {
+  font-size: 0.875rem;
+  font-family: 'Consolas', 'Monaco', monospace;
+  color: var(--color-text-secondary);
+}
+
+.cache-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.cache-item {
+  position: relative;
+  padding: 1.25rem;
+  padding-right: 5rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+}
+
+.cache-item:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-medium);
+  box-shadow: var(--shadow-md);
+}
+
+.cache-item-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.875rem;
+  flex-wrap: wrap;
+}
+
+.cache-disk {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.cache-type-badge {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.cache-type-badge.quick {
+  color: var(--color-accent-primary);
+  background: rgba(139, 115, 85, 0.1);
+  border: 1px solid rgba(139, 115, 85, 0.2);
+}
+
+.cache-type-badge.deep {
+  color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.cache-item-details {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 0.875rem;
+  flex-wrap: wrap;
+}
+
+.cache-detail {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.detail-label {
+  color: var(--color-text-tertiary);
+}
+
+.detail-value {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.delete-cache-btn {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-error);
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  opacity: 0;
+  z-index: 10;
+}
+
+.cache-item:hover .delete-cache-btn {
+  opacity: 1;
+}
+
+.delete-cache-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.25);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+}
+
+.no-cache {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem 2rem;
+  color: var(--color-text-tertiary);
+}
+
+.no-cache p {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.clear-all-cache-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.875rem 1.375rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-error);
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  letter-spacing: -0.01em;
+}
+
+.clear-all-cache-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.25);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+}
+
+.clear-all-cache-btn svg {
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.clear-all-cache-btn:hover svg {
+  transform: rotate(180deg);
 }
 </style>

@@ -14,7 +14,7 @@ pub struct CachedScanResult {
 }
 
 pub struct ScanCacheDb {
-    conn: Connection,
+    pub conn: Connection,
 }
 
 impl ScanCacheDb {

@@ -70,7 +70,6 @@ mod tests {
         
         println!("\n=== 测试完成 ===\n");
     }
-}
 
     #[tokio::test]
     async fn test_directory_migration_real() {
@@ -110,4 +109,13 @@ mod tests {
                 println!("  文件大小: {} 字节", migration_result.file_size);
                 println!("  耗时: {} 毫秒", migration_result.duration_ms);
                 
-    
+                assert!(migration_result.success, "迁移应该成功");
+            }
+            Err(e) => {
+                panic!("迁移失败: {}", e);
+            }
+        }
+        
+        println!("\n=== 测试完成 ===\n");
+    }
+}
