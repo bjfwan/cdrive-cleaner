@@ -163,6 +163,9 @@ async function startDeepScan() {
     return;
   }
   
+  // 立即设置状态，提供即时反馈
+  deepScanning.value = true;
+  
   // 先检查是否有深度扫描缓存
   try {
     const cached = await invoke<ScanResult | null>('get_scan_cache', { 
@@ -187,14 +190,12 @@ async function startDeepScan() {
         `发现 ${cached.total_files.toLocaleString()} 个文件 · ${formatBytes(cached.total_size)}`,
         'info'
       );
+      deepScanning.value = false;
       return;
     }
   } catch (err) {
     console.log('无深度扫描缓存，开始扫描');
   }
-  
-  // 没有缓存，执行深度扫描
-  deepScanning.value = true;
 
   try {
     const estimatedFiles = scanResult.value?.total_files ?? 800000;
