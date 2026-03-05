@@ -68,13 +68,11 @@ const navigationStack = ref<string[]>([]);
 const scanCache = ref<Map<string, ScanResult>>(new Map());
 const hasDeepScanned = ref(false);
 
-// Toast 通知
 const showToast = ref(false);
 const toastMessage = ref('');
 const toastSubMessage = ref('');
 const toastType = ref<'success' | 'info' | 'warning' | 'error'>('success');
 
-// 设置
 const showSettings = ref(false);
 const showHistory = ref(false);
 const showWelcome = ref(false);
@@ -190,7 +188,6 @@ async function startDeepScan() {
       scanResult.value = result;
     }
     
-    // 显示完成通知
     showToastNotification(
       '深度扫描完成',
       `发现 ${result.total_files.toLocaleString()} 个文件 · ${formatBytes(result.total_size)}`,
@@ -260,7 +257,6 @@ async function navigateToPath(path: string) {
       scanResult.value = found;
       navigationStack.value.push(path);
       scanCache.value.set(path, found);
-      console.log('[调试] 从深度扫描树中找到目录:', path, '子目录数:', found.directories.length);
       return;
     }
   }
@@ -307,13 +303,10 @@ function closeHistory() {
 }
 
 function saveSettings(newSettings: any) {
-  // 应用大文件阈值设置
   if (newSettings.largeFileThreshold) {
-    // 可以在这里更新大文件视图的阈值
     console.log('应用大文件阈值:', newSettings.largeFileThreshold);
   }
   
-  // 应用主题设置
   if (newSettings.theme) {
     applyTheme(newSettings.theme);
   }
@@ -322,7 +315,6 @@ function saveSettings(newSettings: any) {
 }
 
 function applyTheme(theme: 'light' | 'dark' | 'auto') {
-  // TODO: 实现主题切换逻辑
   if (theme === 'auto') {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
@@ -423,48 +415,10 @@ function loadUserSettings() {
     <main class="main">
       <div v-if="!scanResult && !scanning" class="empty">
         <svg width="80" height="80" viewBox="0 0 120 120" fill="none" class="empty-icon">
-          <defs>
-            <linearGradient id="emptyBgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" style="stop-color:#f97316;stop-opacity:1" />
-              <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
-            </linearGradient>
-            <linearGradient id="emptyBgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
-              <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
-            </linearGradient>
-            <linearGradient id="emptyDiskCGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.95" />
-              <stop offset="100%" style="stop-color:#fecaca;stop-opacity:0.85" />
-            </linearGradient>
-            <linearGradient id="emptyDiskDGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" style="stop-color:#dbeafe;stop-opacity:0.95" />
-              <stop offset="100%" style="stop-color:#93c5fd;stop-opacity:0.85" />
-            </linearGradient>
-            <linearGradient id="emptyLightningGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" style="stop-color:#f87171;stop-opacity:1" />
-              <stop offset="100%" style="stop-color:#60a5fa;stop-opacity:1" />
-            </linearGradient>
-            <!-- 稀疏条纹图案 - 空间感 -->
-            <pattern id="emptySparseStripePattern" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
-              <rect width="8" height="8" fill="none"/>
-              <rect width="3" height="8" fill="#3b82f6" opacity="0.4"/>
-            </pattern>
-          </defs>
-          <rect x="8" y="8" width="104" height="104" rx="22" fill="url(#emptyBgGradient)"/>
-          <g transform="translate(60, 60)">
-            <g transform="translate(-18, 0)">
-              <path d="M 8 -22 A 22 22 0 1 0 8 22 L 8 15 A 15 15 0 1 1 8 -15 Z" fill="url(#emptyDiskCGradient)"/>
-            </g>
-            <g transform="translate(0, 0)">
-              <path d="M -12 1 L 0 -4 L 0 0 L 12 -1 L 0 5 L 0 1 Z" fill="url(#emptyLightningGradient)"/>
-            </g>
-            <g transform="translate(22, 0)">
-              <path d="M -8 -22 L -8 22 A 22 22 0 0 0 -8 -22 Z" fill="url(#emptyDiskDGradient)"/>
-              <path d="M -8 -15 L -8 15 A 15 15 0 0 0 -8 -15 Z" fill="url(#emptySparseStripePattern)"/>
-              <!-- 分离线 -->
-              <path d="M -8 -15 L -8 15 A 15 15 0 0 0 -8 -15" stroke="#3b82f6" stroke-width="1" fill="none" opacity="0.6"/>
-            </g>
-          </g>
+          <circle cx="60" cy="60" r="50" fill="rgba(139, 92, 46, 0.08)" />
+          <path d="M40 60 L50 50 L50 70 Z" fill="var(--color-accent-primary)" opacity="0.6"/>
+          <circle cx="60" cy="60" r="30" stroke="var(--color-accent-primary)" stroke-width="2" fill="none" opacity="0.4"/>
+          <circle cx="60" cy="60" r="20" stroke="var(--color-accent-secondary)" stroke-width="2" fill="none" opacity="0.6"/>
         </svg>
         <h2>选择磁盘开始扫描</h2>
         <p>分析空间占用情况</p>
@@ -515,396 +469,6 @@ function loadUserSettings() {
   </div>
 </template>
 
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-</style>
-
 <style scoped>
-.app {
-  display: flex;
-  height: 100vh;
-  background: #ffffff;
-  color: #2c2c2c;
-}
-
-.sidebar {
-  width: 340px;
-  background: white;
-  border-right: 1px solid #e7e5e4;
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-}
-
-.brand {
-  padding: 2.5rem 2rem 2rem;
-  border-bottom: 1px solid #e7e5e4;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.brand h1 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #2c2c2c;
-  letter-spacing: -0.02em;
-}
-
-.header-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.settings-icon-btn {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f5f5f4;
-  border: none;
-  border-radius: 10px;
-  color: #57534e;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.settings-icon-btn:hover {
-  background: #e7e5e4;
-  color: #1c1917;
-  transform: scale(1.05);
-}
-
-.settings-icon-btn:first-child:hover {
-  transform: rotate(-15deg) scale(1.05);
-}
-
-.settings-icon-btn:last-child:hover {
-  transform: rotate(45deg) scale(1.05);
-}
-
-.disks-container {
-  flex: 1;
-  overflow-y: auto;
-  padding: 2rem 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.action {
-  padding: 1.5rem;
-  border-top: 1px solid #e7e5e4;
-  background: linear-gradient(to top, #fafaf9 0%, #ffffff 100%);
-  display: flex;
-  flex-direction: column;
-  gap: 0.875rem;
-}
-
-.scan-btn {
-  width: 100%;
-  padding: 0;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
-}
-
-.btn-content {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 1.25rem;
-}
-
-.btn-icon {
-  flex-shrink: 0;
-  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* Primary Button - Quick Scan */
-.scan-btn.primary {
-  background: linear-gradient(135deg, #0066ff 0%, #0047b3 100%);
-  color: white;
-  box-shadow: 
-    0 4px 16px rgba(0, 102, 255, 0.2),
-    0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.scan-btn.primary .btn-shimmer {
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.2) 50%,
-    transparent 100%
-  );
-  transition: left 0.6s ease;
-}
-
-.scan-btn.primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 
-    0 8px 24px rgba(0, 102, 255, 0.3),
-    0 2px 6px rgba(0, 0, 0, 0.15);
-}
-
-.scan-btn.primary:hover:not(:disabled) .btn-shimmer {
-  left: 100%;
-}
-
-.scan-btn.primary:hover:not(:disabled) .btn-icon {
-  transform: rotate(90deg) scale(1.1);
-}
-
-/* Deep Scan Button - Distinctive Design */
-.scan-btn.deep {
-  background: linear-gradient(135deg, #fafaf9 0%, #f5f5f4 100%);
-  color: #1c1917;
-  border: 1.5px solid #e7e5e4;
-  box-shadow: 
-    0 2px 8px rgba(0, 0, 0, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-}
-
-.scan-btn.deep .btn-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.125rem;
-  flex: 1;
-}
-
-.scan-btn.deep .btn-label {
-  font-weight: 600;
-  font-size: 0.9375rem;
-  letter-spacing: -0.01em;
-}
-
-.scan-btn.deep .btn-hint {
-  font-size: 0.75rem;
-  font-weight: 400;
-  color: #78716c;
-  letter-spacing: 0.01em;
-}
-
-.scan-btn.deep .btn-glow {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    circle at center,
-    rgba(0, 102, 255, 0.08) 0%,
-    transparent 70%
-  );
-  opacity: 0;
-  transition: opacity 0.4s ease;
-}
-
-.scan-btn.deep:hover:not(:disabled) {
-  background: linear-gradient(135deg, #ffffff 0%, #fafaf9 100%);
-  border-color: #d6d3d1;
-  transform: translateY(-1px);
-  box-shadow: 
-    0 4px 16px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 1);
-}
-
-.scan-btn.deep:hover:not(:disabled) .btn-glow {
-  opacity: 1;
-}
-
-.scan-btn.deep:hover:not(:disabled) .btn-icon {
-  transform: translateY(3px) scale(1.05);
-}
-
-.scan-btn.deep:hover:not(:disabled) .btn-hint {
-  color: #57534e;
-}
-
-/* Active State */
-.scan-btn:active:not(:disabled) {
-  transform: translateY(0) scale(0.98);
-}
-
-/* Disabled State */
-.scan-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.scan-btn:disabled .btn-icon {
-  transform: none;
-}
-
-.scan-btn:disabled .btn-shimmer,
-.scan-btn:disabled .btn-glow {
-  display: none;
-}
-
-.main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: #ffffff;
-}
-
-.empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 4rem 2rem;
-}
-
-.empty-icon {
-  color: #d6d3d1;
-  margin-bottom: 2rem;
-}
-
-.empty h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-  letter-spacing: -0.02em;
-}
-
-.empty p {
-  font-size: 0.9375rem;
-  color: #78716c;
-}
-
-.spinner {
-  width: 48px;
-  height: 48px;
-  border: 3px solid #e7e5e4;
-  border-top-color: #2c2c2c;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin-bottom: 2rem;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.error {
-  margin: 2rem;
-  padding: 1rem 1.25rem;
-  background: #fef2f2;
-  color: #991b1b;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-  font-size: 0.875rem;
-}
+/* All styles are imported from external CSS files in main.ts */
 </style>
-
-
-@media (max-width: 900px) {
-  .app {
-    flex-direction: column;
-  }
-
-  .sidebar {
-    width: 100%;
-    border-right: none;
-    border-bottom: 1px solid #e7e5e4;
-    max-height: 50vh;
-  }
-
-  .disks-container {
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  }
-}
-
-@media (max-width: 600px) {
-  .brand h1 {
-    font-size: 1.25rem;
-  }
-
-  .disks-container {
-    grid-template-columns: 1fr;
-    padding: 1.5rem 1rem;
-  }
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  backdrop-filter: blur(4px);
-}
-
-.modal-content {
-  background: white;
-  border-radius: 20px;
-  width: 90%;
-  max-width: 1200px;
-  max-height: 90vh;
-  overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-close {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: #f5f5f4;
-  color: #57534e;
-  border-radius: 50%;
-  font-size: 20px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  z-index: 10;
-}
-
-.modal-close:hover {
-  background: #e7e5e4;
-  color: #1c1917;
-  transform: rotate(90deg);
-}
-
-.modal-content > * {
-  overflow-y: auto;
-}
