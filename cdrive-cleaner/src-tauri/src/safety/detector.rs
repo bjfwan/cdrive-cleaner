@@ -38,7 +38,7 @@ struct SubdirRisk {
 }
 
 const MAX_CHECK_DEPTH: usize = 4;
-const CHECK_TIMEOUT_SECS: u64 = 5;
+const CHECK_TIMEOUT_SECS: u64 = 20;
 
 pub fn analyze_migration_safety(path: &Path, size: u64) -> Result<MigrationSafety, String> {
     let path_str = path.to_string_lossy().to_uppercase();
