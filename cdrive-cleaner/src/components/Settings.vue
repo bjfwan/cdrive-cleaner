@@ -107,6 +107,15 @@ async function confirmRestartAsAdmin() {
   showRestartConfirm.value = false;
 }
 
+function confirmRestartAsStandard() {
+  try {
+    window.location.reload();
+  } catch (e) {
+    console.error('Failed to restart:', e);
+  }
+  showDisableAdminConfirm.value = false;
+}
+
 function close() {
   emit('close');
 }
@@ -329,11 +338,11 @@ function formatBytes(bytes: number): string {
     <ConfirmDialog
       :show="showDisableAdminConfirm"
       title="关闭管理员模式"
-      message="关闭管理员模式需要手动重启应用。请关闭应用后，以标准方式重新启动。"
-      confirm-text="我知道了"
-      cancel-text="取消"
+      message="应用将关闭并以标准权限重新启动。"
+      confirm-text="立即重启"
+      cancel-text="稍后手动重启"
       type="info"
-      @confirm="showDisableAdminConfirm = false"
+      @confirm="confirmRestartAsStandard"
       @cancel="showDisableAdminConfirm = false"
     />
   </div>
