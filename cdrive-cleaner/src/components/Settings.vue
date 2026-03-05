@@ -331,7 +331,7 @@ function formatBytes(bytes: number): string {
       title="关闭管理员模式"
       message="关闭管理员模式需要手动重启应用。请关闭应用后，以标准方式重新启动。"
       confirm-text="我知道了"
-      cancel-text=""
+      cancel-text="取消"
       type="info"
       @confirm="showDisableAdminConfirm = false"
       @cancel="showDisableAdminConfirm = false"
