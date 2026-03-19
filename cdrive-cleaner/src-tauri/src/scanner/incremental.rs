@@ -832,3 +832,92 @@ pub fn merge_scan_results(
 
     rebuild_tree(flat, root_path)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_node(path: &Path, size: u64, file_count: usize, dir_count: usize, children: Vec<DirectoryNode>) -> DirectoryNode {
+        DirectoryNode {
+            path: path.to_string_lossy().to_string(),
+            name: path.file_name().unwrap_or_default().to_string_lossy().to_string(),
+            size,
+            file_count,
+            dir_count,
+            has_children: !children.is_empty(),
+            children,
+            is_symlink: false,
+            link_target: None,
+            safety: None,
+            modified_time: None,
+            file_id: None,
+        }
+    }
+
+    #[test]
+    fn merge_scan_results_updates_ancestor_totals_for_changed_subtree() {
+        let root = PathBuf::from("root");
+        let dir_a = root.join("a");
+        let dir_b = dir_a.join("b");
+
+        let old_tree = vec![make_node(
+            &dir_a,
+            100,
+            2,
+            2,
+            vec![make_node(&dir_b, 40, 1, 1, vec![])],
+        )];
+
+        let merged = merge_scan_results(
+            old_tree,
+            vec![make_node(&dir_b, 80, 2, 1, vec![])],
+            vec![],
+            &root,
+        );
+
+        assert_eq!(merged.len(), 1);
+        let merged_a = &merged[0];
+        assert_eq!(merged_a.path, dir_a.to_string_lossy());
+        assert_eq!(merged_a.size, 140);
+        assert_eq!(merged_a.file_count, 3);
+        assert_eq!(merged_a.dir_count, 2);
+        assert_eq!(merged_a.children.len(), 1);
+        assert_eq!(merged_a.children[0].path, dir_b.to_string_lossy());
+        assert_eq!(merged_a.children[0].size, 80);
+        assert_eq!(merged_a.children[0].file_count, 2);
+    }
+
+    #[test]
+    fn merge_scan_results_removes_deleted_subtree_and_updates_parent() {
+        let root = PathBuf::from("root");
+        let dir_a = root.join("a");
+        let dir_b = dir_a.join("b");
+        let dir_c = dir_a.join("c");
+
+        let old_tree = vec![make_node(
+            &dir_a,
+            150,
+            3,
+            3,
+            vec![
+                make_node(&dir_b, 50, 1, 1, vec![]),
+                make_node(&dir_c, 70, 2, 1, vec![]),
+            ],
+        )];
+
+        let merged = merge_scan_results(
+            old_tree,
+            vec![],
+            vec![dir_b.to_string_lossy().to_string()],
+            &root,
+        );
+
+        assert_eq!(merged.len(), 1);
+        let merged_a = &merged[0];
+        assert_eq!(merged_a.size, 100);
+        assert_eq!(merged_a.file_count, 2);
+        assert_eq!(merged_a.dir_count, 2);
+        assert_eq!(merged_a.children.len(), 1);
+        assert_eq!(merged_a.children[0].path, dir_c.to_string_lossy());
+    }
+}

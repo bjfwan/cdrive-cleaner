@@ -1,8 +1,12 @@
 use super::link_creator::{LinkCreator, LinkType};
 use anyhow::{anyhow, Result};
+use rayon::prelude::*;
 use std::fs;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
 #[derive(Clone, serde::Serialize)]
@@ -24,6 +28,72 @@ pub struct FileMigrator {
 struct CopySummary {
     copied_bytes: u64,
     copied_files: usize,
+}
+
+#[derive(Debug, Clone)]
+struct CopyTask {
+    source: PathBuf,
+    target: PathBuf,
+    expected_size: u64,
+}
+
+#[derive(Debug, Default)]
+struct DirectoryCopyPlan {
+    directories: Vec<PathBuf>,
+    files: Vec<CopyTask>,
+}
+
+#[derive(Debug, Default)]
+struct CopyProgressTracker {
+    copied_bytes: AtomicU64,
+    copied_files: AtomicUsize,
+    should_stop: AtomicBool,
+    current_file: Mutex<String>,
+}
+
+const LARGE_FILE_COPY_THRESHOLD: u64 = 128 * 1024 * 1024;
+const PARALLEL_COPY_MIN_BYTES: u64 = 512 * 1024 * 1024;
+const PARALLEL_COPY_MIN_FILES: usize = 128;
+const DEFAULT_COPY_BUFFER_SIZE: usize = 1024 * 1024;
+const LARGE_COPY_BUFFER_SIZE: usize = 8 * 1024 * 1024;
+const HUGE_COPY_BUFFER_SIZE: usize = 16 * 1024 * 1024;
+const PROGRESS_EMIT_INTERVAL: Duration = Duration::from_millis(200);
+
+impl CopyProgressTracker {
+    fn set_current_file(&self, path: &Path) {
+        if let Ok(mut current_file) = self.current_file.lock() {
+            *current_file = path.to_string_lossy().to_string();
+        }
+    }
+
+    fn add_copied_bytes(&self, path: &Path, bytes: u64) {
+        self.set_current_file(path);
+        self.copied_bytes.fetch_add(bytes, Ordering::Relaxed);
+    }
+
+    fn complete_file(&self, path: &Path, bytes: u64) {
+        self.set_current_file(path);
+        self.copied_bytes.fetch_add(bytes, Ordering::Relaxed);
+        self.copied_files.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn finish_buffered_file(&self, path: &Path) {
+        self.set_current_file(path);
+        self.copied_files.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn snapshot(&self) -> (u64, usize, String) {
+        let current_file = self.current_file
+            .lock()
+            .map(|path| path.clone())
+            .unwrap_or_default();
+
+        (
+            self.copied_bytes.load(Ordering::Relaxed),
+            self.copied_files.load(Ordering::Relaxed),
+            current_file,
+        )
+    }
 }
 
 impl FileMigrator {
@@ -280,8 +350,232 @@ impl FileMigrator {
         Ok(())
     }
 
+    fn source_entry_size(path: &Path, metadata: &fs::Metadata) -> Result<u64> {
+        if Self::is_link_entry(metadata) {
+            Ok(fs::metadata(path)?.len())
+        } else {
+            Ok(metadata.len())
+        }
+    }
+
+    fn copy_buffer_size(file_size: u64) -> usize {
+        if file_size >= 1024 * 1024 * 1024 {
+            HUGE_COPY_BUFFER_SIZE
+        } else if file_size >= LARGE_FILE_COPY_THRESHOLD {
+            LARGE_COPY_BUFFER_SIZE
+        } else {
+            DEFAULT_COPY_BUFFER_SIZE
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn should_use_buffered_copy(file_size: u64) -> bool {
+        file_size >= LARGE_FILE_COPY_THRESHOLD
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn should_use_buffered_copy(_file_size: u64) -> bool {
+        false
+    }
+
+    #[cfg(target_os = "windows")]
+    fn should_parallelize_directory_copy(total_size: u64, total_files: usize) -> bool {
+        total_size >= PARALLEL_COPY_MIN_BYTES || total_files >= PARALLEL_COPY_MIN_FILES
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn should_parallelize_directory_copy(_total_size: u64, _total_files: usize) -> bool {
+        false
+    }
+
+    fn build_directory_copy_plan(&self, source: &Path, target: &Path) -> Result<DirectoryCopyPlan> {
+        let mut plan = DirectoryCopyPlan {
+            directories: vec![target.to_path_buf()],
+            files: Vec::new(),
+        };
+        let mut pending = vec![(source.to_path_buf(), target.to_path_buf())];
+
+        while let Some((src_dir, dst_dir)) = pending.pop() {
+            for entry in fs::read_dir(&src_dir)? {
+                let entry = entry?;
+                let file_type = entry.file_type()?;
+                let src = entry.path();
+                let dst = dst_dir.join(entry.file_name());
+                let metadata = fs::symlink_metadata(&src)?;
+
+                if Self::is_link_entry(&metadata) && file_type.is_dir() {
+                    return Err(anyhow!(
+                        "Directory contains nested symlink or junction: {}",
+                        src.display()
+                    ));
+                }
+
+                if file_type.is_dir() {
+                    plan.directories.push(dst.clone());
+                    pending.push((src, dst));
+                    continue;
+                }
+
+                let expected_size = Self::source_entry_size(src.as_path(), &metadata)?;
+                plan.files.push(CopyTask {
+                    source: src,
+                    target: dst,
+                    expected_size,
+                });
+            }
+        }
+
+        plan.directories.sort_by(|a, b| {
+            a.components()
+                .count()
+                .cmp(&b.components().count())
+                .then_with(|| a.cmp(b))
+        });
+        plan.directories.dedup();
+        plan.files.sort_by(|a, b| a.source.cmp(&b.source));
+
+        Ok(plan)
+    }
+
+    fn prepare_directory_copy_plan(&self, plan: &DirectoryCopyPlan) -> Result<()> {
+        for dir in &plan.directories {
+            fs::create_dir_all(dir)?;
+        }
+        Ok(())
+    }
+
+    fn start_progress_reporter(
+        app: &Option<AppHandle>,
+        tracker: &Arc<CopyProgressTracker>,
+        total_size: u64,
+        total_files: usize,
+    ) -> Option<std::thread::JoinHandle<()>> {
+        let app = app.clone()?;
+        let tracker = Arc::clone(tracker);
+
+        Some(std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(PROGRESS_EMIT_INTERVAL);
+
+                let (copied_bytes, copied_files, current_file) = tracker.snapshot();
+                Self::emit_progress_impl(
+                    Some(&app),
+                    "copying",
+                    copied_bytes,
+                    total_size,
+                    copied_files,
+                    total_files,
+                    &current_file,
+                );
+
+                if tracker.should_stop.load(Ordering::Relaxed) {
+                    break;
+                }
+            }
+        }))
+    }
+
+    fn finish_copy_progress(
+        &self,
+        app: &Option<AppHandle>,
+        tracker: Arc<CopyProgressTracker>,
+        reporter: Option<std::thread::JoinHandle<()>>,
+        total_size: u64,
+        total_files: usize,
+        fallback_path: &Path,
+    ) -> CopySummary {
+        tracker.should_stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = reporter {
+            let _ = handle.join();
+        }
+
+        let (copied_bytes, copied_files, current_file) = tracker.snapshot();
+        let current_file = if current_file.is_empty() {
+            fallback_path.to_string_lossy().to_string()
+        } else {
+            current_file
+        };
+
+        self.emit_progress(
+            app,
+            "copying",
+            copied_bytes,
+            total_size,
+            copied_files,
+            total_files,
+            &current_file,
+        );
+
+        CopySummary {
+            copied_bytes,
+            copied_files,
+        }
+    }
+
+    fn stop_progress_reporter(
+        tracker: &Arc<CopyProgressTracker>,
+        reporter: Option<std::thread::JoinHandle<()>>,
+    ) {
+        tracker.should_stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = reporter {
+            let _ = handle.join();
+        }
+    }
+
+    fn copy_file_buffered(
+        &self,
+        source: &Path,
+        target: &Path,
+        expected_size: u64,
+        progress: Option<&CopyProgressTracker>,
+    ) -> Result<u64> {
+        #[cfg(target_os = "windows")]
+        let mut input = {
+            use std::os::windows::fs::OpenOptionsExt;
+            use windows::Win32::Storage::FileSystem::FILE_FLAG_SEQUENTIAL_SCAN;
+
+            fs::OpenOptions::new()
+                .read(true)
+                .custom_flags(FILE_FLAG_SEQUENTIAL_SCAN.0)
+                .open(source)?
+        };
+
+        #[cfg(not(target_os = "windows"))]
+        let mut input = fs::File::open(source)?;
+
+        let mut output = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(target)?;
+
+        let mut buffer = vec![0u8; Self::copy_buffer_size(expected_size)];
+        let mut copied = 0u64;
+
+        loop {
+            let read = input.read(&mut buffer)?;
+            if read == 0 {
+                break;
+            }
+
+            output.write_all(&buffer[..read])?;
+            copied += read as u64;
+
+            if let Some(progress) = progress {
+                progress.add_copied_bytes(source, read as u64);
+            }
+        }
+
+        output.flush()?;
+
+        if let Ok(source_metadata) = fs::metadata(source) {
+            let _ = fs::set_permissions(target, source_metadata.permissions());
+        }
+
+        Ok(copied)
+    }
+
     #[cfg(windows)]
-    fn copy_file_optimized(&self, source: &Path, target: &Path) -> Result<u64> {
+    fn copy_file_via_copyfileex(&self, source: &Path, target: &Path) -> Result<u64> {
         use std::os::windows::ffi::OsStrExt;
         use windows::Win32::Storage::FileSystem::CopyFileExW;
         use windows::core::PCWSTR;
@@ -303,9 +597,100 @@ impl FileMigrator {
         Ok(fs::metadata(target)?.len())
     }
 
+    #[cfg(windows)]
+    fn copy_file_optimized(
+        &self,
+        source: &Path,
+        target: &Path,
+        expected_size: u64,
+        progress: Option<&CopyProgressTracker>,
+    ) -> Result<u64> {
+        let use_buffered_copy = Self::should_use_buffered_copy(expected_size);
+        let copied = if use_buffered_copy {
+            self.copy_file_buffered(source, target, expected_size, progress)?
+        } else {
+            self.copy_file_via_copyfileex(source, target)?
+        };
+
+        self.verify_copied_file(expected_size, target)?;
+
+        if let Some(progress) = progress {
+            if use_buffered_copy {
+                progress.finish_buffered_file(source);
+            } else {
+                progress.complete_file(source, copied);
+            }
+        }
+
+        Ok(copied)
+    }
+
     #[cfg(not(windows))]
-    fn copy_file_optimized(&self, source: &Path, target: &Path) -> Result<u64> {
-        Ok(fs::copy(source, target)?)
+    fn copy_file_optimized(
+        &self,
+        source: &Path,
+        target: &Path,
+        expected_size: u64,
+        progress: Option<&CopyProgressTracker>,
+    ) -> Result<u64> {
+        let copied = fs::copy(source, target)?;
+        self.verify_copied_file(expected_size, target)?;
+
+        if let Some(progress) = progress {
+            progress.complete_file(source, copied);
+        }
+
+        Ok(copied)
+    }
+
+    fn copy_directory_serial(
+        &self,
+        plan: &DirectoryCopyPlan,
+        total_size: u64,
+        total_files: usize,
+        app: &Option<AppHandle>,
+        fallback_path: &Path,
+    ) -> Result<CopySummary> {
+        let tracker = Arc::new(CopyProgressTracker::default());
+        let reporter = Self::start_progress_reporter(app, &tracker, total_size, total_files);
+
+        let copy_result = (|| -> Result<()> {
+            for task in &plan.files {
+                self.copy_file_optimized(&task.source, &task.target, task.expected_size, Some(tracker.as_ref()))?;
+            }
+            Ok(())
+        })();
+
+        if let Err(err) = copy_result {
+            Self::stop_progress_reporter(&tracker, reporter);
+            return Err(err);
+        }
+
+        Ok(self.finish_copy_progress(app, tracker, reporter, total_size, total_files, fallback_path))
+    }
+
+    fn copy_directory_parallel(
+        &self,
+        plan: &DirectoryCopyPlan,
+        total_size: u64,
+        total_files: usize,
+        app: &Option<AppHandle>,
+        fallback_path: &Path,
+    ) -> Result<CopySummary> {
+        let tracker = Arc::new(CopyProgressTracker::default());
+        let reporter = Self::start_progress_reporter(app, &tracker, total_size, total_files);
+
+        let copy_result = plan.files.par_iter().try_for_each(|task| -> Result<()> {
+            self.copy_file_optimized(&task.source, &task.target, task.expected_size, Some(tracker.as_ref()))?;
+            Ok(())
+        });
+
+        if let Err(err) = copy_result {
+            Self::stop_progress_reporter(&tracker, reporter);
+            return Err(err);
+        }
+
+        Ok(self.finish_copy_progress(app, tracker, reporter, total_size, total_files, fallback_path))
     }
 
     /// 带进度报告的复制
@@ -318,89 +703,25 @@ impl FileMigrator {
         app: &Option<AppHandle>,
     ) -> Result<CopySummary> {
         if source.is_file() {
-            let copied = self.copy_file_optimized(source, target)?;
-            self.verify_copied_file(total_size, target)?;
-            self.emit_progress(
-                app,
-                "copying",
-                copied,
-                total_size,
-                total_files.min(1),
-                total_files.max(1),
-                source.to_string_lossy().as_ref(),
-            );
-            return Ok(CopySummary {
-                copied_bytes: copied,
-                copied_files: 1,
-            });
+            let tracker = Arc::new(CopyProgressTracker::default());
+            let tracked_files = total_files.max(1);
+            let reporter = Self::start_progress_reporter(app, &tracker, total_size, tracked_files);
+
+            if let Err(err) = self.copy_file_optimized(source, target, total_size, Some(tracker.as_ref())) {
+                Self::stop_progress_reporter(&tracker, reporter);
+                return Err(err);
+            }
+            return Ok(self.finish_copy_progress(app, tracker, reporter, total_size, tracked_files, source));
         }
 
-        let mut copied_bytes = 0u64;
-        let mut copied_files = 0usize;
-        let mut last_emit = Instant::now();
+        let plan = self.build_directory_copy_plan(source, target)?;
+        self.prepare_directory_copy_plan(&plan)?;
 
-        self.copy_dir_with_progress(source, target, total_size, total_files, &mut copied_bytes, &mut copied_files, &mut last_emit, app)?;
-        self.emit_progress(
-            app,
-            "copying",
-            copied_bytes,
-            total_size,
-            copied_files,
-            total_files,
-            target.to_string_lossy().as_ref(),
-        );
-        Ok(CopySummary {
-            copied_bytes,
-            copied_files,
-        })
-    }
-
-    fn copy_dir_with_progress(
-        &self, source: &Path, target: &Path,
-        total_size: u64, total_files: usize,
-        copied_bytes: &mut u64, copied_files: &mut usize,
-        last_emit: &mut Instant, app: &Option<AppHandle>,
-    ) -> Result<()> {
-        fs::create_dir_all(target)?;
-        for entry in fs::read_dir(source)? {
-            let entry = entry?;
-            let file_type = entry.file_type()?;
-            let src = entry.path();
-            let dst = target.join(entry.file_name());
-            let metadata = fs::symlink_metadata(&src)?;
-
-            if Self::is_link_entry(&metadata) && file_type.is_dir() {
-                return Err(anyhow!(
-                    "Directory contains nested symlink or junction: {}",
-                    src.display()
-                ));
-            }
-
-            if file_type.is_dir() {
-                self.copy_dir_with_progress(&src, &dst, total_size, total_files, copied_bytes, copied_files, last_emit, app)?;
-            } else {
-                let expected_size = metadata.len();
-                self.copy_file_optimized(&src, &dst)?;
-                self.verify_copied_file(expected_size, &dst)?;
-                *copied_bytes += expected_size;
-                *copied_files += 1;
-
-                // 每 200ms 发送一次进度，避免事件风暴
-                if last_emit.elapsed().as_millis() >= 200 {
-                    self.emit_progress(
-                        app,
-                        "copying",
-                        *copied_bytes,
-                        total_size,
-                        *copied_files,
-                        total_files,
-                        src.to_string_lossy().as_ref(),
-                    );
-                    *last_emit = Instant::now();
-                }
-            }
+        if Self::should_parallelize_directory_copy(total_size, total_files) {
+            self.copy_directory_parallel(&plan, total_size, total_files, app, target)
+        } else {
+            self.copy_directory_serial(&plan, total_size, total_files, app, target)
         }
-        Ok(())
     }
 
     fn create_backup_path(&self, path: &Path) -> PathBuf {
@@ -436,6 +757,26 @@ impl FileMigrator {
     fn emit_progress(
         &self,
         app: &Option<AppHandle>,
+        status: &str,
+        copied_bytes: u64,
+        total_bytes: u64,
+        copied_files: usize,
+        total_files: usize,
+        current_file: &str,
+    ) {
+        Self::emit_progress_impl(
+            app.as_ref(),
+            status,
+            copied_bytes,
+            total_bytes,
+            copied_files,
+            total_files,
+            current_file,
+        );
+    }
+
+    fn emit_progress_impl(
+        app: Option<&AppHandle>,
         status: &str,
         copied_bytes: u64,
         total_bytes: u64,
