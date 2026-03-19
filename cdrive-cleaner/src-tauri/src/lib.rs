@@ -5,6 +5,7 @@ mod commands;
 pub mod safety;
 pub mod cache;
 mod utils;
+mod winfs;
 
 use scanner::DiskScanner;
 use database::{ScanCacheDb, MigrationDb};

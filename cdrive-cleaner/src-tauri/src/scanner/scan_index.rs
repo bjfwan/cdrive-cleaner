@@ -14,6 +14,9 @@ pub struct IndexedScanResult {
     nodes: HashMap<String, DirectoryNode>,
     children_by_path: HashMap<String, Vec<DirectoryNode>>,
     large_files: Vec<FileInfo>,
+    root_file_id: Option<u64>,
+    usn_journal_id: Option<u64>,
+    usn_next_usn: Option<i64>,
 }
 
 impl IndexedScanResult {
@@ -33,6 +36,9 @@ impl IndexedScanResult {
             nodes: HashMap::new(),
             children_by_path: HashMap::new(),
             large_files: result.large_files.clone(),
+            root_file_id: result.root_file_id,
+            usn_journal_id: result.usn_journal_id,
+            usn_next_usn: result.usn_next_usn,
         };
 
         indexed.index_children(&result.root_path, &result.directories);
@@ -50,6 +56,9 @@ impl IndexedScanResult {
                 directories: self.root_children.clone(),
                 large_files: self.large_files.clone(),
                 inaccessible_count: self.inaccessible_count,
+                root_file_id: self.root_file_id,
+                usn_journal_id: self.usn_journal_id,
+                usn_next_usn: self.usn_next_usn,
             });
         }
 
@@ -65,6 +74,9 @@ impl IndexedScanResult {
             directories,
             large_files: self.large_files_for_path(path),
             inaccessible_count: self.inaccessible_count,
+            root_file_id: self.root_file_id,
+            usn_journal_id: self.usn_journal_id,
+            usn_next_usn: self.usn_next_usn,
         })
     }
 
@@ -108,6 +120,7 @@ impl IndexedScanResult {
             has_children: node.has_children || !node.children.is_empty(),
             safety: node.safety.clone(),
             modified_time: node.modified_time,
+            file_id: node.file_id,
         }
     }
 

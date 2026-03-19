@@ -10,19 +10,7 @@ use sysinfo::System;
 use tauri::{AppHandle, Emitter};
 use winreg::enums::*;
 use winreg::RegKey;
-
-#[cfg(windows)]
-fn is_link_entry(metadata: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-
-    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
-    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
-}
-
-#[cfg(not(windows))]
-fn is_link_entry(metadata: &fs::Metadata) -> bool {
-    metadata.file_type().is_symlink()
-}
+use crate::winfs;
 
 #[derive(Clone, serde::Serialize)]
 pub struct SafetyAnalysisProgress {
@@ -485,33 +473,42 @@ fn analyze_subdirs_parallel(path: &Path, env: &Arc<EnvironmentSnapshot>, app: Ap
 
 fn collect_subdirs(path: &Path, max_depth: usize, start: &Instant, timeout: &Duration, timed_out: &AtomicBool) -> Vec<PathBuf> {
     let mut subdirs = Vec::new();
-    for entry in jwalk::WalkDir::new(path)
-        .min_depth(1)
-        .max_depth(max_depth)
-        .skip_hidden(false)
-        .follow_links(false)
-    {
-        if start.elapsed() > *timeout || timed_out.load(Ordering::Relaxed) {
-            timed_out.store(true, Ordering::Relaxed);
-            break;
-        }
-
-        let Ok(entry) = entry else { continue; };
-        let subpath = entry.path();
-        let Ok(metadata) = fs::symlink_metadata(&subpath) else {
-            continue;
-        };
-
-        if is_link_entry(&metadata) {
-            continue;
-        }
-
-        if metadata.is_dir() {
-            subdirs.push(subpath);
-        }
-    }
+    collect_subdirs_native(path, 0, max_depth, &mut subdirs, start, timeout, timed_out);
 
     subdirs
+}
+
+fn collect_subdirs_native(
+    path: &Path,
+    depth: usize,
+    max_depth: usize,
+    subdirs: &mut Vec<PathBuf>,
+    start: &Instant,
+    timeout: &Duration,
+    timed_out: &AtomicBool,
+) {
+    if depth >= max_depth || start.elapsed() > *timeout || timed_out.load(Ordering::Relaxed) {
+        return;
+    }
+
+    let entries = match winfs::enumerate_directory(path, false) {
+        Ok(entries) => entries,
+        Err(_) => return,
+    };
+
+    for entry in entries {
+        if start.elapsed() > *timeout || timed_out.load(Ordering::Relaxed) {
+            timed_out.store(true, Ordering::Relaxed);
+            return;
+        }
+
+        if entry.is_symlink || !entry.is_dir {
+            continue;
+        }
+
+        subdirs.push(entry.path.clone());
+        collect_subdirs_native(&entry.path, depth + 1, max_depth, subdirs, start, timeout, timed_out);
+    }
 }
 
 fn quick_check_subdir(path: &Path, env: &EnvironmentSnapshot) -> Option<SubdirRisk> {

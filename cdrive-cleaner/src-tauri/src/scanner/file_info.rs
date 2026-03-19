@@ -32,6 +32,8 @@ pub struct DirectoryNode {
     pub safety: Option<MigrationSafety>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modified_time: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_id: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -44,4 +46,10 @@ pub struct ScanResult {
     pub directories: Vec<DirectoryNode>,
     pub large_files: Vec<FileInfo>,
     pub inaccessible_count: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_file_id: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usn_journal_id: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usn_next_usn: Option<i64>,
 }

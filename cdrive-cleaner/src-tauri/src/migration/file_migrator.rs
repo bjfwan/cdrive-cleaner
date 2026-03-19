@@ -280,6 +280,34 @@ impl FileMigrator {
         Ok(())
     }
 
+    #[cfg(windows)]
+    fn copy_file_optimized(&self, source: &Path, target: &Path) -> Result<u64> {
+        use std::os::windows::ffi::OsStrExt;
+        use windows::Win32::Storage::FileSystem::CopyFileExW;
+        use windows::core::PCWSTR;
+
+        let source_wide: Vec<u16> = source.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        let target_wide: Vec<u16> = target.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+
+        unsafe {
+            CopyFileExW(
+                PCWSTR(source_wide.as_ptr()),
+                PCWSTR(target_wide.as_ptr()),
+                None,
+                None,
+                None,
+                0,
+            )?;
+        }
+
+        Ok(fs::metadata(target)?.len())
+    }
+
+    #[cfg(not(windows))]
+    fn copy_file_optimized(&self, source: &Path, target: &Path) -> Result<u64> {
+        Ok(fs::copy(source, target)?)
+    }
+
     /// 带进度报告的复制
     fn copy_with_progress(
         &self,
@@ -290,7 +318,7 @@ impl FileMigrator {
         app: &Option<AppHandle>,
     ) -> Result<CopySummary> {
         if source.is_file() {
-            let copied = fs::copy(source, target)?;
+            let copied = self.copy_file_optimized(source, target)?;
             self.verify_copied_file(total_size, target)?;
             self.emit_progress(
                 app,
@@ -352,7 +380,7 @@ impl FileMigrator {
                 self.copy_dir_with_progress(&src, &dst, total_size, total_files, copied_bytes, copied_files, last_emit, app)?;
             } else {
                 let expected_size = metadata.len();
-                fs::copy(&src, &dst)?;
+                self.copy_file_optimized(&src, &dst)?;
                 self.verify_copied_file(expected_size, &dst)?;
                 *copied_bytes += expected_size;
                 *copied_files += 1;

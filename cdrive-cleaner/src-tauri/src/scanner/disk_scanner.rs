@@ -18,6 +18,7 @@ use windows::core::PCWSTR;
 use tauri::{AppHandle, Emitter};
 
 use crate::cache::ScanCache;
+use crate::winfs;
 
 #[derive(Clone, serde::Serialize)]
 pub struct ScanProgress {
@@ -166,11 +167,9 @@ impl DiskScanner {
         println!("[{:.3}s] 初始化完成", step_time.elapsed().as_secs_f64());
         step_time = Instant::now();
 
-        let entries: Vec<_> = match fs::read_dir(path) {
-            Ok(entries) => entries.collect(),
-            Err(e) => return Err(anyhow::anyhow!("Failed to read directory: {}", e)),
-        };
-        println!("[{:.3}s] read_dir 完成, {} 个条目", step_time.elapsed().as_secs_f64(), entries.len());
+        let entries = winfs::enumerate_directory(path, false)
+            .map_err(|e| anyhow::anyhow!("Failed to read directory: {}", e))?;
+        println!("[{:.3}s] 原生枚举完成, {} 个条目", step_time.elapsed().as_secs_f64(), entries.len());
         step_time = Instant::now();
 
         // 从上次扫描缓存获取估算文件数，否则使用默认值
@@ -223,46 +222,31 @@ impl DiskScanner {
         println!("[{:.3}s] 进度线程已启动", step_time.elapsed().as_secs_f64());
         step_time = Instant::now();
 
-        let mut directories_map: HashMap<PathBuf, DirectoryNode> = entries.par_iter()
-            .filter_map(|entry_result| {
-                let entry = match entry_result {
-                    Ok(e) => e,
-                    Err(_) => return None,
-                };
-                let path = entry.path();
-                let metadata = match fs::symlink_metadata(&path) {
-                    Ok(m) => m,
-                    Err(_) => return None,
-                };
-                let is_symlink = Self::is_link_entry(&metadata);
-                let is_directory = if is_symlink {
-                    Self::path_points_to_directory(&path)
-                } else {
-                    metadata.is_dir()
-                };
-
-                if is_directory {
-                    let link_target = if is_symlink {
-                        Self::resolve_link_target(&path)
-                    } else { None };
-                    let modified_time = metadata.modified().ok()
-                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                        .map(|d| d.as_secs());
-
-                    Some((path.clone(), DirectoryNode {
-                        path: path.to_string_lossy().to_string(),
-                        name: entry.file_name().to_string_lossy().to_string(),
+        let mut directories_map: HashMap<PathBuf, DirectoryNode> = entries
+            .par_iter()
+            .filter(|entry| entry.is_dir)
+            .map(|entry| {
+                (
+                    entry.path.clone(),
+                    DirectoryNode {
+                        path: entry.path.to_string_lossy().to_string(),
+                        name: entry.name.clone(),
                         size: 0,
                         file_count: 0,
                         dir_count: 1,
                         children: vec![],
                         has_children: false,
-                        is_symlink,
-                        link_target,
+                        is_symlink: entry.is_symlink,
+                        link_target: if entry.is_symlink {
+                            Self::resolve_link_target(&entry.path)
+                        } else {
+                            None
+                        },
                         safety: None,
-                        modified_time,
-                    }))
-                } else { None }
+                        modified_time: entry.modified_time,
+                        file_id: None,
+                    },
+                )
             })
             .collect();
 
@@ -272,22 +256,28 @@ impl DiskScanner {
         let mut root_file_size = 0u64;
         let mut root_file_count = 0usize;
         let mut root_large_files: Vec<FileInfo> = Vec::new();
-        if let Ok(root_entries) = fs::read_dir(path) {
-            for entry in root_entries.flatten() {
-                let entry_path = entry.path();
-                let Ok(metadata) = fs::symlink_metadata(&entry_path) else { continue; };
+        for entry in &entries {
+            if entry.is_symlink || entry.is_dir {
+                continue;
+            }
 
-                if Self::is_link_entry(&metadata) {
-                    continue;
-                }
-
-                if metadata.is_file() {
-                    root_file_size += metadata.len();
-                    root_file_count += 1;
-                    if metadata.len() >= large_file_threshold {
-                        root_large_files.push(Self::build_file_info(&entry_path, &metadata));
-                    }
-                }
+            root_file_size += entry.size;
+            root_file_count += 1;
+            if entry.size >= large_file_threshold {
+                let modified_at = entry.modified_time
+                    .and_then(|secs| chrono::DateTime::from_timestamp(secs as i64, 0))
+                    .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                    .unwrap_or_default();
+                root_large_files.push(FileInfo {
+                    path: entry.path.to_string_lossy().to_string(),
+                    name: entry.name.clone(),
+                    size: entry.size,
+                    extension: entry.path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
+                    modified_at,
+                    is_readonly: entry.is_readonly,
+                    is_symlink: false,
+                    link_target: None,
+                });
             }
         }
         println!("[{:.3}s] 根目录文件扫描完成: {} 个文件, {:.2} MB",
@@ -319,99 +309,86 @@ impl DiskScanner {
                 let mut dir_count = 0usize;
                 let mut large_files = Vec::new();
                 let mut inaccessible = 0usize;
-                let mut local_counter = 0usize;
+                let mut batch_files = 0usize;
+                let mut batch_size = 0u64;
                 let dir_name = dir_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                let mut pending_dirs = vec![dir_path.clone()];
 
-                let mut t_iter_total: u64 = 0;
-                let mut t_meta_total: u64 = 0;
-                let mut t_proc_total: u64 = 0;
-                let mut last_report = Instant::now();
+                while let Some(current_dir) = pending_dirs.pop() {
+                    if cancelled.load(Ordering::Relaxed) {
+                        break;
+                    }
 
-                let walker = jwalk::WalkDir::new(dir_path).skip_hidden(false).follow_links(false);
-                let mut iter = walker.into_iter();
-                let mut t0 = Instant::now();
-
-                while let Some(entry_result) = iter.next() {
-                    let t1 = Instant::now();
-                    t_iter_total += t1.duration_since(t0).as_nanos() as u64;
-
-                    if cancelled.load(Ordering::Relaxed) { break; }
-
-                    match entry_result {
-                        Ok(entry) => {
-                            let entry_path = entry.path();
-                            let tm0 = Instant::now();
-                            let link_meta_result = fs::symlink_metadata(&entry_path);
-                            let tm1 = Instant::now();
-                            t_meta_total += tm1.duration_since(tm0).as_nanos() as u64;
-
-                            let Ok(link_metadata) = link_meta_result else {
-                                inaccessible += 1;
-                                t0 = Instant::now();
-                                continue;
-                            };
-
-                            if Self::is_link_entry(&link_metadata) {
-                                if Self::path_points_to_directory(&entry_path) && entry_path != *dir_path {
-                                    dir_count += 1;
-                                }
-                                t0 = Instant::now();
-                                continue;
-                            }
-
-                            if let Ok(metadata) = entry.metadata() {
-                                if metadata.is_file() {
-                                    let file_size = metadata.len();
-                                    size += file_size;
-                                    file_count += 1;
-                                    if file_size >= large_file_threshold {
-                                        large_files.push(Self::build_file_info(&entry_path, &metadata));
-                                    }
-                                } else if metadata.is_dir() && entry_path != *dir_path {
-                                    dir_count += 1;
-                                }
-                            } else {
-                                inaccessible += 1;
-                            }
-                            t_proc_total += tm1.elapsed().as_nanos() as u64;
+                    let entries = match winfs::enumerate_directory(&current_dir, false) {
+                        Ok(entries) => entries,
+                        Err(_) => {
+                            inaccessible += 1;
+                            continue;
                         }
-                        Err(_) => { inaccessible += 1; }
-                    }
+                    };
 
-                    local_counter += 1;
-                    if local_counter >= 2048 {
-                        total_files.fetch_add(local_counter, Ordering::Relaxed);
-                        total_size.fetch_add(size, Ordering::Relaxed);
-                        local_counter = 0;
-                    }
+                    for entry in entries {
+                        if cancelled.load(Ordering::Relaxed) {
+                            break;
+                        }
 
-                    if last_report.elapsed().as_secs() >= 5 {
-                        let total_entries = file_count + dir_count;
-                        let wall = dir_start.elapsed().as_secs_f64();
-                        let sum_ns = (t_iter_total + t_meta_total + t_proc_total).max(1) as f64;
-                        println!("    [{dir_name}] {wall:.1}s | {total_entries} 条目 | \
-                            {:.0}/s | iter={:.1}% meta={:.1}% proc={:.1}%",
-                            total_entries as f64 / wall.max(0.001),
-                            t_iter_total as f64 / sum_ns * 100.0,
-                            t_meta_total as f64 / sum_ns * 100.0,
-                            t_proc_total as f64 / sum_ns * 100.0);
-                        last_report = Instant::now();
-                    }
+                        if entry.is_symlink {
+                            if entry.is_dir && entry.path != *dir_path {
+                                dir_count += 1;
+                            }
+                            continue;
+                        }
 
-                    t0 = Instant::now();
+                        if entry.is_dir {
+                            if entry.path != *dir_path {
+                                dir_count += 1;
+                            }
+                            pending_dirs.push(entry.path);
+                            continue;
+                        }
+
+                        size += entry.size;
+                        file_count += 1;
+                        batch_size += entry.size;
+                        batch_files += 1;
+
+                        if entry.size >= large_file_threshold {
+                            let modified_at = entry.modified_time
+                                .and_then(|secs| chrono::DateTime::from_timestamp(secs as i64, 0))
+                                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                                .unwrap_or_default();
+                            large_files.push(FileInfo {
+                                path: entry.path.to_string_lossy().to_string(),
+                                name: entry.name,
+                                size: entry.size,
+                                extension: entry.path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
+                                modified_at,
+                                is_readonly: entry.is_readonly,
+                                is_symlink: false,
+                                link_target: None,
+                            });
+                        }
+
+                        if batch_files >= 512 {
+                            total_files.fetch_add(batch_files, Ordering::Relaxed);
+                            total_size.fetch_add(batch_size, Ordering::Relaxed);
+                            batch_files = 0;
+                            batch_size = 0;
+                        }
+                    }
                 }
 
-                total_files.fetch_add(local_counter, Ordering::Relaxed);
+                if batch_files > 0 {
+                    total_files.fetch_add(batch_files, Ordering::Relaxed);
+                    total_size.fetch_add(batch_size, Ordering::Relaxed);
+                }
 
                 let elapsed = dir_start.elapsed().as_secs_f64();
-                let sum_ns = (t_iter_total + t_meta_total + t_proc_total).max(1) as f64;
                 let total_entries = file_count + dir_count;
-                println!("  [{dir_name}] {elapsed:.2}s | {file_count}F {dir_count}D | \
-                    {:.0}/s | iter={:.1}% meta={:.1}% proc={:.1}%",
+                println!(
+                    "  [{dir_name}] {elapsed:.2}s | {file_count}F {dir_count}D | {:.0}/s",
                     total_entries as f64 / elapsed.max(0.001),
-                    t_iter_total as f64 / sum_ns * 100.0,
-                    t_meta_total as f64 / sum_ns * 100.0,
-                    t_proc_total as f64 / sum_ns * 100.0);
+                );
 
                 DirResult {
                     path: dir_path.clone(), size, file_count, dir_count,
@@ -478,6 +455,7 @@ impl DiskScanner {
                 link_target: None,
                 safety: None,
                 modified_time: None,
+                file_id: None,
             });
         }
         directories.sort_by(|a, b| b.size.cmp(&a.size));
@@ -505,69 +483,10 @@ impl DiskScanner {
             directories,
             large_files: large_files_vec,
             inaccessible_count,
+            root_file_id: None,
+            usn_journal_id: None,
+            usn_next_usn: None,
         })
-    }
-
-    /// 使用 jwalk 并行遍历计算目录大小（替代 walkdir + par_bridge）
-    fn top_level_child_path(root: &Path, path: &Path) -> Option<PathBuf> {
-        let relative = path.strip_prefix(root).ok()?;
-        let mut components = relative.components();
-        let first = components.next()?;
-        Some(root.join(first.as_os_str()))
-    }
-
-    fn build_quick_node(path: &Path) -> DirectoryNode {
-        DirectoryNode {
-            path: path.to_string_lossy().to_string(),
-            name: path.file_name().unwrap_or_default().to_string_lossy().to_string(),
-            size: 0,
-            file_count: 0,
-            dir_count: 1,
-            children: vec![],
-            has_children: false,
-            is_symlink: false,
-            link_target: None,
-            safety: None,
-            modified_time: None,
-        }
-    }
-
-    fn build_file_info(path: &Path, metadata: &fs::Metadata) -> FileInfo {
-        let modified_at = metadata.modified()
-            .ok()
-            .map(|modified| {
-                let datetime: chrono::DateTime<chrono::Local> = modified.into();
-                datetime.format("%Y-%m-%d %H:%M:%S").to_string()
-            })
-            .unwrap_or_default();
-
-        FileInfo {
-            path: path.to_string_lossy().to_string(),
-            name: path.file_name().unwrap_or_default().to_string_lossy().to_string(),
-            size: metadata.len(),
-            extension: path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
-            modified_at,
-            is_readonly: metadata.permissions().readonly(),
-            is_symlink: false,
-            link_target: None,
-        }
-    }
-
-    #[cfg(windows)]
-    fn is_link_entry(metadata: &fs::Metadata) -> bool {
-        use std::os::windows::fs::MetadataExt;
-
-        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
-        metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
-    }
-
-    #[cfg(not(windows))]
-    fn is_link_entry(metadata: &fs::Metadata) -> bool {
-        metadata.file_type().is_symlink()
-    }
-
-    fn path_points_to_directory(path: &Path) -> bool {
-        fs::metadata(path).map(|metadata| metadata.is_dir()).unwrap_or(false)
     }
 
     fn resolve_link_target(path: &Path) -> Option<String> {
@@ -665,89 +584,94 @@ impl DiskScanner {
             }
         });
 
-        // jwalk 并行遍历目录树，迭代器单线程消费，直接写入本地 HashMap
-        for entry in jwalk::WalkDir::new(path).skip_hidden(false).follow_links(false) {
-            if cancelled.load(Ordering::Relaxed) { break; }
+        let mut pending_dirs = vec![path.to_path_buf()];
+        while let Some(current_dir) = pending_dirs.pop() {
+            if cancelled.load(Ordering::Relaxed) {
+                break;
+            }
 
-            match entry {
-                Ok(entry) => {
-                    let entry_path = entry.path();
-                    let Ok(link_metadata) = fs::symlink_metadata(&entry_path) else {
-                        inaccessible_count.fetch_add(1, Ordering::Relaxed);
-                        continue;
-                    };
+            let entries = match winfs::enumerate_directory(&current_dir, true) {
+                Ok(entries) => entries,
+                Err(_) => {
+                    inaccessible_count.fetch_add(1, Ordering::Relaxed);
+                    continue;
+                }
+            };
 
-                    if Self::is_link_entry(&link_metadata) {
-                        if Self::path_points_to_directory(&entry_path) {
-                            total_dirs.fetch_add(1, Ordering::Relaxed);
-                            let modified_time = link_metadata.modified().ok()
-                                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                                .map(|d| d.as_secs());
+            for entry in entries {
+                if cancelled.load(Ordering::Relaxed) {
+                    break;
+                }
 
-                            dir_nodes.insert(entry_path.to_path_buf(), DirectoryNode {
-                                path: entry_path.to_string_lossy().to_string(),
-                                name: entry_path.file_name().unwrap_or_default().to_string_lossy().to_string(),
-                                size: 0,
-                                file_count: 0,
-                                dir_count: 1,
-                                children: vec![],
-                                has_children: false,
-                                is_symlink: true,
-                                link_target: Self::resolve_link_target(&entry_path),
-                                safety: None,
-                                modified_time,
-                            });
-                        }
-                        continue;
-                    }
-
-                    if link_metadata.is_file() {
-                        let file_size = link_metadata.len();
-                        total_files.fetch_add(1, Ordering::Relaxed);
-                        total_size.fetch_add(file_size, Ordering::Relaxed);
-
-                        if file_size >= large_file_threshold {
-                            let file_info = super::file_info::FileInfo {
-                                path: entry_path.to_string_lossy().to_string(),
-                                name: entry_path.file_name().and_then(|n| n.to_str()).unwrap_or("Unknown").to_string(),
-                                size: file_size,
-                                extension: entry_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
-                                modified_at: link_metadata.modified().ok()
-                                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                                    .and_then(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0))
-                                    .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                                    .unwrap_or_default(),
-                                is_readonly: link_metadata.permissions().readonly(),
-                                is_symlink: false,
-                                link_target: None,
-                            };
-                            large_files.push(file_info);
-                        }
-
-                        if let Some(parent) = entry_path.parent() {
-                            let stats = dir_file_stats.entry(parent.to_path_buf()).or_insert((0, 0));
-                            stats.0 += file_size;
-                            stats.1 += 1;
-                        }
-                    } else if link_metadata.is_dir() {
+                if entry.is_symlink {
+                    if entry.is_dir {
                         total_dirs.fetch_add(1, Ordering::Relaxed);
-                        let modified_time = link_metadata.modified().ok()
-                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                            .map(|d| d.as_secs());
-
-                        dir_nodes.insert(entry_path.to_path_buf(), DirectoryNode {
-                            path: entry_path.to_string_lossy().to_string(),
-                            name: entry_path.file_name().unwrap_or_default().to_string_lossy().to_string(),
-                            size: 0, file_count: 0, dir_count: 1, children: vec![],
+                        dir_nodes.insert(entry.path.clone(), DirectoryNode {
+                            path: entry.path.to_string_lossy().to_string(),
+                            name: entry.name,
+                            size: 0,
+                            file_count: 0,
+                            dir_count: 1,
+                            children: vec![],
                             has_children: false,
-                            is_symlink: false,
-                            link_target: None,
+                            is_symlink: true,
+                            link_target: Self::resolve_link_target(&entry.path),
                             safety: None,
-                            modified_time,
+                            modified_time: entry.modified_time,
+                            file_id: None,
                         });
                     }
+                    continue;
                 }
-                Err(_) => { inaccessible_count.fetch_add(1, Ordering::Relaxed); }
+
+                if entry.is_dir {
+                    total_dirs.fetch_add(1, Ordering::Relaxed);
+                    pending_dirs.push(entry.path.clone());
+
+                    dir_nodes.insert(entry.path.clone(), DirectoryNode {
+                        path: entry.path.to_string_lossy().to_string(),
+                        name: entry.name,
+                        size: 0,
+                        file_count: 0,
+                        dir_count: 1,
+                        children: vec![],
+                        has_children: false,
+                        is_symlink: false,
+                        link_target: None,
+                        safety: None,
+                        modified_time: entry.modified_time,
+                        file_id: entry.file_id,
+                    });
+                    continue;
+                }
+
+                let file_size = entry.size;
+                total_files.fetch_add(1, Ordering::Relaxed);
+                total_size.fetch_add(file_size, Ordering::Relaxed);
+
+                if file_size >= large_file_threshold {
+                    let modified_at = entry.modified_time
+                        .and_then(|secs| chrono::DateTime::from_timestamp(secs as i64, 0))
+                        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                        .unwrap_or_default();
+
+                    large_files.push(super::file_info::FileInfo {
+                        path: entry.path.to_string_lossy().to_string(),
+                        name: entry.name,
+                        size: file_size,
+                        extension: entry.path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
+                        modified_at,
+                        is_readonly: entry.is_readonly,
+                        is_symlink: false,
+                        link_target: None,
+                    });
+                }
+
+                if let Some(parent) = entry.path.parent() {
+                    let stats = dir_file_stats.entry(parent.to_path_buf()).or_insert((0, 0));
+                    stats.0 += file_size;
+                    stats.1 += 1;
+                }
             }
         }
 
@@ -821,6 +745,7 @@ impl DiskScanner {
                 has_children: false,
                 is_symlink: false, link_target: None,
                 safety: None, modified_time: None,
+                file_id: None,
             });
         }
 
@@ -850,6 +775,8 @@ impl DiskScanner {
                 disk_used as f64 / 1024.0 / 1024.0 / 1024.0, diff_pct);
         }
 
+        let journal = winfs::query_usn_checkpoint(path);
+
         Ok(ScanResult {
             root_path,
             total_size: scanned_size,
@@ -859,6 +786,9 @@ impl DiskScanner {
             directories,
             large_files: large_files_vec,
             inaccessible_count: inaccessible_count.load(Ordering::Relaxed),
+            root_file_id: winfs::get_path_file_id(path),
+            usn_journal_id: journal.map(|item| item.journal_id),
+            usn_next_usn: journal.map(|item| item.next_usn),
         })
     }
 

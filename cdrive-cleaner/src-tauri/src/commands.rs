@@ -1,24 +1,8 @@
 use crate::scanner::{DiskScanner, file_info::{ScanResult, FileInfo}};
 use crate::migration::{FileMigrator, LinkType, file_migrator::MigrationResult};
 use crate::database::{ScanCacheDb, MigrationDb};
+use crate::winfs;
 use tauri::AppHandle;
-
-#[cfg(windows)]
-fn is_link_entry(metadata: &std::fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-
-    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
-    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
-}
-
-#[cfg(not(windows))]
-fn is_link_entry(metadata: &std::fs::Metadata) -> bool {
-    metadata.file_type().is_symlink()
-}
-
-fn path_points_to_directory(path: &std::path::Path) -> bool {
-    std::fs::metadata(path).map(|metadata| metadata.is_dir()).unwrap_or(false)
-}
 
 fn resolve_link_target(path: &std::path::Path) -> Option<String> {
     let resolved = if let Ok(target) = std::fs::read_link(path) {
@@ -145,53 +129,38 @@ pub async fn scan_directory_files(path: String) -> Result<Vec<FileInfo>, String>
         }
 
         let mut files = Vec::new();
-        for entry in std::fs::read_dir(&dir_path).map_err(|e| format!("无法读取目录: {}", e))?.flatten() {
-            let path = entry.path();
-            let Ok(link_metadata) = std::fs::symlink_metadata(&path) else { continue; };
-            let modified_at = link_metadata.modified().ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .and_then(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0))
+        for entry in winfs::enumerate_directory(&dir_path, false).map_err(|e| e.to_string())? {
+            let modified_at = entry.modified_time
+                .and_then(|secs| chrono::DateTime::from_timestamp(secs as i64, 0))
                 .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
                 .unwrap_or_default();
 
-            if is_link_entry(&link_metadata) {
-                if path_points_to_directory(&path) {
+            if entry.is_symlink {
+                if entry.is_dir {
                     continue;
                 }
 
-                #[cfg(windows)]
-                use std::os::windows::fs::MetadataExt;
-
                 files.push(FileInfo {
-                    path: path.to_string_lossy().to_string(),
-                    name: path.file_name().and_then(|n| n.to_str()).unwrap_or("Unknown").to_string(),
+                    path: entry.path.to_string_lossy().to_string(),
+                    name: entry.name,
                     size: 0,
-                    extension: path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
+                    extension: entry.path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
                     modified_at,
-                    #[cfg(windows)]
-                    is_readonly: link_metadata.file_attributes() & 0x1 != 0,
-                    #[cfg(not(windows))]
-                    is_readonly: link_metadata.permissions().readonly(),
+                    is_readonly: entry.is_readonly,
                     is_symlink: true,
-                    link_target: resolve_link_target(&path),
+                    link_target: resolve_link_target(&entry.path),
                 });
                 continue;
             }
 
-            if link_metadata.is_file() {
-                #[cfg(windows)]
-                use std::os::windows::fs::MetadataExt;
-
+            if !entry.is_dir {
                 files.push(FileInfo {
-                    path: path.to_string_lossy().to_string(),
-                    name: path.file_name().and_then(|n| n.to_str()).unwrap_or("Unknown").to_string(),
-                    size: link_metadata.len(),
-                    extension: path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
+                    path: entry.path.to_string_lossy().to_string(),
+                    name: entry.name,
+                    size: entry.size,
+                    extension: entry.path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
                     modified_at,
-                    #[cfg(windows)]
-                    is_readonly: link_metadata.file_attributes() & 0x1 != 0,
-                    #[cfg(not(windows))]
-                    is_readonly: link_metadata.permissions().readonly(),
+                    is_readonly: entry.is_readonly,
                     is_symlink: false,
                     link_target: None,
                 });

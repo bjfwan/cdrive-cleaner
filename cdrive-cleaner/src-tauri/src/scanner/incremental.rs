@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::collections::{HashMap, HashSet};
 use anyhow::Result;
 use tauri::{AppHandle, Emitter};
+use crate::winfs;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ChangeStatus {
@@ -168,6 +169,72 @@ pub fn detect_changes_recursive(cached_tree: &[DirectoryNode], current_path: &Pa
     changes
 }
 
+fn build_file_id_index(nodes: &[DirectoryNode], map: &mut HashMap<u64, String>) {
+    for node in nodes {
+        if let Some(file_id) = node.file_id {
+            map.insert(file_id, node.path.clone());
+        }
+        build_file_id_index(&node.children, map);
+    }
+}
+
+fn normalize_changed_dirs(root_path: &Path, candidates: HashSet<String>) -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = candidates
+        .into_iter()
+        .map(PathBuf::from)
+        .filter(|path| path != root_path)
+        .filter(|path| path.starts_with(root_path))
+        .collect();
+
+    paths.sort_by(|a, b| {
+        a.components()
+            .count()
+            .cmp(&b.components().count())
+            .then_with(|| a.cmp(b))
+    });
+
+    let mut normalized: Vec<PathBuf> = Vec::new();
+    for path in paths {
+        if normalized.iter().any(|existing| path.starts_with(existing)) {
+            continue;
+        }
+        normalized.push(path);
+    }
+    normalized
+}
+
+fn detect_changes_via_usn(path: &Path, cached_result: &ScanResult) -> Option<(Vec<ChangedDirectory>, bool)> {
+    let checkpoint = match (cached_result.usn_journal_id, cached_result.usn_next_usn) {
+        (Some(journal_id), Some(next_usn)) => winfs::UsnJournalCheckpoint { journal_id, next_usn },
+        _ => return None,
+    };
+
+    let mut file_id_map = HashMap::new();
+    if let Some(root_file_id) = cached_result.root_file_id {
+        file_id_map.insert(root_file_id, path.to_string_lossy().to_string());
+    }
+    build_file_id_index(&cached_result.directories, &mut file_id_map);
+
+    let change_set = match winfs::collect_usn_changed_dirs(path, checkpoint, cached_result.root_file_id, &file_id_map) {
+        Ok(Some(changes)) => changes,
+        _ => return None,
+    };
+
+    let changes = normalize_changed_dirs(path, change_set.changed_dirs)
+        .into_iter()
+        .map(|candidate| ChangedDirectory {
+            status: if candidate.exists() {
+                ChangeStatus::Modified
+            } else {
+                ChangeStatus::Deleted
+            },
+            path: candidate,
+        })
+        .collect();
+
+    Some((changes, change_set.root_files_changed))
+}
+
 fn build_file_info(path: &Path, metadata: &std::fs::Metadata) -> FileInfo {
     let modified_at = metadata.modified().ok()
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
@@ -253,6 +320,7 @@ fn rescan_directory_tree(path: &Path, large_file_threshold: u64) -> Option<Resca
                 link_target: resolve_link_target(path),
                 safety: None,
                 modified_time,
+                file_id: None,
             },
             large_files: vec![],
         });
@@ -265,64 +333,93 @@ fn rescan_directory_tree(path: &Path, large_file_threshold: u64) -> Option<Resca
     let mut dir_file_stats: HashMap<PathBuf, (u64, usize)> = HashMap::new();
     let mut dir_nodes: HashMap<PathBuf, DirectoryNode> = HashMap::new();
     let mut large_files = Vec::new();
+    let root_modified_time = root_metadata.modified().ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs());
 
-    for entry in jwalk::WalkDir::new(path).skip_hidden(false).follow_links(false) {
-        let Ok(entry) = entry else { continue; };
-        let entry_path = entry.path();
-        let Ok(link_metadata) = std::fs::symlink_metadata(&entry_path) else { continue; };
+    dir_nodes.insert(path.to_path_buf(), DirectoryNode {
+        path: path.to_string_lossy().to_string(),
+        name: path.file_name().unwrap_or_default().to_string_lossy().to_string(),
+        size: 0,
+        file_count: 0,
+        dir_count: 1,
+        children: vec![],
+        has_children: false,
+        is_symlink: false,
+        link_target: None,
+        safety: None,
+        modified_time: root_modified_time,
+        file_id: winfs::get_path_file_id(path),
+    });
 
-        if is_link_entry(&link_metadata) {
-            if path_points_to_directory(&entry_path) {
-                let modified_time = link_metadata.modified().ok()
-                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|d| d.as_secs());
+    let mut pending_dirs = vec![path.to_path_buf()];
+    while let Some(current_dir) = pending_dirs.pop() {
+        let entries = match winfs::enumerate_directory(&current_dir, true) {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
 
-                dir_nodes.insert(entry_path.to_path_buf(), DirectoryNode {
-                    path: entry_path.to_string_lossy().to_string(),
-                    name: entry_path.file_name().unwrap_or_default().to_string_lossy().to_string(),
+        for entry in entries {
+            if entry.is_symlink {
+                if entry.is_dir {
+                    dir_nodes.insert(entry.path.clone(), DirectoryNode {
+                        path: entry.path.to_string_lossy().to_string(),
+                        name: entry.name,
+                        size: 0,
+                        file_count: 0,
+                        dir_count: 1,
+                        children: vec![],
+                        has_children: false,
+                        is_symlink: true,
+                        link_target: resolve_link_target(&entry.path),
+                        safety: None,
+                        modified_time: entry.modified_time,
+                        file_id: None,
+                    });
+                }
+                continue;
+            }
+
+            if entry.is_dir {
+                pending_dirs.push(entry.path.clone());
+                dir_nodes.insert(entry.path.clone(), DirectoryNode {
+                    path: entry.path.to_string_lossy().to_string(),
+                    name: entry.name,
                     size: 0,
                     file_count: 0,
                     dir_count: 1,
                     children: vec![],
                     has_children: false,
-                    is_symlink: true,
-                    link_target: resolve_link_target(&entry_path),
+                    is_symlink: false,
+                    link_target: None,
                     safety: None,
-                    modified_time,
+                    modified_time: entry.modified_time,
+                    file_id: entry.file_id,
                 });
+                continue;
             }
-            continue;
-        }
 
-        let metadata = link_metadata;
-
-        if metadata.is_file() {
-            if let Some(parent) = entry_path.parent() {
+            if let Some(parent) = entry.path.parent() {
                 let stats = dir_file_stats.entry(parent.to_path_buf()).or_insert((0, 0));
-                stats.0 += metadata.len();
+                stats.0 += entry.size;
                 stats.1 += 1;
             }
-            if metadata.len() >= large_file_threshold {
-                large_files.push(build_file_info(&entry_path, &metadata));
+            if entry.size >= large_file_threshold {
+                let modified_at = entry.modified_time
+                    .and_then(|secs| chrono::DateTime::from_timestamp(secs as i64, 0))
+                    .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                    .unwrap_or_default();
+                large_files.push(FileInfo {
+                    path: entry.path.to_string_lossy().to_string(),
+                    name: entry.name,
+                    size: entry.size,
+                    extension: entry.path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
+                    modified_at,
+                    is_readonly: entry.is_readonly,
+                    is_symlink: false,
+                    link_target: None,
+                });
             }
-        } else if metadata.is_dir() {
-            let modified_time = metadata.modified().ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs());
-
-            dir_nodes.insert(entry_path.to_path_buf(), DirectoryNode {
-                path: entry_path.to_string_lossy().to_string(),
-                name: entry_path.file_name().unwrap_or_default().to_string_lossy().to_string(),
-                size: 0,
-                file_count: 0,
-                dir_count: 1,
-                children: vec![],
-                has_children: false,
-                is_symlink: false,
-                link_target: None,
-                safety: None,
-                modified_time,
-            });
         }
     }
 
@@ -402,14 +499,30 @@ pub async fn scan_incremental(
 
     // 阶段1: 检测变化
     let detect_start = Instant::now();
-    let changes = detect_changes_recursive(&cached_result.directories, path);
+    let (changes, mut root_files_changed, detection_mode) = if let Some((changes, root_files_changed)) =
+        detect_changes_via_usn(path, &cached_result)
+    {
+        (changes, root_files_changed, "usn")
+    } else {
+        let (current_root_size, current_root_files, _) = scan_root_files(path, large_file_threshold);
+        let (cached_root_size, cached_root_files) = cached_result.directories.iter()
+            .find(|node| node.path == root_path_str)
+            .map(|node| (node.size, node.file_count))
+            .unwrap_or((0, 0));
+        let root_files_changed = cached_root_size != current_root_size || cached_root_files != current_root_files;
+        (detect_changes_recursive(&cached_result.directories, path), root_files_changed, "mtime")
+    };
     let (current_root_size, current_root_files, root_large_files) = scan_root_files(path, large_file_threshold);
     let (cached_root_size, cached_root_files) = cached_result.directories.iter()
         .find(|node| node.path == root_path_str)
         .map(|node| (node.size, node.file_count))
         .unwrap_or((0, 0));
-    let root_files_changed = cached_root_size != current_root_size || cached_root_files != current_root_files;
-    println!("[阶段1] 变化检测完成，耗时: {:.2}ms", detect_start.elapsed().as_secs_f64() * 1000.0);
+    root_files_changed = root_files_changed || cached_root_size != current_root_size || cached_root_files != current_root_files;
+    println!(
+        "[阶段1] 变化检测完成，耗时: {:.2}ms | mode={}",
+        detect_start.elapsed().as_secs_f64() * 1000.0,
+        detection_mode
+    );
 
     let change_dirs = changes.iter().filter(|c| c.status != ChangeStatus::Deleted).count();
     let delete_dirs = changes.iter().filter(|c| c.status == ChangeStatus::Deleted).count();
@@ -555,6 +668,8 @@ pub async fn scan_incremental(
     println!("更新后: {:.2} GB, {} 文件", new_total_size as f64 / 1024.0 / 1024.0 / 1024.0, new_total_files);
     println!("==================================\n");
 
+    let journal = winfs::query_usn_checkpoint(path);
+
     Ok(ScanResult {
         root_path: cached_result.root_path,
         total_size: new_total_size,
@@ -564,6 +679,9 @@ pub async fn scan_incremental(
         directories: updated_tree,
         large_files,
         inaccessible_count: cached_result.inaccessible_count,
+        root_file_id: winfs::get_path_file_id(path).or(cached_result.root_file_id),
+        usn_journal_id: journal.map(|item| item.journal_id).or(cached_result.usn_journal_id),
+        usn_next_usn: journal.map(|item| item.next_usn).or(cached_result.usn_next_usn),
     })
 }
 
@@ -600,6 +718,7 @@ fn upsert_root_files_node(nodes: &mut Vec<DirectoryNode>, root_path: &Path, root
             link_target: None,
             safety: None,
             modified_time: None,
+            file_id: None,
         });
     }
 
@@ -643,28 +762,70 @@ fn rebuild_tree(mut flat: HashMap<String, DirectoryNode>, root_path: &Path) -> V
 }
 
 pub fn merge_scan_results(
-    mut old_tree: Vec<DirectoryNode>,
+    old_tree: Vec<DirectoryNode>,
     changed_dirs: Vec<DirectoryNode>,
     deleted_paths: Vec<String>,
     root_path: &Path,
 ) -> Vec<DirectoryNode> {
     let deleted_paths: Vec<PathBuf> = deleted_paths.into_iter().map(PathBuf::from).collect();
-
-    // 移除已删除的目录
-    fn remove_deleted(nodes: &mut Vec<DirectoryNode>, deleted: &[PathBuf]) {
-        nodes.retain(|node| !deleted.iter().any(|deleted_path| Path::new(&node.path).starts_with(deleted_path)));
-        for node in nodes.iter_mut() {
-            remove_deleted(&mut node.children, deleted);
-        }
-    }
-    remove_deleted(&mut old_tree, &deleted_paths);
-
-    // 更新已修改的目录 + 添加新目录
     let mut flat = HashMap::new();
     flatten_tree(old_tree, &mut flat);
 
+    fn apply_delta_to_ancestors(
+        flat: &mut HashMap<String, DirectoryNode>,
+        path: &Path,
+        root_path: &Path,
+        size_delta: i128,
+        file_delta: isize,
+        dir_delta: isize,
+    ) {
+        fn apply_u64_delta(value: u64, delta: i128) -> u64 {
+            if delta >= 0 {
+                value.saturating_add(delta as u64)
+            } else {
+                value.saturating_sub(delta.unsigned_abs() as u64)
+            }
+        }
+
+        let mut current = path.parent();
+        while let Some(parent) = current {
+            if parent == root_path {
+                break;
+            }
+
+            let key = parent.to_string_lossy().to_string();
+            if let Some(node) = flat.get_mut(&key) {
+                node.size = apply_u64_delta(node.size, size_delta);
+                node.file_count = node.file_count.saturating_add_signed(file_delta);
+                node.dir_count = node.dir_count.saturating_add_signed(dir_delta);
+            }
+            current = parent.parent();
+        }
+    }
+
+    for deleted_path in &deleted_paths {
+        let deleted_key = deleted_path.to_string_lossy().to_string();
+        if let Some(old_node) = flat.get(&deleted_key).cloned() {
+            apply_delta_to_ancestors(
+                &mut flat,
+                deleted_path,
+                root_path,
+                -(old_node.size as i128),
+                -(old_node.file_count as isize),
+                -(old_node.dir_count as isize),
+            );
+        }
+        flat.retain(|path, _| !Path::new(path).starts_with(deleted_path));
+    }
+
     for changed_dir in changed_dirs {
         let changed_path = PathBuf::from(&changed_dir.path);
+        let previous = flat.get(&changed_dir.path).cloned();
+        let size_delta = changed_dir.size as i128 - previous.as_ref().map(|node| node.size as i128).unwrap_or(0);
+        let file_delta = changed_dir.file_count as isize - previous.as_ref().map(|node| node.file_count as isize).unwrap_or(0);
+        let dir_delta = changed_dir.dir_count as isize - previous.as_ref().map(|node| node.dir_count as isize).unwrap_or(0);
+
+        apply_delta_to_ancestors(&mut flat, &changed_path, root_path, size_delta, file_delta, dir_delta);
         flat.retain(|path, _| !Path::new(path).starts_with(&changed_path));
         flatten_tree(vec![changed_dir], &mut flat);
     }
