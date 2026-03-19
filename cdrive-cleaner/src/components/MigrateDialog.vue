@@ -293,7 +293,9 @@ async function startSingleMigration() {
     const result = await invoke<MigrationResult>('migrate_file', {
       source: itemPath.value,
       targetDisk: targetDisk.value,
-      linkType: createSymlink ? null : 'none'
+      linkType: createSymlink ? null : 'none',
+      knownSize: itemSize.value,
+      knownFiles: props.selectedDir?.file_count ?? 1
     });
 
     if (!result.success) {
@@ -336,7 +338,9 @@ async function startBatchMigration() {
       const result = await invoke<MigrationResult>('migrate_file', {
         source: item.path,
         targetDisk: targetDisk.value,
-        linkType: createSymlink ? null : 'none'
+        linkType: createSymlink ? null : 'none',
+        knownSize: item.size || 0,
+        knownFiles: 'file_count' in item ? item.file_count : 1
       });
       if (!result.success) {
         throw new Error(result.error || '迁移失败');

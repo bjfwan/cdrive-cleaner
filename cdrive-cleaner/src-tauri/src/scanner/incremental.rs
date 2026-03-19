@@ -294,7 +294,7 @@ fn rescan_directory_tree(path: &Path, large_file_threshold: u64) -> Option<Resca
             continue;
         }
 
-        let Ok(metadata) = entry.metadata() else { continue; };
+        let metadata = link_metadata;
 
         if metadata.is_file() {
             if let Some(parent) = entry_path.parent() {

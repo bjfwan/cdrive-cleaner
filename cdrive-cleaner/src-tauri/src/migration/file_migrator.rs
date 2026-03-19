@@ -36,6 +36,7 @@ impl FileMigrator {
         source: P,
         target_disk: P,
         link_type: LinkType,
+        known_stats: Option<(u64, usize)>,
         app: Option<AppHandle>,
     ) -> Result<MigrationResult> {
         let start = Instant::now();
@@ -65,7 +66,10 @@ impl FileMigrator {
         let file_name = source.file_name().ok_or_else(|| anyhow!("Invalid source path"))?;
         let target_path = target_disk.join(file_name);
         let is_directory = source_metadata.is_dir();
-        let source_stats = Self::calculate_stats(source)?;
+        let source_stats = match known_stats {
+            Some(stats) => stats,
+            None => Self::calculate_stats(source)?,
+        };
         let (file_size, total_files) = source_stats;
         let available_space = self.get_available_space(target_disk)?;
 

@@ -607,7 +607,7 @@ impl DiskScanner {
         println!("扫描路径: {}", root_path);
 
         let inaccessible_count = Arc::new(AtomicUsize::new(0));
-        let large_files: Arc<Mutex<Vec<super::file_info::FileInfo>>> = Arc::new(Mutex::new(Vec::new()));
+        let mut large_files: Vec<super::file_info::FileInfo> = Vec::new();
         let large_file_threshold = 100 * 1024 * 1024u64;
 
         let total_files = Arc::new(AtomicUsize::new(0));
@@ -701,54 +701,50 @@ impl DiskScanner {
                         continue;
                     }
 
-                    if let Ok(metadata) = entry.metadata() {
-                        if metadata.is_file() {
-                            let file_size = metadata.len();
-                            total_files.fetch_add(1, Ordering::Relaxed);
-                            total_size.fetch_add(file_size, Ordering::Relaxed);
+                    if link_metadata.is_file() {
+                        let file_size = link_metadata.len();
+                        total_files.fetch_add(1, Ordering::Relaxed);
+                        total_size.fetch_add(file_size, Ordering::Relaxed);
 
-                            if file_size >= large_file_threshold {
-                                let file_info = super::file_info::FileInfo {
-                                    path: entry_path.to_string_lossy().to_string(),
-                                    name: entry_path.file_name().and_then(|n| n.to_str()).unwrap_or("Unknown").to_string(),
-                                    size: file_size,
-                                    extension: entry_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
-                                    modified_at: metadata.modified().ok()
-                                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                                        .and_then(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0))
-                                        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                                        .unwrap_or_default(),
-                                    is_readonly: metadata.permissions().readonly(),
-                                    is_symlink: false,
-                                    link_target: None,
-                                };
-                                large_files.lock().unwrap().push(file_info);
-                            }
-
-                            if let Some(parent) = entry_path.parent() {
-                                let stats = dir_file_stats.entry(parent.to_path_buf()).or_insert((0, 0));
-                                stats.0 += file_size;
-                                stats.1 += 1;
-                            }
-                        } else if metadata.is_dir() {
-                            total_dirs.fetch_add(1, Ordering::Relaxed);
-                            let modified_time = metadata.modified().ok()
-                                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                                .map(|d| d.as_secs());
-
-                            dir_nodes.insert(entry_path.to_path_buf(), DirectoryNode {
+                        if file_size >= large_file_threshold {
+                            let file_info = super::file_info::FileInfo {
                                 path: entry_path.to_string_lossy().to_string(),
-                                name: entry_path.file_name().unwrap_or_default().to_string_lossy().to_string(),
-                                size: 0, file_count: 0, dir_count: 1, children: vec![],
-                                has_children: false,
+                                name: entry_path.file_name().and_then(|n| n.to_str()).unwrap_or("Unknown").to_string(),
+                                size: file_size,
+                                extension: entry_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
+                                modified_at: link_metadata.modified().ok()
+                                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                                    .and_then(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0))
+                                    .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                                    .unwrap_or_default(),
+                                is_readonly: link_metadata.permissions().readonly(),
                                 is_symlink: false,
                                 link_target: None,
-                                safety: None,
-                                modified_time,
-                            });
+                            };
+                            large_files.push(file_info);
                         }
-                    } else {
-                        inaccessible_count.fetch_add(1, Ordering::Relaxed);
+
+                        if let Some(parent) = entry_path.parent() {
+                            let stats = dir_file_stats.entry(parent.to_path_buf()).or_insert((0, 0));
+                            stats.0 += file_size;
+                            stats.1 += 1;
+                        }
+                    } else if link_metadata.is_dir() {
+                        total_dirs.fetch_add(1, Ordering::Relaxed);
+                        let modified_time = link_metadata.modified().ok()
+                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                            .map(|d| d.as_secs());
+
+                        dir_nodes.insert(entry_path.to_path_buf(), DirectoryNode {
+                            path: entry_path.to_string_lossy().to_string(),
+                            name: entry_path.file_name().unwrap_or_default().to_string_lossy().to_string(),
+                            size: 0, file_count: 0, dir_count: 1, children: vec![],
+                            has_children: false,
+                            is_symlink: false,
+                            link_target: None,
+                            safety: None,
+                            modified_time,
+                        });
                     }
                 }
                 Err(_) => { inaccessible_count.fetch_add(1, Ordering::Relaxed); }
@@ -836,10 +832,7 @@ impl DiskScanner {
         let scanned_dirs = Self::sum_dir_count(&directories);
 
         let duration = start.elapsed();
-        let large_files_vec = match Arc::try_unwrap(large_files) {
-            Ok(m) => m.into_inner().unwrap(),
-            Err(a) => a.lock().unwrap().clone(),
-        };
+        let large_files_vec = large_files;
 
         println!("========== 深度扫描完成 ==========");
         println!("耗时: {:.2}s | 文件: {} | 目录: {} | 大小: {:.2} GB",

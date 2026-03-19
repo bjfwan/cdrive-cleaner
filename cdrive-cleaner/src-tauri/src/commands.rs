@@ -138,76 +138,85 @@ pub async fn cancel_scan(scanner: tauri::State<'_, DiskScanner>) -> Result<(), S
 
 #[tauri::command]
 pub async fn scan_directory_files(path: String) -> Result<Vec<FileInfo>, String> {
-    let dir_path = std::path::Path::new(&path);
-    if !dir_path.exists() || !dir_path.is_dir() {
-        return Err("路径不存在或不是目录".to_string());
-    }
+    tokio::task::spawn_blocking(move || {
+        let dir_path = std::path::PathBuf::from(path);
+        if !dir_path.exists() || !dir_path.is_dir() {
+            return Err("路径不存在或不是目录".to_string());
+        }
 
-    let mut files = Vec::new();
-    for entry in std::fs::read_dir(dir_path).map_err(|e| format!("无法读取目录: {}", e))?.flatten() {
-        let path = entry.path();
-        let Ok(link_metadata) = std::fs::symlink_metadata(&path) else { continue; };
-        let modified_at = link_metadata.modified().ok()
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .and_then(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0))
-            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-            .unwrap_or_default();
+        let mut files = Vec::new();
+        for entry in std::fs::read_dir(&dir_path).map_err(|e| format!("无法读取目录: {}", e))?.flatten() {
+            let path = entry.path();
+            let Ok(link_metadata) = std::fs::symlink_metadata(&path) else { continue; };
+            let modified_at = link_metadata.modified().ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .and_then(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0))
+                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                .unwrap_or_default();
 
-        if is_link_entry(&link_metadata) {
-            if path_points_to_directory(&path) {
+            if is_link_entry(&link_metadata) {
+                if path_points_to_directory(&path) {
+                    continue;
+                }
+
+                #[cfg(windows)]
+                use std::os::windows::fs::MetadataExt;
+
+                files.push(FileInfo {
+                    path: path.to_string_lossy().to_string(),
+                    name: path.file_name().and_then(|n| n.to_str()).unwrap_or("Unknown").to_string(),
+                    size: 0,
+                    extension: path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
+                    modified_at,
+                    #[cfg(windows)]
+                    is_readonly: link_metadata.file_attributes() & 0x1 != 0,
+                    #[cfg(not(windows))]
+                    is_readonly: link_metadata.permissions().readonly(),
+                    is_symlink: true,
+                    link_target: resolve_link_target(&path),
+                });
                 continue;
             }
 
-            #[cfg(windows)]
-            use std::os::windows::fs::MetadataExt;
-
-            files.push(FileInfo {
-                path: path.to_string_lossy().to_string(),
-                name: path.file_name().and_then(|n| n.to_str()).unwrap_or("Unknown").to_string(),
-                size: 0,
-                extension: path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
-                modified_at,
+            if link_metadata.is_file() {
                 #[cfg(windows)]
-                is_readonly: link_metadata.file_attributes() & 0x1 != 0,
-                #[cfg(not(windows))]
-                is_readonly: link_metadata.permissions().readonly(),
-                is_symlink: true,
-                link_target: resolve_link_target(&path),
-            });
-            continue;
-        }
+                use std::os::windows::fs::MetadataExt;
 
-        if link_metadata.is_file() {
-            #[cfg(windows)]
-            use std::os::windows::fs::MetadataExt;
-
-            files.push(FileInfo {
-                path: path.to_string_lossy().to_string(),
-                name: path.file_name().and_then(|n| n.to_str()).unwrap_or("Unknown").to_string(),
-                size: link_metadata.len(),
-                extension: path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
-                modified_at,
-                #[cfg(windows)]
-                is_readonly: link_metadata.file_attributes() & 0x1 != 0,
-                #[cfg(not(windows))]
-                is_readonly: link_metadata.permissions().readonly(),
-                is_symlink: false,
-                link_target: None,
-            });
+                files.push(FileInfo {
+                    path: path.to_string_lossy().to_string(),
+                    name: path.file_name().and_then(|n| n.to_str()).unwrap_or("Unknown").to_string(),
+                    size: link_metadata.len(),
+                    extension: path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
+                    modified_at,
+                    #[cfg(windows)]
+                    is_readonly: link_metadata.file_attributes() & 0x1 != 0,
+                    #[cfg(not(windows))]
+                    is_readonly: link_metadata.permissions().readonly(),
+                    is_symlink: false,
+                    link_target: None,
+                });
+            }
         }
-    }
-    files.sort_by(|a, b| b.size.cmp(&a.size));
-    Ok(files)
+        files.sort_by(|a, b| b.size.cmp(&a.size));
+        Ok(files)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn migrate_file(
     source: String, target_disk: String, link_type: Option<LinkType>,
+    known_size: Option<u64>, known_files: Option<usize>,
     app: AppHandle, migration_db: tauri::State<'_, MigrationDb>,
 ) -> Result<MigrationResult, String> {
     let migrator = FileMigrator::new();
     let lt = link_type.unwrap_or(LinkType::Auto);
-    let mut result = migrator.migrate(&source, &target_disk, lt, Some(app))
+    let known_stats = match (known_size, known_files) {
+        (Some(size), Some(files)) => Some((size, files)),
+        _ => None,
+    };
+    let mut result = migrator.migrate(&source, &target_disk, lt, known_stats, Some(app))
         .await.map_err(|e| e.to_string())?;
 
     if !result.success {
@@ -283,7 +292,12 @@ pub struct DiskInfo {
 
 #[tauri::command]
 pub async fn analyze_migration_safety(path: String, size: u64, app: AppHandle) -> Result<crate::safety::MigrationSafety, String> {
-    crate::safety::analyze_migration_safety(std::path::Path::new(&path), size, app)
+    tokio::task::spawn_blocking(move || {
+        let path_buf = std::path::PathBuf::from(path);
+        crate::safety::analyze_migration_safety(path_buf.as_path(), size, app)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

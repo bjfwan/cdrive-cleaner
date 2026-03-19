@@ -28,7 +28,7 @@ mod tests {
         let migrator = FileMigrator::new();
         
         println!("开始迁移...");
-        let result = migrator.migrate(source_path, target_disk, LinkType::Auto, None).await;
+        let result = migrator.migrate(source_path, target_disk, LinkType::Auto, None, None).await;
         
         match result {
             Ok(migration_result) => {
@@ -97,7 +97,7 @@ mod tests {
         let migrator = FileMigrator::new();
         
         println!("开始迁移...");
-        let result = migrator.migrate(source_path, target_disk, LinkType::Auto, None).await;
+        let result = migrator.migrate(source_path, target_disk, LinkType::Auto, None, None).await;
         
         match result {
             Ok(migration_result) => {

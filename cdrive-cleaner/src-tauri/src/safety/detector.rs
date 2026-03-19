@@ -485,41 +485,33 @@ fn analyze_subdirs_parallel(path: &Path, env: &Arc<EnvironmentSnapshot>, app: Ap
 
 fn collect_subdirs(path: &Path, max_depth: usize, start: &Instant, timeout: &Duration, timed_out: &AtomicBool) -> Vec<PathBuf> {
     let mut subdirs = Vec::new();
-    collect_subdirs_recursive(path, 0, max_depth, &mut subdirs, start, timeout, timed_out);
-    subdirs
-}
+    for entry in jwalk::WalkDir::new(path)
+        .min_depth(1)
+        .max_depth(max_depth)
+        .skip_hidden(false)
+        .follow_links(false)
+    {
+        if start.elapsed() > *timeout || timed_out.load(Ordering::Relaxed) {
+            timed_out.store(true, Ordering::Relaxed);
+            break;
+        }
 
-fn collect_subdirs_recursive(
-    path: &Path,
-    depth: usize,
-    max_depth: usize,
-    subdirs: &mut Vec<PathBuf>,
-    start: &Instant,
-    timeout: &Duration,
-    timed_out: &AtomicBool,
-) {
-    if depth >= max_depth || start.elapsed() > *timeout || timed_out.load(Ordering::Relaxed) {
-        return;
-    }
-    if let Ok(entries) = fs::read_dir(path) {
-        for entry in entries.flatten() {
-            if start.elapsed() > *timeout {
-                timed_out.store(true, Ordering::Relaxed);
-                return;
-            }
-            let subpath = entry.path();
-            let Ok(metadata) = fs::symlink_metadata(&subpath) else {
-                continue;
-            };
-            if is_link_entry(&metadata) {
-                continue;
-            }
-            if metadata.is_dir() {
-                subdirs.push(subpath.clone());
-                collect_subdirs_recursive(&subpath, depth + 1, max_depth, subdirs, start, timeout, timed_out);
-            }
+        let Ok(entry) = entry else { continue; };
+        let subpath = entry.path();
+        let Ok(metadata) = fs::symlink_metadata(&subpath) else {
+            continue;
+        };
+
+        if is_link_entry(&metadata) {
+            continue;
+        }
+
+        if metadata.is_dir() {
+            subdirs.push(subpath);
         }
     }
+
+    subdirs
 }
 
 fn quick_check_subdir(path: &Path, env: &EnvironmentSnapshot) -> Option<SubdirRisk> {
