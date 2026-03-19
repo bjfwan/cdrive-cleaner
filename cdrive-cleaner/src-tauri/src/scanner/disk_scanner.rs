@@ -1,4 +1,5 @@
 use super::file_info::{DirectoryNode, FileInfo, ScanResult};
+use super::scan_index::IndexedScanResult;
 use anyhow::Result;
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -32,6 +33,7 @@ pub struct ScanProgress {
 pub struct DiskScanner {
     cache: ScanCache,
     cancelled: Arc<AtomicBool>,
+    sessions: Arc<Mutex<HashMap<String, IndexedScanResult>>>,
 }
 
 impl DiskScanner {
@@ -39,6 +41,7 @@ impl DiskScanner {
         Self {
             cache: ScanCache::new(),
             cancelled: Arc::new(AtomicBool::new(false)),
+            sessions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -47,6 +50,7 @@ impl DiskScanner {
         Self {
             cache,
             cancelled: Arc::new(AtomicBool::new(false)),
+            sessions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -66,6 +70,21 @@ impl DiskScanner {
     #[allow(dead_code)]
     pub fn cache_size(&self) -> usize {
         self.cache.size()
+    }
+
+    pub fn store_indexed_scan_result(&self, result: &ScanResult) {
+        let indexed = IndexedScanResult::from_scan_result(result);
+        if let Ok(mut sessions) = self.sessions.lock() {
+            sessions.insert(result.root_path.clone(), indexed);
+        }
+    }
+
+    pub fn get_directory_snapshot(&self, root_path: &str, path: &str) -> Option<ScanResult> {
+        self.sessions
+            .lock()
+            .ok()
+            .and_then(|sessions| sessions.get(root_path).cloned())
+            .and_then(|indexed| indexed.snapshot_for_path(path))
     }
 
     #[cfg(windows)]
@@ -237,6 +256,7 @@ impl DiskScanner {
                         file_count: 0,
                         dir_count: 1,
                         children: vec![],
+                        has_children: false,
                         is_symlink,
                         link_target,
                         safety: None,
@@ -453,6 +473,7 @@ impl DiskScanner {
                 file_count: root_file_count,
                 dir_count: 0,
                 children: vec![],
+                has_children: false,
                 is_symlink: false,
                 link_target: None,
                 safety: None,
@@ -503,6 +524,7 @@ impl DiskScanner {
             file_count: 0,
             dir_count: 1,
             children: vec![],
+            has_children: false,
             is_symlink: false,
             link_target: None,
             safety: None,
@@ -669,6 +691,7 @@ impl DiskScanner {
                                 file_count: 0,
                                 dir_count: 1,
                                 children: vec![],
+                                has_children: false,
                                 is_symlink: true,
                                 link_target: Self::resolve_link_target(&entry_path),
                                 safety: None,
@@ -717,6 +740,7 @@ impl DiskScanner {
                                 path: entry_path.to_string_lossy().to_string(),
                                 name: entry_path.file_name().unwrap_or_default().to_string_lossy().to_string(),
                                 size: 0, file_count: 0, dir_count: 1, children: vec![],
+                                has_children: false,
                                 is_symlink: false,
                                 link_target: None,
                                 safety: None,
@@ -798,6 +822,7 @@ impl DiskScanner {
                 file_count: root_file_count,
                 dir_count: 0,
                 children: Vec::new(),
+                has_children: false,
                 is_symlink: false, link_target: None,
                 safety: None, modified_time: None,
             });
@@ -847,6 +872,7 @@ impl DiskScanner {
     fn sort_directory_tree(nodes: &mut [DirectoryNode]) {
         for node in nodes.iter_mut() {
             Self::sort_directory_tree(&mut node.children);
+            node.has_children = !node.children.is_empty();
             node.children.sort_by(|a, b| b.size.cmp(&a.size));
         }
         nodes.sort_by(|a, b| b.size.cmp(&a.size));

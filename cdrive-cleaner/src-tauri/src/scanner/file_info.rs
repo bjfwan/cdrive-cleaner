@@ -24,6 +24,8 @@ pub struct DirectoryNode {
     #[serde(default)]
     pub dir_count: usize,
     pub children: Vec<DirectoryNode>,
+    #[serde(default)]
+    pub has_children: bool,
     pub is_symlink: bool,
     pub link_target: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

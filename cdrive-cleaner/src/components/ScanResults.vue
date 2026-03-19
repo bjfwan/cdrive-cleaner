@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import TreemapView from './TreemapView.vue';
-import ListView from './ListView.vue';
-import LargeFilesView from './LargeFilesView.vue';
-import MigrateDialog from './MigrateDialog.vue';
+import { computed, defineAsyncComponent, ref } from 'vue';
 import { IconArrowLeft, IconInfo, IconDeepScan } from './icons';
 import type { DirectoryNode, FileInfo, DiskInfo, ScanResult } from '../types';
 import { formatBytes, formatNumber } from '../utils/format';
+
+const TreemapView = defineAsyncComponent(() => import('./TreemapView.vue'));
+const ListView = defineAsyncComponent(() => import('./ListView.vue'));
+const LargeFilesView = defineAsyncComponent(() => import('./LargeFilesView.vue'));
+const MigrateDialog = defineAsyncComponent(() => import('./MigrateDialog.vue'));
 
 interface Props {
   result: ScanResult;

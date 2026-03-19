@@ -50,7 +50,7 @@ const allSelectableCount = computed(() => selectableDirs.value.length + selectab
 const allSelected = computed(() => allSelectableCount.value > 0 && selectedItems.value.length === allSelectableCount.value);
 
 function isDirSelectable(dir: DirectoryNode) {
-  return !dir.is_symlink && (!props.deepScanning || (dir.children && dir.children.length > 0));
+  return !dir.is_symlink && (!props.deepScanning || dir.has_children);
 }
 
 function toggleDirSelection(dir: DirectoryNode) {
@@ -216,7 +216,7 @@ function getRiskClass(riskLevel?: string): string {
               <IconRiskDanger v-else-if="dir.safety.risk_level === 'dangerous'" :size="16" />
               <IconRiskUnknown v-else :size="16" />
             </span>
-            <span v-if="deepScanning && (!dir.children || dir.children.length === 0)" class="badge">扫描中</span>
+            <span v-if="deepScanning && !dir.has_children" class="badge">扫描中</span>
           </div>
           <div class="td td-size" @click="handleItemClick(dir)" :class="{ 'disabled': !hasDeepScanned }">{{ formatBytes(dir.size) }}</div>
           <div class="td td-percent" @click="handleItemClick(dir)" :class="{ 'disabled': !hasDeepScanned }">

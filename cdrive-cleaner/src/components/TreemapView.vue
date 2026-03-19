@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { use } from 'echarts/core';
+import { TreemapChart } from 'echarts/charts';
+import { TitleComponent, TooltipComponent } from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
 import VChart from 'vue-echarts';
 import type { DirectoryNode } from '../types';
 import { formatBytes } from '../utils/format';
+
+use([CanvasRenderer, TreemapChart, TitleComponent, TooltipComponent]);
 
 interface Props {
   directories: DirectoryNode[];
@@ -56,10 +62,10 @@ const treemapOption = computed(() => {
         name: dir.name,
         value: dir.size,
         path: dir.path,
-        hasChildren: dir.children && dir.children.length > 0,
+        hasChildren: dir.has_children,
         itemStyle: {
           color: colors[index % colors.length],
-          opacity: props.deepScanning && (!dir.children || dir.children.length === 0) ? 0.6 : 0.92
+          opacity: props.deepScanning && !dir.has_children ? 0.6 : 0.92
         }
       })),
       roam: false,

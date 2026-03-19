@@ -1,38 +1,30 @@
 <script setup lang="ts">
-import { ref, provide, onMounted } from 'vue';
+import { defineAsyncComponent, onMounted, provide, ref, shallowRef } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { use } from 'echarts/core';
-import { CanvasRenderer } from 'echarts/renderers';
-import { TreemapChart } from 'echarts/charts';
-import { TitleComponent, TooltipComponent } from 'echarts/components';
-import DiskCard from './components/DiskCard.vue';
-import ScanResults from './components/ScanResults.vue';
-import ScanProgress from './components/ScanProgress.vue';
-import DeepScanProgress from './components/DeepScanProgress.vue';
-import Toast from './components/Toast.vue';
-import Settings from './components/Settings.vue';
-import History from './components/History.vue';
-import Welcome from './components/Welcome.vue';
 import appIcon from './assets/app-icon.svg';
-import { IconHistory, IconSettings, IconScan, IconDeepScan } from './components/icons';
-import type { DiskInfo, ScanResult, DirectoryNode, ToastType, AppSettings } from './types';
+import DeepScanProgress from './components/DeepScanProgress.vue';
+import DiskCard from './components/DiskCard.vue';
+import { IconDeepScan, IconHistory, IconScan, IconSettings } from './components/icons';
+import ScanProgress from './components/ScanProgress.vue';
+import ScanResults from './components/ScanResults.vue';
+import Toast from './components/Toast.vue';
+import { TOAST_KEY } from './composables/useToast';
+import type { AppSettings, DiskInfo, ScanResult, ToastType } from './types';
 import { formatBytes } from './utils/format';
 import { getSettings } from './utils/settings';
-import { TOAST_KEY } from './composables/useToast';
 
-use([CanvasRenderer, TreemapChart, TitleComponent, TooltipComponent]);
+const Settings = defineAsyncComponent(() => import('./components/Settings.vue'));
+const History = defineAsyncComponent(() => import('./components/History.vue'));
+const Welcome = defineAsyncComponent(() => import('./components/Welcome.vue'));
 
 const disks = ref<DiskInfo[]>([]);
 const selectedDisk = ref<string>('');
 const scanning = ref(false);
 const deepScanning = ref(false);
-const scanResult = ref<ScanResult | null>(null);
-const deepScanResult = ref<ScanResult | null>(null);
+const scanResult = shallowRef<ScanResult | null>(null);
 const error = ref<string>('');
 const viewMode = ref<'treemap' | 'list' | 'large-files'>('treemap');
 const navigationStack = ref<string[]>([]);
-const scanCache = ref<Map<string, ScanResult>>(new Map());
-const deepTreeIndex = ref<Map<string, DirectoryNode>>(new Map());
 const hasDeepScanned = ref(false);
 
 const showToast = ref(false);
@@ -43,6 +35,9 @@ const toastType = ref<ToastType>('success');
 const showSettings = ref(false);
 const showHistory = ref(false);
 const showWelcome = ref(false);
+
+let deepScanResult: ScanResult | null = null;
+let deepScanCache = new Map<string, ScanResult>();
 
 provide(TOAST_KEY, showToastNotification);
 
@@ -67,57 +62,61 @@ async function loadDisks() {
   try {
     disks.value = await invoke<DiskInfo[]>('get_disk_info');
     if (disks.value.length > 0) {
-      const cDrive = disks.value.find(d => d.drive_letter === 'C:');
-      selectedDisk.value = cDrive ? 'C:\\' : disks.value[0].drive_letter + '\\';
+      const cDrive = disks.value.find((disk) => disk.drive_letter === 'C:');
+      selectedDisk.value = cDrive ? 'C:\\' : `${disks.value[0].drive_letter}\\`;
     }
-  } catch (err) {
+  } catch {
     error.value = '无法加载磁盘信息';
   }
 }
 
-function buildTreeIndex(nodes: DirectoryNode[], index: Map<string, DirectoryNode>) {
-  for (const node of nodes) {
-    index.set(node.path, node);
-    if (node.children?.length) buildTreeIndex(node.children, index);
-  }
+function resetDeepState() {
+  deepScanResult = null;
+  deepScanCache = new Map();
+  hasDeepScanned.value = false;
 }
 
-function makeIndexedResult(node: DirectoryNode, inaccessibleCount = 0, scanDurationMs = 0): ScanResult {
-  return {
-    root_path: node.path,
-    total_size: node.size,
-    total_files: node.file_count,
-    total_dirs: node.children.length,
-    scan_duration_ms: scanDurationMs,
-    directories: node.children,
-    large_files: [],
-    inaccessible_count: inaccessibleCount,
-  };
+function setRootSnapshot(result: ScanResult) {
+  deepScanResult = result;
+  deepScanCache = new Map([[selectedDisk.value, result]]);
+  hasDeepScanned.value = true;
+}
+
+async function loadDeepSnapshot(path: string): Promise<ScanResult> {
+  const cached = deepScanCache.get(path);
+  if (cached) {
+    return cached;
+  }
+
+  const snapshot = await invoke<ScanResult>('get_directory_snapshot', {
+    rootPath: selectedDisk.value,
+    path,
+  });
+  deepScanCache.set(path, snapshot);
+  return snapshot;
 }
 
 async function startScan() {
-  if (!selectedDisk.value) return;
-  
+  if (!selectedDisk.value) {
+    return;
+  }
+
   scanning.value = true;
   deepScanning.value = false;
   error.value = '';
   scanResult.value = null;
-  deepScanResult.value = null;
   navigationStack.value = [];
-  scanCache.value.clear();
-  deepTreeIndex.value.clear();
-  hasDeepScanned.value = false;
+  resetDeepState();
 
   try {
     const result = await invoke<ScanResult>('scan_disk_incremental', { path: selectedDisk.value });
     scanResult.value = result;
     navigationStack.value = [selectedDisk.value];
-    scanCache.value.set(selectedDisk.value, result);
-    
+
     showToastNotification(
       '快速扫描完成',
       `发现 ${result.total_files.toLocaleString()} 个文件 · ${formatBytes(result.total_size)}`,
-      'success'
+      'success',
     );
   } catch (err) {
     const msg = String(err);
@@ -133,57 +132,45 @@ async function startScan() {
 }
 
 async function startDeepScan() {
-  if (!selectedDisk.value) return;
-  
-  // 如果正在扫描，直接返回
+  if (!selectedDisk.value) {
+    return;
+  }
+
   if (deepScanning.value) {
-    showToastNotification(
-      '深度扫描进行中',
-      '请等待当前扫描完成',
-      'warning'
-    );
+    showToastNotification('深度扫描进行中', '请等待当前扫描完成', 'warning');
     return;
   }
-  
-  // 如果已经有深度扫描结果，提示用户
-  if (hasDeepScanned.value && deepScanResult.value) {
-    showToastNotification(
-      '已完成深度扫描',
-      '当前磁盘已有深度扫描结果',
-      'info'
-    );
-    return;
-  }
-  
-  // 立即设置状态，提供即时反馈
+
   deepScanning.value = true;
+  error.value = '';
+
+  const currentPath = navigationStack.value[navigationStack.value.length - 1] || selectedDisk.value;
 
   try {
-    const estimatedFiles = scanResult.value?.total_files ?? 800000;
-    
-    const result = await invoke<ScanResult>('scan_disk_deep', { 
+    const estimatedFiles = deepScanResult?.total_files ?? scanResult.value?.total_files ?? 800000;
+    const rootSnapshot = await invoke<ScanResult>('scan_disk_deep', {
       path: selectedDisk.value,
-      estimatedFiles: estimatedFiles
+      estimatedFiles,
     });
-    deepScanResult.value = result;
-    scanCache.value.set(selectedDisk.value, result);
-    hasDeepScanned.value = true;
-    
-    const idx = new Map<string, DirectoryNode>();
-    buildTreeIndex(result.directories, idx);
-    deepTreeIndex.value = idx;
-    
-    if (navigationStack.value.length === 0) {
+
+    setRootSnapshot(rootSnapshot);
+
+    if (navigationStack.value.length === 0 || currentPath === selectedDisk.value) {
       navigationStack.value = [selectedDisk.value];
-      scanResult.value = result;
-    } else if (navigationStack.value[navigationStack.value.length - 1] === selectedDisk.value) {
-      scanResult.value = result;
+      scanResult.value = rootSnapshot;
+    } else {
+      try {
+        scanResult.value = await loadDeepSnapshot(currentPath);
+      } catch {
+        navigationStack.value = [selectedDisk.value];
+        scanResult.value = rootSnapshot;
+      }
     }
-    
+
     showToastNotification(
       '深度扫描完成',
-      `发现 ${result.total_files.toLocaleString()} 个文件 · ${formatBytes(result.total_size)}`,
-      'success'
+      `发现 ${rootSnapshot.total_files.toLocaleString()} 个文件 · ${formatBytes(rootSnapshot.total_size)}`,
+      'success',
     );
   } catch (err) {
     const msg = String(err);
@@ -209,32 +196,30 @@ function closeToast() {
 }
 
 async function navigateToPath(path: string) {
-  const cachedResult = scanCache.value.get(path);
-  
-  if (cachedResult && cachedResult.directories.length > 0 && cachedResult.directories[0].children.length > 0) {
-    scanResult.value = cachedResult;
-    navigationStack.value.push(path);
+  const currentPath = navigationStack.value[navigationStack.value.length - 1];
+  if (!path || path === currentPath) {
     return;
   }
 
-  const indexedNode = deepTreeIndex.value.get(path);
-  if (indexedNode) {
-    const found = makeIndexedResult(indexedNode);
-    scanResult.value = found;
-    navigationStack.value.push(path);
-    scanCache.value.set(path, found);
-    return;
+  error.value = '';
+
+  if (hasDeepScanned.value) {
+    try {
+      scanResult.value = await loadDeepSnapshot(path);
+      navigationStack.value.push(path);
+      return;
+    } catch {
+      showToastNotification('目录快照失效', '已回退到即时扫描，请考虑重新深度扫描', 'warning');
+    }
   }
 
   scanning.value = true;
-  error.value = '';
 
   try {
     const result = await invoke<ScanResult>('scan_disk', { path });
     scanResult.value = result;
     navigationStack.value.push(path);
-    scanCache.value.set(path, result);
-  } catch (err) {
+  } catch {
     error.value = '无法访问该目录';
   } finally {
     scanning.value = false;
@@ -250,62 +235,64 @@ async function refreshAfterMigration(paths: string[]) {
 
   try {
     if (hasDeepScanned.value) {
-      const estimatedFiles = deepScanResult.value?.total_files ?? scanResult.value?.total_files ?? 800000;
-      const result = await invoke<ScanResult>('scan_disk_deep', {
+      const estimatedFiles = deepScanResult?.total_files ?? scanResult.value?.total_files ?? 800000;
+      const rootSnapshot = await invoke<ScanResult>('scan_disk_deep', {
         path: selectedDisk.value,
-        estimatedFiles
+        estimatedFiles,
       });
 
-      deepScanResult.value = result;
-      const index = new Map<string, DirectoryNode>();
-      buildTreeIndex(result.directories, index);
-      deepTreeIndex.value = index;
-
-      scanCache.value.clear();
-      scanCache.value.set(selectedDisk.value, result);
+      setRootSnapshot(rootSnapshot);
 
       if (currentPath === selectedDisk.value) {
-        scanResult.value = result;
+        navigationStack.value = [selectedDisk.value];
+        scanResult.value = rootSnapshot;
       } else {
-        const currentNode = index.get(currentPath);
-        if (currentNode) {
-          const refreshed = makeIndexedResult(currentNode, result.inaccessible_count, result.scan_duration_ms);
-          scanResult.value = refreshed;
-          scanCache.value.set(currentPath, refreshed);
-        } else {
+        try {
+          scanResult.value = await loadDeepSnapshot(currentPath);
+        } catch {
           navigationStack.value = [selectedDisk.value];
-          scanResult.value = result;
+          scanResult.value = rootSnapshot;
         }
       }
     } else {
       const result = await invoke<ScanResult>('scan_disk_incremental', { path: selectedDisk.value });
-      scanCache.value.clear();
-      scanCache.value.set(selectedDisk.value, result);
       navigationStack.value = [selectedDisk.value];
       scanResult.value = result;
     }
 
-    showToastNotification(
-      '扫描结果已更新',
-      `已同步 ${paths.length} 项迁移后的空间变化`,
-      'info'
-    );
+    showToastNotification('扫描结果已更新', `已同步 ${paths.length} 项迁移后的空间变化`, 'info');
   } catch {
-    showToastNotification(
-      '迁移已完成',
-      '结果刷新失败，请手动重新扫描一次',
-      'warning'
-    );
+    showToastNotification('迁移已完成', '结果刷新失败，请手动重新扫描一次', 'warning');
   }
 }
 
-function goBack() {
-  if (navigationStack.value.length <= 1) return;
+async function goBack() {
+  if (navigationStack.value.length <= 1) {
+    return;
+  }
+
   navigationStack.value.pop();
   const previousPath = navigationStack.value[navigationStack.value.length - 1];
-  const cached = scanCache.value.get(previousPath);
-  if (cached) {
-    scanResult.value = cached;
+
+  if (hasDeepScanned.value) {
+    try {
+      scanResult.value = await loadDeepSnapshot(previousPath);
+      return;
+    } catch {
+      navigationStack.value = [selectedDisk.value];
+      scanResult.value = deepScanResult;
+      return;
+    }
+  }
+
+  if (previousPath === selectedDisk.value && scanResult.value) {
+    return;
+  }
+
+  try {
+    scanResult.value = await invoke<ScanResult>('scan_disk', { path: previousPath });
+  } catch {
+    error.value = '无法返回上一层目录';
   }
 }
 

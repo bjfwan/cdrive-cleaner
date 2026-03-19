@@ -90,7 +90,7 @@ pub async fn scan_disk_deep(
 ) -> Result<ScanResult, String> {
     use crate::scanner::incremental;
 
-    if let Ok(Some(cached)) = cache_db.get_scan_result(&path, "deep") {
+    let full_result = if let Ok(Some(cached)) = cache_db.get_scan_result(&path, "deep") {
         if let Ok(cached_result) = serde_json::from_str::<ScanResult>(&cached.result_json) {
             let result = incremental::scan_incremental(
                 std::path::Path::new(&path),
@@ -98,15 +98,36 @@ pub async fn scan_disk_deep(
                 app.clone(),
             )
                 .await.map_err(|e| e.to_string())?;
-            persist_scan_result_async(cache_db.inner().clone(), path, "deep", result.clone());
-            return Ok(result);
+            persist_scan_result_async(cache_db.inner().clone(), path.clone(), "deep", result.clone());
+            result
+        } else {
+            let result = scanner.scan_deep(&path, app, estimated_files.unwrap_or(800000))
+                .await.map_err(|e| e.to_string())?;
+            persist_scan_result_async(cache_db.inner().clone(), path.clone(), "deep", result.clone());
+            result
         }
-    }
+    } else {
+        let result = scanner.scan_deep(&path, app, estimated_files.unwrap_or(800000))
+            .await.map_err(|e| e.to_string())?;
+        persist_scan_result_async(cache_db.inner().clone(), path.clone(), "deep", result.clone());
+        result
+    };
 
-    let result = scanner.scan_deep(&path, app, estimated_files.unwrap_or(800000))
-        .await.map_err(|e| e.to_string())?;
-    persist_scan_result_async(cache_db.inner().clone(), path, "deep", result.clone());
-    Ok(result)
+    scanner.store_indexed_scan_result(&full_result);
+    scanner
+        .get_directory_snapshot(&path, &path)
+        .ok_or_else(|| "无法建立深度扫描索引".to_string())
+}
+
+#[tauri::command]
+pub fn get_directory_snapshot(
+    root_path: String,
+    path: String,
+    scanner: tauri::State<'_, DiskScanner>,
+) -> Result<ScanResult, String> {
+    scanner
+        .get_directory_snapshot(&root_path, &path)
+        .ok_or_else(|| "目录快照不存在，请重新执行深度扫描".to_string())
 }
 
 #[tauri::command]

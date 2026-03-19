@@ -28,6 +28,7 @@ pub fn run() {
             commands::scan_disk,
             commands::scan_disk_incremental,
             commands::scan_disk_deep,
+            commands::get_directory_snapshot,
             commands::cancel_scan,
             commands::scan_directory_files,
             commands::migrate_file,

@@ -190,6 +190,7 @@ fn build_file_info(path: &Path, metadata: &std::fs::Metadata) -> FileInfo {
 fn sort_directory_tree(nodes: &mut [DirectoryNode]) {
     for node in nodes.iter_mut() {
         sort_directory_tree(&mut node.children);
+        node.has_children = !node.children.is_empty();
     }
     nodes.sort_by(|a, b| b.size.cmp(&a.size));
 }
@@ -247,6 +248,7 @@ fn rescan_directory_tree(path: &Path, large_file_threshold: u64) -> Option<Resca
                 file_count: 0,
                 dir_count: 1,
                 children: vec![],
+                has_children: false,
                 is_symlink: true,
                 link_target: resolve_link_target(path),
                 safety: None,
@@ -282,6 +284,7 @@ fn rescan_directory_tree(path: &Path, large_file_threshold: u64) -> Option<Resca
                     file_count: 0,
                     dir_count: 1,
                     children: vec![],
+                    has_children: false,
                     is_symlink: true,
                     link_target: resolve_link_target(&entry_path),
                     safety: None,
@@ -314,6 +317,7 @@ fn rescan_directory_tree(path: &Path, large_file_threshold: u64) -> Option<Resca
                 file_count: 0,
                 dir_count: 1,
                 children: vec![],
+                has_children: false,
                 is_symlink: false,
                 link_target: None,
                 safety: None,
@@ -591,6 +595,7 @@ fn upsert_root_files_node(nodes: &mut Vec<DirectoryNode>, root_path: &Path, root
             file_count: root_files,
             dir_count: 0,
             children: vec![],
+            has_children: false,
             is_symlink: false,
             link_target: None,
             safety: None,

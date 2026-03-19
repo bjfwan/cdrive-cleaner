@@ -13,7 +13,9 @@ export interface DirectoryNode {
   name: string;
   size: number;
   file_count: number;
+  dir_count: number;
   children: DirectoryNode[];
+  has_children: boolean;
   is_symlink: boolean;
   link_target?: string;
   safety?: MigrationSafety;
