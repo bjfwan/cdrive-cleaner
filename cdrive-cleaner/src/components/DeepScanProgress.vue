@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { IconSpinner, IconArrowDown } from './icons';
+import { formatBytes } from '../utils/format';
 
 interface Props {
   scanning: boolean;
 }
 
 defineProps<Props>();
+
+async function cancelScan() {
+  try { await invoke('cancel_scan'); } catch {}
+}
 
 const scannedFiles = ref(0);
 const totalSize = ref(0);
@@ -23,18 +29,10 @@ const formattedSpeed = computed(() => {
   return `${Math.round(speed)} 文件/秒`;
 });
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
-}
-
 let unlisten: (() => void) | null = null;
 
 onMounted(async () => {
-  unlisten = await listen('deep-scan-progress', (event: any) => {
+  unlisten = await listen<Record<string, number>>('deep-scan-progress', (event) => {
     const progress = event.payload;
     scannedFiles.value = progress.scanned_files;
     totalSize.value = progress.total_size;
@@ -62,6 +60,7 @@ onUnmounted(() => {
           <div class="subtitle">{{ Math.round(progressPercent) }}% · {{ scannedFiles.toLocaleString() }} 文件</div>
         </div>
       </div>
+      <button class="cancel-btn" @click.stop="cancelScan">取消</button>
       <div class="expand-icon" :class="{ expanded }">
         <IconArrowDown :size="16" />
       </div>
@@ -147,6 +146,25 @@ onUnmounted(() => {
 .subtitle {
   font-size: 0.75rem;
   color: #0369a1;
+}
+
+.cancel-btn {
+  padding: 0.25rem 0.75rem;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  background: white;
+  color: #0369a1;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.cancel-btn:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
 }
 
 .expand-icon {

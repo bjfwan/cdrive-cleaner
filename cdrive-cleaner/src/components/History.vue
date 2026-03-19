@@ -173,23 +173,11 @@ import {
   IconRefresh, IconChart, IconSizeIcon, IconSuccess, IconRollback, 
   IconDocument, IconArrowRight, IconDisk, IconClose, IconWarning 
 } from './icons'
+import type { MigrationRecord, MigrationStats } from '../types'
+import { formatBytes, formatDate } from '../utils/format'
+import { useToast } from '../composables/useToast'
 
-interface MigrationRecord {
-  id: number
-  source_path: string
-  target_path: string
-  link_type: string
-  file_size: number
-  created_at: string
-  status: string
-}
-
-interface MigrationStats {
-  total_count: number
-  total_size: number
-  active_count: number
-  rolled_back_count: number
-}
+const showToast = useToast()
 
 const records = ref<MigrationRecord[]>([])
 const stats = ref<MigrationStats | null>(null)
@@ -207,8 +195,8 @@ const loadHistory = async () => {
     ])
     records.value = historyData
     stats.value = statsData
-  } catch (error) {
-    console.error('Failed to load history:', error)
+  } catch {
+    showToast('加载历史记录失败', '无法读取迁移历史数据', 'error')
   } finally {
     loading.value = false
   }
@@ -231,36 +219,18 @@ const executeRollback = async () => {
   showConfirm.value = false
   
   try {
-    const result = await invoke('rollback_migration', { migrationId: recordId })
-    console.log('Rollback result:', result)
+    await invoke('rollback_migration', { migrationId: recordId })
     await loadHistory()
+    showToast('回滚成功', '文件已恢复到原始位置', 'success')
   } catch (error) {
-    console.error('Rollback failed:', error)
-    alert(`回滚失败: ${error}`)
+    showToast('回滚失败', String(error), 'error')
   } finally {
     rollingBack.value = null
     selectedRecord.value = null
   }
 }
 
-const formatSize = (bytes: number): string => {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return (bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i]
-}
-
-const formatDate = (dateStr: string): string => {
-  const date = new Date(dateStr)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
+const formatSize = formatBytes
 
 onMounted(() => {
   loadHistory()

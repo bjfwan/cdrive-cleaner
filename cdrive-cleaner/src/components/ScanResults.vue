@@ -4,55 +4,9 @@ import TreemapView from './TreemapView.vue';
 import ListView from './ListView.vue';
 import LargeFilesView from './LargeFilesView.vue';
 import MigrateDialog from './MigrateDialog.vue';
-import { IconWarning, IconArrowLeft, IconInfo, IconDeepScan } from './icons';
-
-interface DirectoryNode {
-  path: string;
-  name: string;
-  size: number;
-  file_count: number;
-  children: DirectoryNode[];
-  is_symlink: boolean;
-  link_target?: string;
-  safety?: {
-    risk_level: 'safe' | 'moderate' | 'risky' | 'dangerous';
-    safety_score: number;
-    can_migrate: boolean;
-    reasons: string[];
-    recommendations: string[];
-    app_type: string;
-  };
-}
-
-interface FileInfo {
-  path: string;
-  name: string;
-  size: number;
-  extension: string;
-  modified_at: string;
-  is_readonly: boolean;
-}
-
-interface DiskInfo {
-  drive_letter: string;
-  label: string;
-  file_system: string;
-  total_space: number;
-  free_space: number;
-  used_space: number;
-  usage_percent: number;
-}
-
-interface ScanResult {
-  root_path: string;
-  total_size: number;
-  total_files: number;
-  total_dirs: number;
-  scan_duration_ms: number;
-  directories: DirectoryNode[];
-  large_files: FileInfo[];
-  inaccessible_count: number;
-}
+import { IconArrowLeft, IconInfo, IconDeepScan } from './icons';
+import type { DirectoryNode, FileInfo, DiskInfo, ScanResult } from '../types';
+import { formatBytes, formatNumber } from '../utils/format';
 
 interface Props {
   result: ScanResult;
@@ -70,6 +24,7 @@ const emit = defineEmits<{
   'navigate': [path: string];
   'goBack': [];
   'start-deep-scan': [];
+  'migrated': [paths: string[]];
 }>();
 
 const showMigrate = ref(false);
@@ -95,18 +50,6 @@ const availableTargetDisks = computed(() => {
   const currentDriveLetter = props.currentPath.substring(0, 2);
   return props.availableDisks.filter(disk => disk.drive_letter !== currentDriveLetter);
 });
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
-}
-
-function formatNumber(num: number): string {
-  return num.toLocaleString('zh-CN');
-}
 
 function showMigrateDialog(dir: DirectoryNode) {
   selectedDir.value = dir;
@@ -245,6 +188,7 @@ function closeMigrateDialog() {
       :selected-items="selectedItems"
       :available-disks="availableTargetDisks"
       @close="closeMigrateDialog"
+      @migrated="emit('migrated', $event)"
     />
   </div>
 </template>

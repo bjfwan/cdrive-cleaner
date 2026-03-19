@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { listen } from '@tauri-apps/api/event';
-import { IconFolder, IconClock, IconSpeed } from './icons';
+import { IconFolder, IconSpeed } from './icons';
 
 interface Props {
   scanning: boolean;
@@ -57,7 +57,7 @@ const statusMessage = computed(() => {
 let unlisten: (() => void) | null = null;
 
 onMounted(async () => {
-  unlisten = await listen('incremental-scan-progress', (event: any) => {
+  unlisten = await listen<{ phase: string; total_dirs: number; checked_dirs: number; changed_dirs: number; scanned_dirs: number }>('incremental-scan-progress', (event) => {
     const progress = event.payload;
     phase.value = progress.phase;
     totalDirs.value = progress.total_dirs;

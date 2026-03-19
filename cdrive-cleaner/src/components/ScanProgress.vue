@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { IconFolder, IconFile, IconClock, IconSpeed } from './icons';
+import { formatBytes, formatTime } from '../utils/format';
 
 interface Props {
   scanning: boolean;
 }
 
 defineProps<Props>();
+
+async function cancelScan() {
+  try { await invoke('cancel_scan'); } catch {}
+}
 
 const scannedFiles = ref(0);
 const scannedDirs = ref(0);
@@ -17,7 +23,6 @@ const elapsedMs = ref(0);
 const filesPerSecond = ref(0);
 const progressPercent = ref(0);
 
-// 平滑处理的目标值
 const targetFiles = ref(0);
 const targetDirs = ref(0);
 const targetSize = ref(0);
@@ -31,25 +36,6 @@ const formattedSpeed = computed(() => {
   return `${Math.round(speed)} 文件/秒`;
 });
 const formattedTime = computed(() => formatTime(elapsedMs.value));
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
-}
-
-function formatTime(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  
-  if (hours > 0) {
-    return `${hours}:${String(minutes % 60).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
-  }
-  return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
-}
 
 // 平滑动画
 function smoothUpdate() {
@@ -106,7 +92,7 @@ onMounted(async () => {
   startAnimation();
   
   // 只监听快速扫描的进度事件
-  unlisten = await listen('quick-scan-progress', (event: any) => {
+  unlisten = await listen<{ scanned_files: number; scanned_dirs: number; total_size: number; current_path: string; elapsed_ms: number; files_per_second: number; progress_percent: number }>('quick-scan-progress', (event) => {
     const progress = event.payload;
     
     targetFiles.value = progress.scanned_files;
@@ -140,6 +126,7 @@ onUnmounted(() => {
           <h3>快速扫描</h3>
           <p class="current-path">{{ currentPath || '准备中...' }}</p>
         </div>
+        <button class="cancel-btn" @click="cancelScan">取消</button>
       </div>
       
       <div class="progress-stats">
@@ -241,6 +228,26 @@ onUnmounted(() => {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+.cancel-btn {
+  margin-left: auto;
+  padding: 0.5rem 1.25rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 10px;
+  background: white;
+  color: #78716c;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.cancel-btn:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
 }
 
 .progress-header {

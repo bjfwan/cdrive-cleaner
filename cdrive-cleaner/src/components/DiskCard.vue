@@ -1,13 +1,6 @@
 <script setup lang="ts">
-interface DiskInfo {
-  drive_letter: string;
-  label: string;
-  file_system: string;
-  total_space: number;
-  free_space: number;
-  used_space: number;
-  usage_percent: number;
-}
+import type { DiskInfo } from '../types';
+import { formatBytes } from '../utils/format';
 
 interface Props {
   disk: DiskInfo;
@@ -18,14 +11,6 @@ defineProps<Props>();
 defineEmits<{
   select: [];
 }>();
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
-}
 </script>
 
 <template>

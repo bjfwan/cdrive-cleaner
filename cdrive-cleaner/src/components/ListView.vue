@@ -1,33 +1,11 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
 import { IconRiskSafe, IconRiskLow, IconRiskMedium, IconRiskDanger, IconRiskUnknown, IconFolder, IconFile, IconMigrate } from './icons';
+import type { DirectoryNode, FileInfo } from '../types';
+import { formatBytes, formatNumber } from '../utils/format';
+import { useToast } from '../composables/useToast';
 
-interface DirectoryNode {
-  path: string;
-  name: string;
-  size: number;
-  file_count: number;
-  children: DirectoryNode[];
-  is_symlink: boolean;
-  link_target?: string;
-  safety?: {
-    risk_level: 'safe' | 'moderate' | 'risky' | 'dangerous';
-    safety_score: number;
-    can_migrate: boolean;
-    reasons: string[];
-    recommendations: string[];
-    app_type: string;
-  };
-}
-
-interface FileInfo {
-  path: string;
-  name: string;
-  size: number;
-  extension: string;
-  modified_at: string;
-  is_readonly: boolean;
-}
+const showToast = useToast();
 
 interface Props {
   directories: DirectoryNode[];
@@ -66,6 +44,14 @@ const selectedItems = computed(() => {
 });
 
 const hasSelection = computed(() => selectedDirs.value.size > 0 || selectedFiles.value.size > 0);
+const selectableDirs = computed(() => props.directories.filter((dir) => isDirSelectable(dir)));
+const selectableFiles = computed(() => currentFiles.value.filter((file) => !file.is_symlink));
+const allSelectableCount = computed(() => selectableDirs.value.length + selectableFiles.value.length);
+const allSelected = computed(() => allSelectableCount.value > 0 && selectedItems.value.length === allSelectableCount.value);
+
+function isDirSelectable(dir: DirectoryNode) {
+  return !dir.is_symlink && (!props.deepScanning || (dir.children && dir.children.length > 0));
+}
 
 function toggleDirSelection(dir: DirectoryNode) {
   const newSet = new Set(selectedDirs.value);
@@ -91,12 +77,12 @@ function selectAll() {
   const newDirSet = new Set(selectedDirs.value);
   const newFileSet = new Set(selectedFiles.value);
   
-  props.directories.forEach(dir => {
-    if (!props.deepScanning || (dir.children && dir.children.length > 0)) {
+  selectableDirs.value.forEach(dir => {
+    if (isDirSelectable(dir)) {
       newDirSet.add(dir.path);
     }
   });
-  currentFiles.value.forEach(file => {
+  selectableFiles.value.forEach(file => {
     newFileSet.add(file.path);
   });
   
@@ -116,18 +102,6 @@ function handleBatchMigrate() {
   }
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
-}
-
-function formatNumber(num: number): string {
-  return num.toLocaleString('zh-CN');
-}
-
 function handleItemClick(dir: DirectoryNode) {
   if (!props.hasDeepScanned) {
     return;
@@ -141,15 +115,15 @@ async function loadDirectoryFiles(path: string) {
     const { invoke } = await import('@tauri-apps/api/core');
     const files = await invoke<FileInfo[]>('scan_directory_files', { path });
     currentFiles.value = files;
-  } catch (err) {
-    console.error('加载文件失败:', err);
+  } catch {
     currentFiles.value = [];
+    showToast('加载文件失败', '无法读取当前目录的文件列表', 'error');
   } finally {
     loadingFiles.value = false;
   }
 }
 
-watch(() => props.currentPath, (newPath) => {
+watch(() => [props.currentPath, props.totalSize] as const, ([newPath]) => {
   loadDirectoryFiles(newPath);
   clearSelection();
 }, { immediate: true });
@@ -205,8 +179,8 @@ function getRiskClass(riskLevel?: string): string {
           <input 
             type="checkbox" 
             class="checkbox"
-            :checked="hasSelection && selectedItems.length === (directories.length + currentFiles.length)"
-            @change="hasSelection ? clearSelection() : selectAll()"
+            :checked="allSelected"
+            @change="allSelected ? clearSelection() : selectAll()"
           />
         </div>
         <div class="th th-name">名称</div>
@@ -220,20 +194,21 @@ function getRiskClass(riskLevel?: string): string {
           v-for="dir in directories" 
           :key="dir.path"
           class="table-row"
-          :class="{ 'row-disabled': deepScanning && (!dir.children || dir.children.length === 0), 'row-selected': selectedDirs.has(dir.path) }"
+          :class="{ 'row-disabled': !isDirSelectable(dir), 'row-selected': selectedDirs.has(dir.path), 'row-link': dir.is_symlink }"
         >
           <div class="td td-checkbox" @click.stop>
             <input 
               type="checkbox" 
               class="checkbox"
               :checked="selectedDirs.has(dir.path)"
-              :disabled="deepScanning && (!dir.children || dir.children.length === 0)"
+              :disabled="!isDirSelectable(dir)"
               @change="toggleDirSelection(dir)"
             />
           </div>
           <div class="td td-name" @click="handleItemClick(dir)" :class="{ 'disabled': !hasDeepScanned }" :title="!hasDeepScanned ? '请先进行深度扫描以查看子目录' : ''">
             <IconFolder :size="18" />
             <span>{{ dir.name }}</span>
+            <span v-if="dir.is_symlink" class="badge symlink" :title="dir.link_target || '迁移后的链接占位'">链接</span>
             <span v-if="dir.safety" class="risk-badge" :class="getRiskClass(dir.safety.risk_level)" :title="`${getRiskLabel(dir.safety.risk_level)} - ${dir.safety.app_type}`">
               <IconRiskSafe v-if="dir.safety.risk_level === 'safe'" :size="16" />
               <IconRiskLow v-else-if="dir.safety.risk_level === 'moderate'" :size="16" />
@@ -250,9 +225,9 @@ function getRiskClass(riskLevel?: string): string {
               <span class="percent-text">{{ ((dir.size / totalSize) * 100).toFixed(1) }}%</span>
             </div>
           </div>
-          <div class="td td-files" @click="handleItemClick(dir)" :class="{ 'disabled': !hasDeepScanned }">{{ formatNumber(dir.file_count) }}</div>
+          <div class="td td-files" @click="handleItemClick(dir)" :class="{ 'disabled': !hasDeepScanned }">{{ dir.is_symlink ? '链接目录' : formatNumber(dir.file_count) }}</div>
           <div class="td td-actions">
-            <button class="action-btn migrate-btn" @click.stop="$emit('migrate-dir', dir)" :disabled="!hasDeepScanned" :title="!hasDeepScanned ? '请先进行深度扫描' : '迁移到其他磁盘'">
+            <button class="action-btn migrate-btn" @click.stop="$emit('migrate-dir', dir)" :disabled="!hasDeepScanned || dir.is_symlink" :title="dir.is_symlink ? '该目录已经迁移为链接占位' : (!hasDeepScanned ? '请先进行深度扫描' : '迁移到其他磁盘')">
               <IconMigrate :size="16" />
             </button>
           </div>
@@ -269,6 +244,7 @@ function getRiskClass(riskLevel?: string): string {
               type="checkbox" 
               class="checkbox"
               :checked="selectedFiles.has(file.path)"
+              :disabled="file.is_symlink"
               @change="toggleFileSelection(file)"
             />
           </div>
@@ -276,6 +252,7 @@ function getRiskClass(riskLevel?: string): string {
             <IconFile :size="18" />
             <span>{{ file.name }}</span>
             <span v-if="file.is_readonly" class="badge readonly">只读</span>
+            <span v-if="file.is_symlink" class="badge symlink" :title="file.link_target || '迁移后的链接占位'">链接</span>
           </div>
           <div class="td td-size">{{ formatBytes(file.size) }}</div>
           <div class="td td-percent">
@@ -284,9 +261,9 @@ function getRiskClass(riskLevel?: string): string {
               <span class="percent-text">{{ ((file.size / totalSize) * 100).toFixed(1) }}%</span>
             </div>
           </div>
-          <div class="td td-files">{{ file.extension || '-' }}</div>
+          <div class="td td-files">{{ file.is_symlink ? '链接' : (file.extension || '-') }}</div>
           <div class="td td-actions">
-            <button class="action-btn migrate-btn" @click.stop="$emit('migrate-file', file)" :disabled="deepScanning" :title="deepScanning ? '深度扫描完成后可迁移' : '迁移到其他磁盘'">
+            <button class="action-btn migrate-btn" @click.stop="$emit('migrate-file', file)" :disabled="deepScanning || file.is_symlink" :title="file.is_symlink ? '该条目已经迁移为链接占位' : (deepScanning ? '深度扫描完成后可迁移' : '迁移到其他磁盘')">
               <IconMigrate :size="16" />
             </button>
           </div>
@@ -576,6 +553,11 @@ function getRiskClass(riskLevel?: string): string {
 .badge.readonly {
   background: #fef3c7;
   color: #92400e;
+}
+
+.badge.symlink {
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 .td-size {

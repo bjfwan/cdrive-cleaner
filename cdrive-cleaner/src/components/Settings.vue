@@ -3,27 +3,12 @@ import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import ConfirmDialog from './ConfirmDialog.vue';
 import { IconClose, IconRefresh, IconLink, IconInfo, IconWarning } from './icons';
+import type { DiskInfo, CacheEntry, CacheInfo, AppSettings } from '../types';
+import { formatBytes, formatDate } from '../utils/format';
+import { getSettings, saveSettings as persistSettings } from '../utils/settings';
+import { useToast } from '../composables/useToast';
 
-interface DiskInfo {
-  drive_letter: string;
-  label: string;
-  free_space: number;
-}
-
-interface CacheEntry {
-  disk_path: string;
-  scan_type: string;
-  file_count: number;
-  total_size: number;
-  created_at: string;
-  cache_size: number;
-}
-
-interface CacheInfo {
-  cache_path: string;
-  total_size: number;
-  caches: CacheEntry[];
-}
+const showToast = useToast();
 
 interface Props {
   show: boolean;
@@ -33,19 +18,13 @@ interface Props {
 const props = defineProps<Props>();
 const emit = defineEmits<{
   'close': [];
-  'save': [settings: Settings];
+  'save': [settings: AppSettings];
 }>();
 
-interface Settings {
-  defaultTargetDisk: string;
-  largeFileThreshold: number;
-  createSymlink: boolean;
-}
-
-const settings = ref<Settings>({
+const settings = ref<AppSettings>({
   defaultTargetDisk: '',
   largeFileThreshold: 100,
-  createSymlink: true
+  createSymlink: true,
 });
 
 const showRestartConfirm = ref(false);
@@ -68,32 +47,21 @@ onMounted(() => {
 async function checkElevation() {
   try {
     isElevated.value = await invoke<boolean>('is_elevated');
-  } catch (e) {
-    console.error('Failed to check elevation:', e);
+  } catch {
+    showToast('权限检测失败', '无法检测当前权限状态', 'warning');
   } finally {
     isCheckingElevation.value = false;
   }
 }
 
 function loadSettings() {
-  const saved = localStorage.getItem('cdrive-cleaner-settings');
-  if (saved) {
-    try {
-      settings.value = { ...settings.value, ...JSON.parse(saved) };
-    } catch (e) {
-      console.error('Failed to load settings:', e);
-    }
-  }
+  settings.value = getSettings();
 }
 
 function saveSettings() {
-  try {
-    localStorage.setItem('cdrive-cleaner-settings', JSON.stringify(settings.value));
-    emit('save', settings.value);
-    emit('close');
-  } catch (e) {
-    console.error('Failed to save settings:', e);
-  }
+  persistSettings(settings.value);
+  emit('save', settings.value);
+  emit('close');
 }
 
 function handleAdminToggle(event: Event) {
@@ -112,9 +80,8 @@ function handleAdminToggle(event: Event) {
 async function confirmRestartAsAdmin() {
   try {
     await invoke('restart_as_admin');
-  } catch (e) {
-    console.error('Failed to restart as admin:', e);
-    alert('重启失败，请手动以管理员身份运行应用');
+  } catch {
+    showToast('重启失败', '请手动以管理员身份运行应用', 'error');
   }
   showRestartConfirm.value = false;
 }
@@ -122,11 +89,8 @@ async function confirmRestartAsAdmin() {
 async function confirmRestartAsStandard() {
   showDisableAdminConfirm.value = false;
   try {
-    // 使用后端命令退出应用
     await invoke('exit_app');
-  } catch (e) {
-    console.error('Failed to exit:', e);
-    // 如果后端命令失败，尝试使用 window.close()
+  } catch {
     window.close();
   }
 }
@@ -135,20 +99,12 @@ function close() {
   emit('close');
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
-}
-
 async function loadCacheInfo() {
   loadingCache.value = true;
   try {
     cacheInfo.value = await invoke<CacheInfo>('get_cache_info');
-  } catch (e) {
-    console.error('Failed to load cache info:', e);
+  } catch {
+    showToast('缓存加载失败', '无法读取缓存信息', 'error');
   } finally {
     loadingCache.value = false;
   }
@@ -159,9 +115,8 @@ async function clearAllCache() {
     await invoke('clear_scan_cache');
     await loadCacheInfo();
     showClearCacheConfirm.value = false;
-  } catch (e) {
-    console.error('Failed to clear cache:', e);
-    alert('清理缓存失败');
+  } catch {
+    showToast('清理缓存失败', '无法清空缓存数据', 'error');
   }
 }
 
@@ -174,9 +129,8 @@ async function deleteCacheEntry(entry: CacheEntry) {
     await loadCacheInfo();
     showDeleteCacheConfirm.value = false;
     deletingCacheEntry.value = null;
-  } catch (e) {
-    console.error('Failed to delete cache entry:', e);
-    alert('删除缓存失败');
+  } catch {
+    showToast('删除缓存失败', '无法删除此缓存条目', 'error');
   }
 }
 
@@ -187,21 +141,6 @@ function confirmDeleteCache(entry: CacheEntry) {
 
 function getScanTypeLabel(scanType: string): string {
   return scanType === 'quick' ? '快速扫描' : '深度扫描';
-}
-
-function formatDate(dateStr: string): string {
-  try {
-    const date = new Date(dateStr);
-    return date.toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  } catch {
-    return dateStr;
-  }
 }
 </script>
 

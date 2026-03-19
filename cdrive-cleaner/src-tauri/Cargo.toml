@@ -32,6 +32,7 @@ windows = { version = "0.52", features = [
     "Win32_System_Threading"
 ] }
 walkdir = "2.4"
+jwalk = "0.8"
 rayon = "1.8"
 rusqlite = { version = "0.31", features = ["bundled"] }
 chrono = "0.4"

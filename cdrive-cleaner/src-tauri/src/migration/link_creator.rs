@@ -84,6 +84,18 @@ impl LinkCreator {
         }
 
         let metadata = fs::symlink_metadata(path)?;
+
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::fs::MetadataExt;
+
+            const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+            if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                let actual_canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+                let expected_canonical = expected.canonicalize().unwrap_or_else(|_| expected.to_path_buf());
+                return Ok(actual_canonical == expected_canonical && expected.exists());
+            }
+        }
         
         if metadata.file_type().is_symlink() {
             let target = fs::read_link(path)?;

@@ -1,14 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import VChart from 'vue-echarts';
-
-interface DirectoryNode {
-  path: string;
-  name: string;
-  size: number;
-  file_count: number;
-  children: DirectoryNode[];
-}
+import type { DirectoryNode } from '../types';
+import { formatBytes } from '../utils/format';
 
 interface Props {
   directories: DirectoryNode[];
@@ -32,7 +26,7 @@ const treemapOption = computed(() => {
 
   return {
     tooltip: {
-      formatter: (info: any) => {
+      formatter: (info: { name: string; value: number; data: { hasChildren: boolean } }) => {
         const status = props.deepScanning && !info.data.hasChildren ? '<br/>(扫描中...)' : '';
         return `${info.name}<br/>${formatBytes(info.value)}${status}`;
       },
@@ -73,7 +67,7 @@ const treemapOption = computed(() => {
       breadcrumb: { show: false },
       label: {
         show: true,
-        formatter: (params: any) => {
+        formatter: (params: { name: string; width: number; height: number }) => {
           const area = params.width * params.height;
           if (area < 2000) return '';
           if (area < 5000) return params.name.substring(0, 10);
@@ -129,20 +123,13 @@ const sortedDirectories = computed(() => {
   return [...props.directories].sort((a, b) => b.size - a.size);
 });
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
-}
-
-function handleChartClick(params: any) {
-  if (params.data && params.data.path) {
+function handleChartClick(params: Record<string, unknown>) {
+  const data = params.data as { path?: string } | undefined;
+  if (data?.path) {
     if (!props.hasDeepScanned) {
       return;
     }
-    emit('navigate', params.data.path);
+    emit('navigate', data.path);
   }
 }
 

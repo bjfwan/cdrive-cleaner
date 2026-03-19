@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, provide, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -15,48 +15,12 @@ import History from './components/History.vue';
 import Welcome from './components/Welcome.vue';
 import appIcon from './assets/app-icon.svg';
 import { IconHistory, IconSettings, IconScan, IconDeepScan } from './components/icons';
+import type { DiskInfo, ScanResult, DirectoryNode, ToastType, AppSettings } from './types';
+import { formatBytes } from './utils/format';
+import { getSettings } from './utils/settings';
+import { TOAST_KEY } from './composables/useToast';
 
 use([CanvasRenderer, TreemapChart, TitleComponent, TooltipComponent]);
-
-interface DiskInfo {
-  drive_letter: string;
-  label: string;
-  file_system: string;
-  total_space: number;
-  free_space: number;
-  used_space: number;
-  usage_percent: number;
-}
-
-interface DirectoryNode {
-  path: string;
-  name: string;
-  size: number;
-  file_count: number;
-  children: DirectoryNode[];
-  is_symlink: boolean;
-  link_target?: string;
-}
-
-interface FileInfo {
-  path: string;
-  name: string;
-  size: number;
-  extension: string;
-  modified_at: string;
-  is_readonly: boolean;
-}
-
-interface ScanResult {
-  root_path: string;
-  total_size: number;
-  total_files: number;
-  total_dirs: number;
-  scan_duration_ms: number;
-  directories: DirectoryNode[];
-  large_files: FileInfo[];
-  inaccessible_count: number;
-}
 
 const disks = ref<DiskInfo[]>([]);
 const selectedDisk = ref<string>('');
@@ -68,16 +32,19 @@ const error = ref<string>('');
 const viewMode = ref<'treemap' | 'list' | 'large-files'>('treemap');
 const navigationStack = ref<string[]>([]);
 const scanCache = ref<Map<string, ScanResult>>(new Map());
+const deepTreeIndex = ref<Map<string, DirectoryNode>>(new Map());
 const hasDeepScanned = ref(false);
 
 const showToast = ref(false);
 const toastMessage = ref('');
 const toastSubMessage = ref('');
-const toastType = ref<'success' | 'info' | 'warning' | 'error'>('success');
+const toastType = ref<ToastType>('success');
 
 const showSettings = ref(false);
 const showHistory = ref(false);
 const showWelcome = ref(false);
+
+provide(TOAST_KEY, showToastNotification);
 
 onMounted(async () => {
   await loadDisks();
@@ -108,6 +75,26 @@ async function loadDisks() {
   }
 }
 
+function buildTreeIndex(nodes: DirectoryNode[], index: Map<string, DirectoryNode>) {
+  for (const node of nodes) {
+    index.set(node.path, node);
+    if (node.children?.length) buildTreeIndex(node.children, index);
+  }
+}
+
+function makeIndexedResult(node: DirectoryNode, inaccessibleCount = 0, scanDurationMs = 0): ScanResult {
+  return {
+    root_path: node.path,
+    total_size: node.size,
+    total_files: node.file_count,
+    total_dirs: node.children.length,
+    scan_duration_ms: scanDurationMs,
+    directories: node.children,
+    large_files: [],
+    inaccessible_count: inaccessibleCount,
+  };
+}
+
 async function startScan() {
   if (!selectedDisk.value) return;
   
@@ -118,6 +105,7 @@ async function startScan() {
   deepScanResult.value = null;
   navigationStack.value = [];
   scanCache.value.clear();
+  deepTreeIndex.value.clear();
   hasDeepScanned.value = false;
 
   try {
@@ -132,9 +120,13 @@ async function startScan() {
       'success'
     );
   } catch (err) {
-    console.error('扫描失败:', err);
-    error.value = '扫描失败';
-    showToastNotification('扫描失败', '无法访问磁盘', 'error');
+    const msg = String(err);
+    if (msg.includes('取消')) {
+      showToastNotification('扫描已取消', '', 'info');
+    } else {
+      error.value = '扫描失败';
+      showToastNotification('扫描失败', '无法访问磁盘', 'error');
+    }
   } finally {
     scanning.value = false;
   }
@@ -165,37 +157,6 @@ async function startDeepScan() {
   
   // 立即设置状态，提供即时反馈
   deepScanning.value = true;
-  
-  // 先检查是否有深度扫描缓存
-  try {
-    const cached = await invoke<ScanResult | null>('get_scan_cache', { 
-      diskPath: selectedDisk.value,
-      scanType: 'deep'
-    });
-    
-    if (cached) {
-      deepScanResult.value = cached;
-      scanCache.value.set(selectedDisk.value, cached);
-      hasDeepScanned.value = true;
-      
-      if (navigationStack.value.length === 0) {
-        navigationStack.value = [selectedDisk.value];
-        scanResult.value = cached;
-      } else if (navigationStack.value[navigationStack.value.length - 1] === selectedDisk.value) {
-        scanResult.value = cached;
-      }
-      
-      showToastNotification(
-        '已加载深度扫描缓存',
-        `发现 ${cached.total_files.toLocaleString()} 个文件 · ${formatBytes(cached.total_size)}`,
-        'info'
-      );
-      deepScanning.value = false;
-      return;
-    }
-  } catch (err) {
-    console.log('无深度扫描缓存，开始扫描');
-  }
 
   try {
     const estimatedFiles = scanResult.value?.total_files ?? 800000;
@@ -207,6 +168,10 @@ async function startDeepScan() {
     deepScanResult.value = result;
     scanCache.value.set(selectedDisk.value, result);
     hasDeepScanned.value = true;
+    
+    const idx = new Map<string, DirectoryNode>();
+    buildTreeIndex(result.directories, idx);
+    deepTreeIndex.value = idx;
     
     if (navigationStack.value.length === 0) {
       navigationStack.value = [selectedDisk.value];
@@ -221,14 +186,18 @@ async function startDeepScan() {
       'success'
     );
   } catch (err) {
-    console.error('深度扫描失败:', err);
-    showToastNotification('深度扫描失败', '无法完成深度分析', 'error');
+    const msg = String(err);
+    if (msg.includes('取消')) {
+      showToastNotification('深度扫描已取消', '', 'info');
+    } else {
+      showToastNotification('深度扫描失败', '无法完成深度分析', 'error');
+    }
   } finally {
     deepScanning.value = false;
   }
 }
 
-function showToastNotification(message: string, subMessage: string, type: 'success' | 'info' | 'warning' | 'error' = 'success') {
+function showToastNotification(message: string, subMessage: string, type: ToastType = 'success') {
   toastMessage.value = message;
   toastSubMessage.value = subMessage;
   toastType.value = type;
@@ -237,14 +206,6 @@ function showToastNotification(message: string, subMessage: string, type: 'succe
 
 function closeToast() {
   showToast.value = false;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
 }
 
 async function navigateToPath(path: string) {
@@ -256,36 +217,13 @@ async function navigateToPath(path: string) {
     return;
   }
 
-  if (deepScanResult.value) {
-    const findInTree = (nodes: any[], targetPath: string): any => {
-      for (const node of nodes) {
-        if (node.path === targetPath) {
-          return {
-            root_path: node.path,
-            total_size: node.size,
-            total_files: node.file_count,
-            total_dirs: node.children.length,
-            scan_duration_ms: 0,
-            directories: node.children,
-            large_files: [],
-            inaccessible_count: 0
-          };
-        }
-        if (node.children && node.children.length > 0) {
-          const found = findInTree(node.children, targetPath);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    const found = findInTree(deepScanResult.value.directories, path);
-    if (found) {
-      scanResult.value = found;
-      navigationStack.value.push(path);
-      scanCache.value.set(path, found);
-      return;
-    }
+  const indexedNode = deepTreeIndex.value.get(path);
+  if (indexedNode) {
+    const found = makeIndexedResult(indexedNode);
+    scanResult.value = found;
+    navigationStack.value.push(path);
+    scanCache.value.set(path, found);
+    return;
   }
 
   scanning.value = true;
@@ -300,6 +238,64 @@ async function navigateToPath(path: string) {
     error.value = '无法访问该目录';
   } finally {
     scanning.value = false;
+  }
+}
+
+async function refreshAfterMigration(paths: string[]) {
+  if (!selectedDisk.value) {
+    return;
+  }
+
+  const currentPath = navigationStack.value[navigationStack.value.length - 1] || selectedDisk.value;
+
+  try {
+    if (hasDeepScanned.value) {
+      const estimatedFiles = deepScanResult.value?.total_files ?? scanResult.value?.total_files ?? 800000;
+      const result = await invoke<ScanResult>('scan_disk_deep', {
+        path: selectedDisk.value,
+        estimatedFiles
+      });
+
+      deepScanResult.value = result;
+      const index = new Map<string, DirectoryNode>();
+      buildTreeIndex(result.directories, index);
+      deepTreeIndex.value = index;
+
+      scanCache.value.clear();
+      scanCache.value.set(selectedDisk.value, result);
+
+      if (currentPath === selectedDisk.value) {
+        scanResult.value = result;
+      } else {
+        const currentNode = index.get(currentPath);
+        if (currentNode) {
+          const refreshed = makeIndexedResult(currentNode, result.inaccessible_count, result.scan_duration_ms);
+          scanResult.value = refreshed;
+          scanCache.value.set(currentPath, refreshed);
+        } else {
+          navigationStack.value = [selectedDisk.value];
+          scanResult.value = result;
+        }
+      }
+    } else {
+      const result = await invoke<ScanResult>('scan_disk_incremental', { path: selectedDisk.value });
+      scanCache.value.clear();
+      scanCache.value.set(selectedDisk.value, result);
+      navigationStack.value = [selectedDisk.value];
+      scanResult.value = result;
+    }
+
+    showToastNotification(
+      '扫描结果已更新',
+      `已同步 ${paths.length} 项迁移后的空间变化`,
+      'info'
+    );
+  } catch {
+    showToastNotification(
+      '迁移已完成',
+      '结果刷新失败，请手动重新扫描一次',
+      'warning'
+    );
   }
 }
 
@@ -329,15 +325,10 @@ function closeHistory() {
   showHistory.value = false;
 }
 
-function saveSettings(newSettings: any) {
-  if (newSettings.largeFileThreshold) {
-    console.log('应用大文件阈值:', newSettings.largeFileThreshold);
-  }
-  
+function onSettingsSaved(newSettings: AppSettings) {
   if (newSettings.theme) {
     applyTheme(newSettings.theme);
   }
-  
   showToastNotification('设置已保存', '您的偏好设置已成功保存', 'success');
 }
 
@@ -351,19 +342,10 @@ function applyTheme(theme: 'light' | 'dark' | 'auto') {
 }
 
 function loadUserSettings() {
-  const saved = localStorage.getItem('cdrive-cleaner-settings');
-  if (saved) {
-    try {
-      const settings = JSON.parse(saved);
-      if (settings.theme) {
-        applyTheme(settings.theme);
-      }
-      return settings;
-    } catch (e) {
-      console.error('Failed to load settings:', e);
-    }
+  const settings = getSettings();
+  if (settings.theme) {
+    applyTheme(settings.theme);
   }
-  return null;
 }
 </script>
 
@@ -444,6 +426,7 @@ function loadUserSettings() {
         @navigate="navigateToPath"
         @go-back="goBack"
         @start-deep-scan="startDeepScan"
+        @migrated="refreshAfterMigration"
       />
 
       <div v-if="error" class="error">{{ error }}</div>
@@ -463,7 +446,7 @@ function loadUserSettings() {
       :show="showSettings"
       :available-disks="disks"
       @close="closeSettings"
-      @save="saveSettings"
+      @save="onSettingsSaved"
     />
 
     <div v-if="showHistory" class="modal-overlay" @click="closeHistory">

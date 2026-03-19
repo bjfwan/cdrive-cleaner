@@ -1,15 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { IconFile, IconDocument, IconMigrate } from './icons';
-
-interface FileInfo {
-  path: string;
-  name: string;
-  size: number;
-  extension: string;
-  modified_at: string;
-  is_readonly: boolean;
-}
+import type { FileInfo } from '../types';
+import { formatBytes, formatDate } from '../utils/format';
+import { getSettings } from '../utils/settings';
 
 interface Props {
   files: FileInfo[];
@@ -18,58 +12,20 @@ interface Props {
 }
 
 const props = defineProps<Props>();
-const emit = defineEmits<{
+defineEmits<{
   'migrate-file': [file: FileInfo];
 }>();
 
-const largeFileThreshold = ref(100); // 默认 100 MB
+const largeFileThreshold = ref(100);
 
 onMounted(() => {
-  loadThreshold();
+  largeFileThreshold.value = getSettings().largeFileThreshold;
 });
 
-function loadThreshold() {
-  const saved = localStorage.getItem('cdrive-cleaner-settings');
-  if (saved) {
-    try {
-      const settings = JSON.parse(saved);
-      if (settings.largeFileThreshold) {
-        largeFileThreshold.value = settings.largeFileThreshold;
-      }
-    } catch (e) {
-      console.error('Failed to load threshold:', e);
-    }
-  }
-}
-
-// 根据设置的阈值过滤文件
 const filteredFiles = computed(() => {
   const thresholdBytes = largeFileThreshold.value * 1024 * 1024;
   return props.files.filter(file => file.size >= thresholdBytes);
 });
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
-}
-
-function formatDate(dateStr: string): string {
-  try {
-    const date = new Date(dateStr);
-    return date.toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  } catch {
-    return dateStr;
-  }
-}
 </script>
 
 <template>

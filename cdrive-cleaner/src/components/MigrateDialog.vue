@@ -1,48 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { IconClose, IconWarning, IconError, IconShield } from './icons';
+import type { DirectoryNode, FileInfo, DiskInfo, MigrationSafety, MigrationResult } from '../types';
+import { formatBytes, formatNumber, formatSpeed, formatDuration as formatTime } from '../utils/format';
+import { getSettings } from '../utils/settings';
+import { useToast } from '../composables/useToast';
 
-interface DirectoryNode {
-  path: string;
-  name: string;
-  size: number;
-  file_count: number;
-  children: DirectoryNode[];
-  is_symlink: boolean;
-  link_target?: string;
-  safety?: {
-    risk_level: 'safe' | 'moderate' | 'risky' | 'dangerous';
-    safety_score: number;
-    can_migrate: boolean;
-    reasons: string[];
-    recommendations: string[];
-    app_type: string;
-  };
-}
-
-interface FileInfo {
-  path: string;
-  name: string;
-  size: number;
-  extension: string;
-  modified_at: string;
-  is_readonly: boolean;
-}
-
-interface DiskInfo {
-  drive_letter: string;
-  label: string;
-  free_space: number;
-}
-
-interface MigrationSafety {
-  risk_level: 'safe' | 'moderate' | 'risky' | 'dangerous';
-  safety_score: number;
-  can_migrate: boolean;
-  reasons: string[];
-  recommendations: string[];
-  app_type: string;
-}
+const showToast = useToast();
 
 interface Props {
   show: boolean;
@@ -55,14 +19,14 @@ interface Props {
 const props = defineProps<Props>();
 const emit = defineEmits<{
   'close': [];
-  'migrate': [targetDisk: string];
+  'migrated': [paths: string[]];
 }>();
 
 const targetDisk = ref<string>('');
 const migrating = ref(false);
 const migrationError = ref<string>('');
 const migrationSuccess = ref(false);
-const migrationResult = ref<any>(null);
+const migrationResult = ref<MigrationResult | null>(null);
 const currentMigratingIndex = ref(0);
 const migrationResults = ref<Array<{ path: string; success: boolean; error?: string }>>([]);
 
@@ -72,6 +36,9 @@ const migrationSpeed = ref(0);
 const estimatedTimeRemaining = ref(0);
 const elapsedTime = ref(0);
 const updateTimer = ref<number | null>(null);
+const migrationProgressPercent = ref(0);
+const migrationStatus = ref<'copying' | 'verifying' | 'creating_link' | 'cleaning_up'>('copying');
+const currentMigratingFile = ref('');
 
 // 安全性分析
 const safetyAnalysis = ref<MigrationSafety | null>(null);
@@ -95,16 +62,9 @@ watch(() => props.show, async (newShow) => {
 });
 
 function loadDefaultTargetDisk() {
-  const saved = localStorage.getItem('cdrive-cleaner-settings');
-  if (saved) {
-    try {
-      const settings = JSON.parse(saved);
-      if (settings.defaultTargetDisk) {
-        targetDisk.value = settings.defaultTargetDisk;
-      }
-    } catch (e) {
-      console.error('Failed to load default target disk:', e);
-    }
+  const settings = getSettings();
+  if (settings.defaultTargetDisk) {
+    targetDisk.value = settings.defaultTargetDisk;
   }
 }
 
@@ -116,13 +76,14 @@ async function analyzeSafety() {
   safetyAnalysisStartTime.value = Date.now();
   safetyScannedDirs.value = 0;
   safetyDirsPerSecond.value = 0;
+  let unlisten: (() => void) | null = null;
   
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     const { listen } = await import('@tauri-apps/api/event');
     
     // 监听进度事件
-    const unlisten = await listen('safety-analysis-progress', (event: any) => {
+    unlisten = await listen<{ scanned_dirs: number; dirs_per_second: number }>('safety-analysis-progress', (event) => {
       const progress = event.payload;
       safetyScannedDirs.value = progress.scanned_dirs;
       safetyDirsPerSecond.value = progress.dirs_per_second;
@@ -135,12 +96,10 @@ async function analyzeSafety() {
     
     safetyAnalysisDuration.value = Date.now() - safetyAnalysisStartTime.value;
     safetyAnalysis.value = result;
-    
-    // 取消监听
-    unlisten();
-  } catch (err) {
-    console.error('安全性分析失败:', err);
+  } catch {
+    showToast('安全性分析失败', '无法完成迁移安全性评估', 'warning');
   } finally {
+    unlisten?.();
     analyzingSafety.value = false;
   }
 }
@@ -194,31 +153,53 @@ const itemSize = computed(() => {
   return props.selectedFile?.size || props.selectedDir?.size || 0;
 });
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
-}
+const migrationStatusText = computed(() => {
+  switch (migrationStatus.value) {
+    case 'verifying':
+      return '正在校验复制结果';
+    case 'creating_link':
+      return '正在创建原路径链接';
+    case 'cleaning_up':
+      return '正在清理原始数据';
+    default:
+      return '正在复制文件到目标磁盘';
+  }
+});
 
-function formatNumber(num: number): string {
-  return num.toLocaleString('zh-CN');
-}
+const successMessage = computed(() => {
+  if (isBatchMode.value) {
+    return '';
+  }
 
-function formatSpeed(bytesPerSecond: number): string {
-  if (bytesPerSecond === 0) return '0 B/s';
-  const k = 1024;
-  const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
-  const i = Math.floor(Math.log(bytesPerSecond) / Math.log(k));
-  return `${(bytesPerSecond / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
-}
+  if (migrationResult.value?.link_type && migrationResult.value.link_type !== 'none') {
+    return '原路径会保留为链接占位，因此在 C 盘还能看到同名条目，但实际数据已经迁移走，不再占用原始空间。';
+  }
 
-function formatTime(seconds: number): string {
-  if (seconds < 60) return `${Math.round(seconds)} 秒`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分 ${Math.round(seconds % 60)} 秒`;
-  return `${Math.floor(seconds / 3600)} 小时 ${Math.floor((seconds % 3600) / 60)} 分`;
-}
+  return '文件已成功迁移到目标磁盘，原路径已移除。';
+});
+
+const willKeepSourceLink = computed(() => {
+  if (migrationResult.value) {
+    return migrationResult.value.link_type !== 'none';
+  }
+
+  return getSettings().createSymlink;
+});
+
+const linkTypeText = computed(() => {
+  switch (migrationResult.value?.link_type) {
+    case 'junction':
+      return 'Junction';
+    case 'symlink':
+      return '符号链接';
+    case 'hardlink':
+      return '硬链接';
+    case 'none':
+      return '不保留链接';
+    default:
+      return '自动';
+  }
+});
 
 function startProgressTimer() {
   if (updateTimer.value) {
@@ -252,6 +233,9 @@ function close() {
   migrationSpeed.value = 0;
   estimatedTimeRemaining.value = 0;
   elapsedTime.value = 0;
+  migrationProgressPercent.value = 0;
+  migrationStatus.value = 'copying';
+  currentMigratingFile.value = '';
   safetyAnalysis.value = null;
   analyzingSafety.value = false;
   emit('close');
@@ -281,38 +265,51 @@ async function startSingleMigration() {
   migrationStartTime.value = Date.now();
   migratedSize.value = 0;
   elapsedTime.value = 0;
+  migrationProgressPercent.value = 0;
+  migrationStatus.value = 'copying';
+  currentMigratingFile.value = '';
   startProgressTimer();
+  let unlisten: (() => void) | null = null;
 
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    
-    // 从设置中读取是否创建符号链接
-    const saved = localStorage.getItem('cdrive-cleaner-settings');
-    let createSymlink = true; // 默认创建
-    if (saved) {
-      try {
-        const settings = JSON.parse(saved);
-        createSymlink = settings.createSymlink !== false;
-      } catch (e) {
-        console.error('Failed to load settings:', e);
+    const { listen } = await import('@tauri-apps/api/event');
+    const { createSymlink } = getSettings();
+
+    unlisten = await listen<{ status: 'copying' | 'verifying' | 'creating_link' | 'cleaning_up'; copied_bytes: number; total_bytes: number; copied_files: number; total_files: number; progress_percent: number; current_file: string }>('migration-progress', (event) => {
+      const p = event.payload;
+      migrationStatus.value = p.status;
+      migratedSize.value = p.copied_bytes;
+      migrationProgressPercent.value = p.progress_percent;
+      currentMigratingFile.value = p.current_file;
+      const elapsed = (Date.now() - migrationStartTime.value) / 1000;
+      if (elapsed > 0) {
+        migrationSpeed.value = p.copied_bytes / elapsed;
+        const remaining = p.total_bytes - p.copied_bytes;
+        estimatedTimeRemaining.value = migrationSpeed.value > 0 ? remaining / migrationSpeed.value : 0;
       }
-    }
-    
-    const result = await invoke('migrate_file', {
+    });
+
+    const result = await invoke<MigrationResult>('migrate_file', {
       source: itemPath.value,
       targetDisk: targetDisk.value,
       linkType: createSymlink ? null : 'none'
     });
-    
+
+    if (!result.success) {
+      throw new Error(result.error || '迁移失败');
+    }
     stopProgressTimer();
     migrationSuccess.value = true;
     migrationResult.value = result;
     migrating.value = false;
+    emit('migrated', [result.source_path]);
   } catch (err) {
     stopProgressTimer();
-    console.error('迁移失败:', err);
     migrationError.value = String(err);
     migrating.value = false;
+  } finally {
+    unlisten?.();
   }
 }
 
@@ -323,34 +320,30 @@ async function startBatchMigration() {
   currentMigratingIndex.value = 0;
   migrationStartTime.value = Date.now();
   migratedSize.value = 0;
+  migrationProgressPercent.value = 0;
+  migrationStatus.value = 'copying';
 
   const { invoke } = await import('@tauri-apps/api/core');
   const totalSize = itemSize.value;
-
-  // 从设置中读取是否创建符号链接
-  const saved = localStorage.getItem('cdrive-cleaner-settings');
-  let createSymlink = true; // 默认创建
-  if (saved) {
-    try {
-      const settings = JSON.parse(saved);
-      createSymlink = settings.createSymlink !== false;
-    } catch (e) {
-      console.error('Failed to load settings:', e);
-    }
-  }
+  const { createSymlink } = getSettings();
+  const succeededPaths: string[] = [];
 
   for (let i = 0; i < props.selectedItems.length; i++) {
     currentMigratingIndex.value = i;
     const item = props.selectedItems[i];
     
     try {
-      await invoke('migrate_file', {
+      const result = await invoke<MigrationResult>('migrate_file', {
         source: item.path,
         targetDisk: targetDisk.value,
         linkType: createSymlink ? null : 'none'
       });
+      if (!result.success) {
+        throw new Error(result.error || '迁移失败');
+      }
       
       migratedSize.value += item.size || 0;
+      migrationProgressPercent.value = (migratedSize.value / totalSize) * 100;
       
       const elapsedSeconds = (Date.now() - migrationStartTime.value) / 1000;
       if (elapsedSeconds > 0) {
@@ -363,8 +356,8 @@ async function startBatchMigration() {
         path: item.path,
         success: true
       });
+      succeededPaths.push(item.path);
     } catch (err) {
-      console.error(`迁移失败 ${item.path}:`, err);
       migrationResults.value.push({
         path: item.path,
         success: false,
@@ -375,10 +368,13 @@ async function startBatchMigration() {
 
   migrating.value = false;
   migrationSuccess.value = migrationResults.value.some(r => r.success);
-  
+
   const failedCount = migrationResults.value.filter(r => !r.success).length;
   if (failedCount > 0) {
     migrationError.value = `${failedCount} 项迁移失败`;
+  }
+  if (succeededPaths.length > 0) {
+    emit('migrated', succeededPaths);
   }
 }
 </script>
@@ -496,7 +492,7 @@ async function startBatchMigration() {
           
           <div class="warning">
             <IconWarning :size="20" />
-            <span>迁移后将在原位置创建符号链接，程序可正常访问</span>
+            <span>{{ willKeepSourceLink ? '迁移后会在原位置保留链接占位，程序仍可从旧路径访问。' : '迁移后会直接移除原路径，不再保留链接占位。' }}</span>
           </div>
           
           <div v-if="migrationError" class="error">
@@ -522,7 +518,7 @@ async function startBatchMigration() {
             </div>
             <div v-else class="progress-bar-wrapper">
               <div class="progress-bar-track">
-                <div class="progress-bar-fill"></div>
+                <div class="progress-bar-fill" :style="{ width: `${migrationProgressPercent}%` }"></div>
               </div>
             </div>
             
@@ -530,13 +526,25 @@ async function startBatchMigration() {
               <span class="progress-text" v-if="isBatchMode && selectedItems[currentMigratingIndex]">
                 {{ selectedItems[currentMigratingIndex].name }}
               </span>
-              <span class="progress-text" v-else>正在复制文件到目标磁盘</span>
+              <span class="progress-text" v-else>{{ migrationStatusText }}</span>
             </div>
             
-            <div v-if="isBatchMode && migrationSpeed > 0" class="progress-details">
+            <div v-if="(isBatchMode && migrationSpeed > 0) || (!isBatchMode && (migrationSpeed > 0 || migrationProgressPercent > 0))" class="progress-details">
               <div class="progress-detail-item">
                 <span class="detail-label">已传输</span>
                 <span class="detail-value">{{ formatBytes(migratedSize) }} / {{ formatBytes(itemSize) }}</span>
+              </div>
+              <div v-if="!isBatchMode" class="progress-detail-item">
+                <span class="detail-label">当前进度</span>
+                <span class="detail-value">{{ migrationProgressPercent.toFixed(1) }}%</span>
+              </div>
+              <div v-if="!isBatchMode && currentMigratingFile" class="progress-detail-item">
+                <span class="detail-label">当前文件</span>
+                <span class="detail-value">{{ currentMigratingFile }}</span>
+              </div>
+              <div v-if="!isBatchMode && migrationSpeed > 0" class="progress-detail-item">
+                <span class="detail-label">传输速度</span>
+                <span class="detail-value">{{ formatSpeed(migrationSpeed) }}</span>
               </div>
               <div class="progress-detail-item" v-if="estimatedTimeRemaining > 0 && estimatedTimeRemaining < 86400">
                 <span class="detail-label">剩余时间</span>
@@ -583,7 +591,7 @@ async function startBatchMigration() {
             失败 {{ migrationResults.filter(r => !r.success).length }} 项
           </p>
         </div>
-        <p v-else class="success-message">文件已成功迁移到目标磁盘，并在原位置创建了符号链接</p>
+        <p v-else class="success-message">{{ successMessage }}</p>
         
         <div v-if="isBatchMode" class="batch-results">
           <div v-for="result in migrationResults" :key="result.path" class="batch-result-item" :class="{ 'result-error': !result.success }">
@@ -614,8 +622,12 @@ async function startBatchMigration() {
             <span class="value">{{ formatBytes(migrationResult?.file_size || 0) }}</span>
           </div>
           <div class="detail-row">
+            <span class="label">保留方式</span>
+            <span class="value">{{ linkTypeText }}</span>
+          </div>
+          <div class="detail-row">
             <span class="label">耗时</span>
-            <span class="value">{{ (migrationResult?.duration_ms / 1000).toFixed(2) }} 秒</span>
+            <span class="value">{{ ((migrationResult?.duration_ms ?? 0) / 1000).toFixed(2) }} 秒</span>
           </div>
         </div>
         
