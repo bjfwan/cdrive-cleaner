@@ -2,8 +2,10 @@ use super::file_info::{DirectoryNode, FileInfo, ScanResult};
 use std::path::{Path, PathBuf};
 use std::collections::{HashMap, HashSet};
 use anyhow::Result;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Runtime};
 use crate::winfs;
+
+type IncrementalProgressEmitter = std::sync::Arc<dyn Fn(IncrementalScanProgress) + Send + Sync>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ChangeStatus {
@@ -17,12 +19,20 @@ pub enum ChangeStatus {
 pub struct ChangedDirectory {
     pub path: PathBuf,
     pub status: ChangeStatus,
+    pub mode: RescanMode,
 }
 
 #[derive(Debug, Clone)]
 struct RescannedDirectory {
     node: DirectoryNode,
     large_files: Vec<FileInfo>,
+    mode: RescanMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RescanMode {
+    Recursive,
+    DirectFilesOnly,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -32,6 +42,16 @@ pub struct IncrementalScanProgress {
     pub checked_dirs: usize,
     pub changed_dirs: usize,
     pub scanned_dirs: usize,
+}
+
+#[derive(Debug, Default)]
+struct TreeMergeHealth {
+    unique_dir_nodes: usize,
+    duplicate_paths: usize,
+    orphan_root_count: usize,
+    orphan_root_samples: Vec<String>,
+    inconsistent_node_count: usize,
+    inconsistent_node_samples: Vec<String>,
 }
 
 #[cfg(windows)]
@@ -78,6 +98,63 @@ fn resolve_link_target(path: &Path) -> Option<String> {
     Some(resolved.to_string_lossy().to_string())
 }
 
+#[cfg(windows)]
+fn normalized_path_key(path: &Path) -> String {
+    let mut text = path.to_string_lossy().replace('/', "\\").to_ascii_lowercase();
+    while text.ends_with('\\') && text.len() > 3 {
+        text.pop();
+    }
+    text
+}
+
+#[cfg(not(windows))]
+fn normalized_path_key(path: &Path) -> String {
+    path.to_string_lossy().to_string()
+}
+
+fn normalized_path_key_str(path: &str) -> String {
+    normalized_path_key(Path::new(path))
+}
+
+fn path_matches(node_path: &str, other: &Path) -> bool {
+    normalized_path_key_str(node_path) == normalized_path_key(other)
+}
+
+fn path_starts_with(candidate: &Path, prefix: &Path) -> bool {
+    let candidate_components: Vec<String> = candidate
+        .components()
+        .map(|component| {
+            #[cfg(windows)]
+            {
+                component.as_os_str().to_string_lossy().to_ascii_lowercase()
+            }
+            #[cfg(not(windows))]
+            {
+                component.as_os_str().to_string_lossy().to_string()
+            }
+        })
+        .collect();
+    let prefix_components: Vec<String> = prefix
+        .components()
+        .map(|component| {
+            #[cfg(windows)]
+            {
+                component.as_os_str().to_string_lossy().to_ascii_lowercase()
+            }
+            #[cfg(not(windows))]
+            {
+                component.as_os_str().to_string_lossy().to_string()
+            }
+        })
+        .collect();
+
+    candidate_components.starts_with(&prefix_components)
+}
+
+fn path_starts_with_str(candidate: &str, prefix: &Path) -> bool {
+    path_starts_with(Path::new(candidate), prefix)
+}
+
 pub fn check_directory_changes(cached_node: &DirectoryNode, current_path: &Path) -> ChangeStatus {
     let current_metadata = match std::fs::symlink_metadata(current_path) {
         Ok(m) => m,
@@ -106,12 +183,11 @@ pub fn check_directory_changes(cached_node: &DirectoryNode, current_path: &Path)
 }
 
 pub fn detect_changes_recursive(cached_tree: &[DirectoryNode], current_path: &Path) -> Vec<ChangedDirectory> {
-    let current_path_str = current_path.to_string_lossy().to_string();
     let cached_nodes: Vec<&DirectoryNode> = cached_tree.iter()
-        .filter(|node| node.path != current_path_str)
+        .filter(|node| !path_matches(&node.path, current_path))
         .collect();
     let cached_map: HashMap<String, &DirectoryNode> = cached_nodes.iter()
-        .map(|node| (node.path.clone(), *node))
+        .map(|node| (normalized_path_key_str(&node.path), *node))
         .collect();
     let mut current_dirs = HashSet::new();
     let mut changes = Vec::new();
@@ -130,18 +206,20 @@ pub fn detect_changes_recursive(cached_tree: &[DirectoryNode], current_path: &Pa
                 continue;
             }
 
-            let entry_str = entry_path.to_string_lossy().to_string();
-            current_dirs.insert(entry_str.clone());
+            let entry_key = normalized_path_key(&entry_path);
+            current_dirs.insert(entry_key.clone());
 
-            if let Some(node) = cached_map.get(&entry_str) {
+            if let Some(node) = cached_map.get(&entry_key) {
                 match check_directory_changes(node, &entry_path) {
                     ChangeStatus::Deleted => changes.push(ChangedDirectory {
                         path: entry_path,
                         status: ChangeStatus::Deleted,
+                        mode: RescanMode::Recursive,
                     }),
                     ChangeStatus::Modified => changes.push(ChangedDirectory {
                         path: entry_path,
                         status: ChangeStatus::Modified,
+                        mode: RescanMode::Recursive,
                     }),
                     ChangeStatus::Unchanged => {
                         changes.extend(detect_changes_recursive(&node.children, &entry_path));
@@ -152,16 +230,18 @@ pub fn detect_changes_recursive(cached_tree: &[DirectoryNode], current_path: &Pa
                 changes.push(ChangedDirectory {
                     path: entry_path,
                     status: ChangeStatus::New,
+                    mode: RescanMode::Recursive,
                 });
             }
         }
     }
 
     for node in cached_nodes {
-        if !current_dirs.contains(&node.path) {
+        if !current_dirs.contains(&normalized_path_key_str(&node.path)) {
             changes.push(ChangedDirectory {
                 path: PathBuf::from(&node.path),
                 status: ChangeStatus::Deleted,
+                mode: RescanMode::Recursive,
             });
         }
     }
@@ -178,7 +258,32 @@ fn build_file_id_index(nodes: &[DirectoryNode], map: &mut HashMap<u64, String>) 
     }
 }
 
-fn normalize_changed_dirs(root_path: &Path, candidates: HashSet<String>) -> Vec<PathBuf> {
+fn normalize_recursive_changed_dirs(root_path: &Path, candidates: HashSet<String>) -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = candidates
+        .into_iter()
+        .map(PathBuf::from)
+        .filter(|path| path != root_path)
+        .filter(|path| path.starts_with(root_path))
+        .collect();
+
+    paths.sort_by(|a, b| {
+        b.components()
+            .count()
+            .cmp(&a.components().count())
+            .then_with(|| a.cmp(b))
+    });
+
+    let mut normalized: Vec<PathBuf> = Vec::new();
+    for path in paths {
+        if normalized.iter().any(|existing| path_starts_with(existing, &path)) {
+            continue;
+        }
+        normalized.push(path);
+    }
+    normalized
+}
+
+fn collect_direct_file_changed_dirs(root_path: &Path, candidates: HashSet<String>) -> Vec<PathBuf> {
     let mut paths: Vec<PathBuf> = candidates
         .into_iter()
         .map(PathBuf::from)
@@ -193,14 +298,7 @@ fn normalize_changed_dirs(root_path: &Path, candidates: HashSet<String>) -> Vec<
             .then_with(|| a.cmp(b))
     });
 
-    let mut normalized: Vec<PathBuf> = Vec::new();
-    for path in paths {
-        if normalized.iter().any(|existing| path.starts_with(existing)) {
-            continue;
-        }
-        normalized.push(path);
-    }
-    normalized
+    paths
 }
 
 fn detect_changes_via_usn(path: &Path, cached_result: &ScanResult) -> Option<(Vec<ChangedDirectory>, bool)> {
@@ -220,7 +318,13 @@ fn detect_changes_via_usn(path: &Path, cached_result: &ScanResult) -> Option<(Ve
         _ => return None,
     };
 
-    let changes = normalize_changed_dirs(path, change_set.changed_dirs)
+    let recursive_paths = normalize_recursive_changed_dirs(path, change_set.recursive_dirs);
+    let recursive_keys: HashSet<String> = recursive_paths
+        .iter()
+        .map(|candidate| normalized_path_key(candidate))
+        .collect();
+
+    let mut changes: Vec<ChangedDirectory> = recursive_paths
         .into_iter()
         .map(|candidate| ChangedDirectory {
             status: if candidate.exists() {
@@ -229,8 +333,28 @@ fn detect_changes_via_usn(path: &Path, cached_result: &ScanResult) -> Option<(Ve
                 ChangeStatus::Deleted
             },
             path: candidate,
+            mode: RescanMode::Recursive,
         })
         .collect();
+
+    changes.extend(
+        collect_direct_file_changed_dirs(path, change_set.direct_file_dirs)
+            .into_iter()
+            .filter(|candidate| {
+                !recursive_keys.iter().any(|existing| {
+                    path_starts_with(candidate, Path::new(existing))
+                })
+            })
+            .map(|candidate| ChangedDirectory {
+                status: if candidate.exists() {
+                    ChangeStatus::Modified
+                } else {
+                    ChangeStatus::Deleted
+                },
+                path: candidate,
+                mode: RescanMode::DirectFilesOnly,
+            }),
+    );
 
     Some((changes, change_set.root_files_changed))
 }
@@ -262,7 +386,7 @@ fn sort_directory_tree(nodes: &mut [DirectoryNode]) {
     nodes.sort_by(|a, b| b.size.cmp(&a.size));
 }
 
-fn scan_root_files(path: &Path, large_file_threshold: u64) -> (u64, usize, Vec<FileInfo>) {
+pub(crate) fn scan_root_files(path: &Path, large_file_threshold: u64) -> (u64, usize, Vec<FileInfo>) {
     let mut total_size = 0u64;
     let mut total_files = 0usize;
     let mut large_files = Vec::new();
@@ -291,9 +415,65 @@ fn scan_root_files(path: &Path, large_file_threshold: u64) -> (u64, usize, Vec<F
     (total_size, total_files, large_files)
 }
 
+fn index_cached_nodes<'a>(nodes: &'a [DirectoryNode], map: &mut HashMap<String, &'a DirectoryNode>) {
+    for node in nodes {
+        if node.dir_count > 0 {
+            map.insert(normalized_path_key_str(&node.path), node);
+        }
+        index_cached_nodes(&node.children, map);
+    }
+}
+
 /// 重新扫描单个目录，返回更新后的 DirectoryNode
 fn rescan_directory(path: &Path, large_file_threshold: u64) -> Option<RescannedDirectory> {
     rescan_directory_tree(path, large_file_threshold)
+        .map(|mut result| {
+            result.mode = RescanMode::Recursive;
+            result
+        })
+}
+
+pub(crate) fn rescan_directory_snapshot(
+    path: &Path,
+    large_file_threshold: u64,
+) -> Option<(DirectoryNode, Vec<FileInfo>)> {
+    rescan_directory_tree(path, large_file_threshold).map(|result| (result.node, result.large_files))
+}
+
+fn refresh_directory_direct_files(
+    path: &Path,
+    cached_node: &DirectoryNode,
+    large_file_threshold: u64,
+) -> Option<RescannedDirectory> {
+    let root_metadata = std::fs::symlink_metadata(path).ok()?;
+    if is_link_entry(&root_metadata) || !root_metadata.is_dir() {
+        return None;
+    }
+
+    let modified_time = root_metadata
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs());
+
+    let (direct_size, direct_files, large_files) = scan_root_files(path, large_file_threshold);
+    let child_size: u64 = cached_node.children.iter().map(|child| child.size).sum();
+    let child_files: usize = cached_node.children.iter().map(|child| child.file_count).sum();
+    let child_dirs: usize = cached_node.children.iter().map(|child| child.dir_count).sum();
+
+    let mut node = cached_node.clone();
+    node.size = child_size + direct_size;
+    node.file_count = child_files + direct_files;
+    node.dir_count = 1 + child_dirs;
+    node.modified_time = modified_time;
+    node.file_id = winfs::get_path_file_id(path).or(node.file_id);
+    node.has_children = !node.children.is_empty();
+
+    Some(RescannedDirectory {
+        node,
+        large_files,
+        mode: RescanMode::DirectFilesOnly,
+    })
 }
 
 fn rescan_directory_tree(path: &Path, large_file_threshold: u64) -> Option<RescannedDirectory> {
@@ -323,6 +503,7 @@ fn rescan_directory_tree(path: &Path, large_file_threshold: u64) -> Option<Resca
                 file_id: None,
             },
             large_files: vec![],
+            mode: RescanMode::Recursive,
         });
     }
 
@@ -468,13 +649,44 @@ fn rescan_directory_tree(path: &Path, large_file_threshold: u64) -> Option<Resca
     sort_directory_tree(&mut node.children);
     large_files.sort_by(|a, b| b.size.cmp(&a.size));
 
-    Some(RescannedDirectory { node, large_files })
+    Some(RescannedDirectory {
+        node,
+        large_files,
+        mode: RescanMode::Recursive,
+    })
 }
 
-pub async fn scan_incremental(
+pub async fn scan_incremental<R: Runtime>(
     path: &Path,
     cached_result: ScanResult,
-    app: AppHandle,
+    app: AppHandle<R>,
+) -> Result<ScanResult> {
+    let progress_emitter: IncrementalProgressEmitter = std::sync::Arc::new(move |progress: IncrementalScanProgress| {
+        let _ = app.emit("incremental-scan-progress", progress);
+    });
+    scan_incremental_internal(path, cached_result, Some(progress_emitter)).await
+}
+
+pub async fn scan_incremental_silent(
+    path: &Path,
+    cached_result: ScanResult,
+) -> Result<ScanResult> {
+    scan_incremental_internal(path, cached_result, None).await
+}
+
+fn emit_incremental_progress(
+    progress_emitter: Option<&IncrementalProgressEmitter>,
+    progress: IncrementalScanProgress,
+) {
+    if let Some(emitter) = progress_emitter {
+        emitter(progress);
+    }
+}
+
+async fn scan_incremental_internal(
+    path: &Path,
+    cached_result: ScanResult,
+    progress_emitter: Option<IncrementalProgressEmitter>,
 ) -> Result<ScanResult> {
     use std::time::Instant;
     use crate::scanner::disk_scanner::DiskScanner;
@@ -485,11 +697,21 @@ pub async fn scan_incremental(
 
     println!("\n========== 增量扫描开始 ==========");
     println!("扫描路径: {}", path.display());
+    println!(
+        "[阶段0] 缓存摘要 backend={:?} files={} dirs={} size={} root_file_id={:?} usn_journal_id={:?} usn_next_usn={:?}",
+        cached_result.scan_backend,
+        cached_result.total_files,
+        cached_result.total_dirs,
+        cached_result.total_size,
+        cached_result.root_file_id,
+        cached_result.usn_journal_id,
+        cached_result.usn_next_usn
+    );
 
     let total_cached_dirs = count_directories(&cached_result.directories, &root_path_str);
     println!("[阶段1] 缓存目录总数: {}", total_cached_dirs);
 
-    let _ = app.emit("incremental-scan-progress", IncrementalScanProgress {
+    emit_incremental_progress(progress_emitter.as_ref(), IncrementalScanProgress {
         phase: "detecting".to_string(),
         total_dirs: total_cached_dirs,
         checked_dirs: 0,
@@ -506,7 +728,7 @@ pub async fn scan_incremental(
     } else {
         let (current_root_size, current_root_files, _) = scan_root_files(path, large_file_threshold);
         let (cached_root_size, cached_root_files) = cached_result.directories.iter()
-            .find(|node| node.path == root_path_str)
+            .find(|node| path_matches(&node.path, path))
             .map(|node| (node.size, node.file_count))
             .unwrap_or((0, 0));
         let root_files_changed = cached_root_size != current_root_size || cached_root_files != current_root_files;
@@ -514,7 +736,7 @@ pub async fn scan_incremental(
     };
     let (current_root_size, current_root_files, root_large_files) = scan_root_files(path, large_file_threshold);
     let (cached_root_size, cached_root_files) = cached_result.directories.iter()
-        .find(|node| node.path == root_path_str)
+        .find(|node| path_matches(&node.path, path))
         .map(|node| (node.size, node.file_count))
         .unwrap_or((0, 0));
     root_files_changed = root_files_changed || cached_root_size != current_root_size || cached_root_files != current_root_files;
@@ -523,11 +745,20 @@ pub async fn scan_incremental(
         detect_start.elapsed().as_secs_f64() * 1000.0,
         detection_mode
     );
+    if detection_mode == "mtime" {
+        if cached_result.usn_journal_id.is_some() && cached_result.usn_next_usn.is_some() {
+            println!("[阶段1] USN checkpoint 存在，但本次未能直接使用，已回退到 mtime 递归检测");
+        } else {
+            println!("[阶段1] 缓存缺少 USN checkpoint，本次只能使用 mtime 递归检测");
+        }
+    } else {
+        println!("[阶段1] 本次增量检测使用了 USN 日志");
+    }
 
     let change_dirs = changes.iter().filter(|c| c.status != ChangeStatus::Deleted).count();
     let delete_dirs = changes.iter().filter(|c| c.status == ChangeStatus::Deleted).count();
     let total_changes = changes.len() + usize::from(root_files_changed);
-    let _ = app.emit("incremental-scan-progress", IncrementalScanProgress {
+    emit_incremental_progress(progress_emitter.as_ref(), IncrementalScanProgress {
         phase: "detecting".to_string(),
         total_dirs: total_cached_dirs,
         checked_dirs: total_cached_dirs,
@@ -537,10 +768,13 @@ pub async fn scan_incremental(
 
     println!("[阶段1] 总变化: {} 个 (重扫: {}, 删除: {}, 根文件变化: {})", total_changes, change_dirs, delete_dirs, root_files_changed);
 
+    let mut cached_node_map = HashMap::new();
+    index_cached_nodes(&cached_result.directories, &mut cached_node_map);
+
     // 无变化，直接返回缓存
     if total_changes == 0 {
         println!("[结果] 无变化，直接使用缓存");
-        let _ = app.emit("incremental-scan-progress", IncrementalScanProgress {
+        emit_incremental_progress(progress_emitter.as_ref(), IncrementalScanProgress {
             phase: "completed".to_string(),
             total_dirs: total_cached_dirs,
             checked_dirs: total_cached_dirs,
@@ -556,16 +790,15 @@ pub async fn scan_incremental(
     if change_ratio > 0.3 {
         println!("[阶段2] 变化超过30% ({:.1}%)，切换到全量扫描", change_ratio * 100.0);
         let scanner = DiskScanner::new();
-        return scanner.scan_deep(path, app, cached_result.total_files.max(1)).await;
+        return scanner.scan_deep_silent(path, cached_result.total_files.max(1)).await;
     }
 
     // 阶段2: 重新扫描修改过的目录
-    let rescan_paths: Vec<&PathBuf> = changes.iter()
+    let rescan_candidates: Vec<&ChangedDirectory> = changes.iter()
         .filter(|c| c.status != ChangeStatus::Deleted)
-        .map(|c| &c.path)
         .collect();
-    let total_rescans = rescan_paths.len() + usize::from(root_files_changed);
-    let _ = app.emit("incremental-scan-progress", IncrementalScanProgress {
+    let total_rescans = rescan_candidates.len() + usize::from(root_files_changed);
+    emit_incremental_progress(progress_emitter.as_ref(), IncrementalScanProgress {
         phase: "scanning".to_string(),
         total_dirs: total_rescans,
         checked_dirs: 0,
@@ -580,11 +813,29 @@ pub async fn scan_incremental(
 
     // 重新扫描修改过的目录，得到最新数据
     let mut rescanned_dirs: Vec<RescannedDirectory> = Vec::new();
-    for (i, rescan_path) in rescan_paths.iter().enumerate() {
-        if let Some(node) = rescan_directory(rescan_path, large_file_threshold) {
+    let stage2_start = Instant::now();
+    for (i, change) in rescan_candidates.iter().enumerate() {
+        let rescan_start = Instant::now();
+        let result = match change.mode {
+            RescanMode::Recursive => rescan_directory(&change.path, large_file_threshold),
+            RescanMode::DirectFilesOnly => cached_node_map
+                .get(&normalized_path_key(&change.path))
+                .and_then(|cached_node| refresh_directory_direct_files(&change.path, cached_node, large_file_threshold)),
+        };
+
+        if let Some(node) = result {
+            let elapsed_ms = rescan_start.elapsed().as_secs_f64() * 1000.0;
+            if elapsed_ms >= 2000.0 {
+                println!(
+                    "[阶段2] 慢重扫 {:.2}ms mode={:?} path={}",
+                    elapsed_ms,
+                    change.mode,
+                    change.path.display()
+                );
+            }
             rescanned_dirs.push(node);
         }
-        let _ = app.emit("incremental-scan-progress", IncrementalScanProgress {
+        emit_incremental_progress(progress_emitter.as_ref(), IncrementalScanProgress {
             phase: "scanning".to_string(),
             total_dirs: total_rescans,
             checked_dirs: i + 1,
@@ -594,7 +845,7 @@ pub async fn scan_incremental(
     }
 
     if root_files_changed {
-        let _ = app.emit("incremental-scan-progress", IncrementalScanProgress {
+        emit_incremental_progress(progress_emitter.as_ref(), IncrementalScanProgress {
             phase: "scanning".to_string(),
             total_dirs: total_rescans,
             checked_dirs: total_rescans,
@@ -603,11 +854,32 @@ pub async fn scan_incremental(
         });
     }
 
-    println!("[阶段2] 重新扫描了 {} 个目录, 删除 {} 个", rescanned_dirs.len(), deleted_paths.len());
+    let recursive_rescans = rescanned_dirs.iter().filter(|item| item.mode == RescanMode::Recursive).count();
+    let direct_only_rescans = rescanned_dirs.iter().filter(|item| item.mode == RescanMode::DirectFilesOnly).count();
+    println!(
+        "[阶段2] 重新扫描了 {} 个目录, 删除 {} 个 | recursive={} direct_only={} stage2_ms={:.2}",
+        rescanned_dirs.len(),
+        deleted_paths.len(),
+        recursive_rescans,
+        direct_only_rescans,
+        stage2_start.elapsed().as_secs_f64() * 1000.0
+    );
+
+    let ScanResult {
+        root_path: cached_root_path,
+        directories: cached_directories,
+        large_files: cached_large_files,
+        inaccessible_count: cached_inaccessible_count,
+        root_file_id: cached_root_file_id,
+        usn_journal_id: cached_usn_journal_id,
+        usn_next_usn: cached_usn_next_usn,
+        total_files: cached_total_files,
+        ..
+    } = cached_result;
 
     // 阶段3: 合并数据
     let merge_start = Instant::now();
-    let _ = app.emit("incremental-scan-progress", IncrementalScanProgress {
+    emit_incremental_progress(progress_emitter.as_ref(), IncrementalScanProgress {
         phase: "merging".to_string(),
         total_dirs: total_changes,
         checked_dirs: total_changes,
@@ -615,12 +887,33 @@ pub async fn scan_incremental(
         scanned_dirs: total_changes,
     });
 
-    let mut updated_tree = merge_scan_results(
-        cached_result.directories.clone(),
-        rescanned_dirs.iter().map(|item| item.node.clone()).collect(),
-        deleted_paths,
-        path,
+    let all_direct_only = rescanned_dirs.iter().all(|item| item.mode == RescanMode::DirectFilesOnly);
+    let merge_strategy = if deleted_paths.is_empty() && all_direct_only {
+        "direct_only_in_place"
+    } else {
+        "full_tree_merge"
+    };
+    println!(
+        "[阶段3] merge strategy={} rescanned={} deleted={}",
+        merge_strategy,
+        rescanned_dirs.len(),
+        deleted_paths.len()
     );
+
+    let mut updated_tree = if deleted_paths.is_empty() && all_direct_only {
+        apply_direct_file_refreshes(
+            cached_directories,
+            rescanned_dirs.iter().map(|item| item.node.clone()).collect(),
+            path,
+        )
+    } else {
+        merge_scan_results(
+            cached_directories,
+            rescanned_dirs.iter().map(|item| item.node.clone()).collect(),
+            deleted_paths,
+            path,
+        )
+    };
     upsert_root_files_node(&mut updated_tree, path, current_root_size, current_root_files);
 
     println!("[阶段3] 数据合并完成，耗时: {:.2}ms", merge_start.elapsed().as_secs_f64() * 1000.0);
@@ -629,17 +922,57 @@ pub async fn scan_incremental(
     let (tree_size, tree_files) = sum_tree(&updated_tree);
     let (new_total_size, new_total_files) = (tree_size, tree_files);
     let new_total_dirs = count_directories(&updated_tree, &root_path_str);
+    let merge_health = inspect_tree_merge_health(&updated_tree, path);
+    println!(
+        "[阶段3] 合并后树校验 roots={} unique_dirs={} duplicate_paths={} orphan_roots={} inconsistent_nodes={}",
+        updated_tree.len(),
+        merge_health.unique_dir_nodes,
+        merge_health.duplicate_paths,
+        merge_health.orphan_root_count,
+        merge_health.inconsistent_node_count
+    );
+    if !merge_health.orphan_root_samples.is_empty() {
+        println!(
+            "[阶段3] 异常根节点样本: {}",
+            merge_health.orphan_root_samples.join(" | ")
+        );
+    }
+    if !merge_health.inconsistent_node_samples.is_empty() {
+        println!(
+            "[阶段3] 统计异常样本: {}",
+            merge_health.inconsistent_node_samples.join(" | ")
+        );
+    }
+    if merge_health.duplicate_paths > 0
+        || merge_health.orphan_root_count > 0
+        || merge_health.inconsistent_node_count > 0
+        || merge_health.unique_dir_nodes != new_total_dirs
+    {
+        println!("[阶段3] 检测到增量合并结构异常，放弃本次增量结果并切换到全量深度扫描重建缓存");
+        let scanner = DiskScanner::new();
+        return scanner.scan_deep_silent(path, cached_total_files.max(1)).await;
+    }
 
     let deleted_pathbufs: Vec<PathBuf> = changes.iter()
         .filter(|c| c.status == ChangeStatus::Deleted)
         .map(|c| c.path.clone())
         .collect();
 
-    let mut large_files: Vec<FileInfo> = cached_result.large_files.into_iter()
+    let rescanned_scopes: Vec<(PathBuf, RescanMode)> = rescanned_dirs
+        .iter()
+        .map(|item| (PathBuf::from(&item.node.path), item.mode))
+        .collect();
+
+    let mut large_files: Vec<FileInfo> = cached_large_files.into_iter()
         .filter(|file| {
             let file_path = Path::new(&file.path);
-            !deleted_pathbufs.iter().any(|deleted| file_path.starts_with(deleted))
-                && !rescan_paths.iter().any(|changed| file_path.starts_with(changed.as_path()))
+            !deleted_pathbufs.iter().any(|deleted| path_starts_with(file_path, deleted))
+                && !rescanned_scopes.iter().any(|(changed_path, mode)| {
+                    match mode {
+                        RescanMode::Recursive => path_starts_with(file_path, changed_path),
+                        RescanMode::DirectFilesOnly => file_path.parent() == Some(changed_path.as_path()),
+                    }
+                })
                 && !(root_files_changed && file_path.parent() == Some(path))
         })
         .collect();
@@ -655,7 +988,7 @@ pub async fn scan_incremental(
     large_files.sort_by(|a, b| b.size.cmp(&a.size));
     let scan_duration_ms = start.elapsed().as_millis() as u64;
 
-    let _ = app.emit("incremental-scan-progress", IncrementalScanProgress {
+    emit_incremental_progress(progress_emitter.as_ref(), IncrementalScanProgress {
         phase: "completed".to_string(),
         total_dirs: total_cached_dirs,
         checked_dirs: total_cached_dirs,
@@ -669,42 +1002,54 @@ pub async fn scan_incremental(
     println!("==================================\n");
 
     let journal = winfs::query_usn_checkpoint(path);
+    if let Some(checkpoint) = journal {
+        println!(
+            "[阶段3] 更新后的 USN checkpoint journal_id={} next_usn={}",
+            checkpoint.journal_id,
+            checkpoint.next_usn
+        );
+    } else {
+        println!("[阶段3] 更新后仍未获取到 USN checkpoint");
+    }
 
     Ok(ScanResult {
-        root_path: cached_result.root_path,
+        root_path: cached_root_path,
         total_size: new_total_size,
         total_files: new_total_files,
         total_dirs: new_total_dirs,
         scan_duration_ms,
         directories: updated_tree,
         large_files,
-        inaccessible_count: cached_result.inaccessible_count,
+        inaccessible_count: cached_inaccessible_count,
         scan_backend: Some("incremental_usn".to_string()),
-        root_file_id: winfs::get_path_file_id(path).or(cached_result.root_file_id),
-        usn_journal_id: journal.map(|item| item.journal_id).or(cached_result.usn_journal_id),
-        usn_next_usn: journal.map(|item| item.next_usn).or(cached_result.usn_next_usn),
+        root_file_id: winfs::get_path_file_id(path).or(cached_root_file_id),
+        usn_journal_id: journal.map(|item| item.journal_id).or(cached_usn_journal_id),
+        usn_next_usn: journal.map(|item| item.next_usn).or(cached_usn_next_usn),
     })
 }
 
-fn count_directories(dirs: &[DirectoryNode], root_path: &str) -> usize {
+pub(crate) fn count_directories(dirs: &[DirectoryNode], root_path: &str) -> usize {
     dirs.iter().map(|node| {
-        if node.path == root_path {
+        if normalized_path_key_str(&node.path) == normalized_path_key_str(root_path) {
             0
-        } else if node.dir_count > 0 {
-            node.dir_count
         } else {
             1 + count_directories(&node.children, root_path)
         }
     }).sum()
 }
 
-fn sum_tree(dirs: &[DirectoryNode]) -> (u64, usize) {
-    dirs.iter().fold((0u64, 0usize), |(s, f), d| (s + d.size, f + d.file_count))
+pub(crate) fn sum_tree(dirs: &[DirectoryNode]) -> (u64, usize) {
+    dirs.iter().fold((0u64, 0usize), |(size_acc, file_acc), node| {
+        let (child_size, child_files) = sum_tree(&node.children);
+        let own_size = node.size.saturating_sub(child_size);
+        let own_files = node.file_count.saturating_sub(child_files);
+        (size_acc + child_size + own_size, file_acc + child_files + own_files)
+    })
 }
 
-fn upsert_root_files_node(nodes: &mut Vec<DirectoryNode>, root_path: &Path, root_size: u64, root_files: usize) {
+pub(crate) fn upsert_root_files_node(nodes: &mut Vec<DirectoryNode>, root_path: &Path, root_size: u64, root_files: usize) {
     let root_path_str = root_path.to_string_lossy().to_string();
-    nodes.retain(|node| node.path != root_path_str);
+    nodes.retain(|node| !path_matches(&node.path, root_path));
 
     if root_size > 0 || root_files > 0 {
         nodes.push(DirectoryNode {
@@ -723,30 +1068,37 @@ fn upsert_root_files_node(nodes: &mut Vec<DirectoryNode>, root_path: &Path, root
         });
     }
 
-    sort_directory_tree(nodes);
+    for node in nodes.iter_mut() {
+        node.has_children = !node.children.is_empty();
+    }
+    nodes.sort_by(|a, b| b.size.cmp(&a.size));
 }
 
 fn flatten_tree(nodes: Vec<DirectoryNode>, flat: &mut HashMap<String, DirectoryNode>) {
     for mut node in nodes {
         let children = std::mem::take(&mut node.children);
-        flat.insert(node.path.clone(), node);
+        flat.insert(normalized_path_key_str(&node.path), node);
         flatten_tree(children, flat);
     }
 }
 
 fn rebuild_tree(mut flat: HashMap<String, DirectoryNode>, root_path: &Path) -> Vec<DirectoryNode> {
-    let root_path_str = root_path.to_string_lossy().to_string();
+    let root_key = normalized_path_key(root_path);
     let mut paths: Vec<String> = flat.keys().cloned().collect();
-    paths.sort_by(|a, b| Path::new(b).components().count().cmp(&Path::new(a).components().count()));
+    paths.sort_by(|a, b| {
+        let depth_b = flat.get(b).map(|node| Path::new(&node.path).components().count()).unwrap_or(0);
+        let depth_a = flat.get(a).map(|node| Path::new(&node.path).components().count()).unwrap_or(0);
+        depth_b.cmp(&depth_a)
+    });
 
     let mut roots = Vec::new();
-    for path in paths {
-        let Some(node) = flat.remove(&path) else { continue; };
+    for key in paths {
+        let Some(node) = flat.remove(&key) else { continue; };
 
-        if path != root_path_str {
-            if let Some(parent_path) = Path::new(&path).parent() {
-                if parent_path != root_path {
-                    let parent_key = parent_path.to_string_lossy().to_string();
+        if normalized_path_key_str(&node.path) != root_key {
+            if let Some(parent_path) = Path::new(&node.path).parent() {
+                if normalized_path_key(parent_path) != root_key {
+                    let parent_key = normalized_path_key(parent_path);
                     if let Some(parent) = flat.get_mut(&parent_key) {
                         parent.children.push(node);
                         continue;
@@ -760,6 +1112,72 @@ fn rebuild_tree(mut flat: HashMap<String, DirectoryNode>, root_path: &Path) -> V
 
     sort_directory_tree(&mut roots);
     roots
+}
+
+fn apply_direct_file_refreshes(
+    mut tree: Vec<DirectoryNode>,
+    refreshed_nodes: Vec<DirectoryNode>,
+    root_path: &Path,
+) -> Vec<DirectoryNode> {
+    fn child_totals(children: &[DirectoryNode]) -> (u64, usize, usize) {
+        children.iter().fold((0u64, 0usize, 0usize), |(size_acc, file_acc, dir_acc), child| {
+            (size_acc + child.size, file_acc + child.file_count, dir_acc + child.dir_count)
+        })
+    }
+
+    fn walk(
+        nodes: &mut Vec<DirectoryNode>,
+        updates: &mut HashMap<String, DirectoryNode>,
+        root_path: &Path,
+    ) -> bool {
+        let mut any_changed = false;
+
+        for node in nodes.iter_mut() {
+            if path_matches(&node.path, root_path) && node.dir_count == 0 {
+                continue;
+            }
+
+            let (old_child_size, old_child_files, _) = child_totals(&node.children);
+            let child_changed = walk(&mut node.children, updates, root_path);
+            let (new_child_size, new_child_files, new_child_dirs) = child_totals(&node.children);
+
+            let mut own_size = node.size.saturating_sub(old_child_size);
+            let mut own_files = node.file_count.saturating_sub(old_child_files);
+            let mut node_changed = child_changed;
+
+            if let Some(update) = updates.remove(&normalized_path_key_str(&node.path)) {
+                let (update_child_size, update_child_files, _) = child_totals(&update.children);
+                own_size = update.size.saturating_sub(update_child_size);
+                own_files = update.file_count.saturating_sub(update_child_files);
+                node.modified_time = update.modified_time;
+                node.file_id = update.file_id.or(node.file_id);
+                node.has_children = !node.children.is_empty();
+                node_changed = true;
+            }
+
+            if node_changed {
+                node.size = own_size + new_child_size;
+                node.file_count = own_files + new_child_files;
+                node.dir_count = 1 + new_child_dirs;
+                node.has_children = !node.children.is_empty();
+                any_changed = true;
+            }
+        }
+
+        if any_changed {
+            nodes.sort_by(|a, b| b.size.cmp(&a.size));
+        }
+
+        any_changed
+    }
+
+    let mut updates = refreshed_nodes
+        .into_iter()
+        .map(|node| (normalized_path_key_str(&node.path), node))
+        .collect::<HashMap<_, _>>();
+
+    let _ = walk(&mut tree, &mut updates, root_path);
+    tree
 }
 
 pub fn merge_scan_results(
@@ -790,11 +1208,11 @@ pub fn merge_scan_results(
 
         let mut current = path.parent();
         while let Some(parent) = current {
-            if parent == root_path {
+            if normalized_path_key(parent) == normalized_path_key(root_path) {
                 break;
             }
 
-            let key = parent.to_string_lossy().to_string();
+            let key = normalized_path_key(parent);
             if let Some(node) = flat.get_mut(&key) {
                 node.size = apply_u64_delta(node.size, size_delta);
                 node.file_count = node.file_count.saturating_add_signed(file_delta);
@@ -805,7 +1223,7 @@ pub fn merge_scan_results(
     }
 
     for deleted_path in &deleted_paths {
-        let deleted_key = deleted_path.to_string_lossy().to_string();
+        let deleted_key = normalized_path_key(deleted_path);
         if let Some(old_node) = flat.get(&deleted_key).cloned() {
             apply_delta_to_ancestors(
                 &mut flat,
@@ -816,22 +1234,110 @@ pub fn merge_scan_results(
                 -(old_node.dir_count as isize),
             );
         }
-        flat.retain(|path, _| !Path::new(path).starts_with(deleted_path));
+        flat.retain(|_, node| !path_starts_with_str(&node.path, deleted_path));
     }
 
     for changed_dir in changed_dirs {
         let changed_path = PathBuf::from(&changed_dir.path);
-        let previous = flat.get(&changed_dir.path).cloned();
+        let previous = flat.get(&normalized_path_key_str(&changed_dir.path)).cloned();
         let size_delta = changed_dir.size as i128 - previous.as_ref().map(|node| node.size as i128).unwrap_or(0);
         let file_delta = changed_dir.file_count as isize - previous.as_ref().map(|node| node.file_count as isize).unwrap_or(0);
         let dir_delta = changed_dir.dir_count as isize - previous.as_ref().map(|node| node.dir_count as isize).unwrap_or(0);
 
         apply_delta_to_ancestors(&mut flat, &changed_path, root_path, size_delta, file_delta, dir_delta);
-        flat.retain(|path, _| !Path::new(path).starts_with(&changed_path));
+        flat.retain(|_, node| !path_starts_with_str(&node.path, &changed_path));
         flatten_tree(vec![changed_dir], &mut flat);
     }
 
     rebuild_tree(flat, root_path)
+}
+
+fn inspect_tree_merge_health(nodes: &[DirectoryNode], root_path: &Path) -> TreeMergeHealth {
+    fn walk(
+        node: &DirectoryNode,
+        root_path: &Path,
+        seen: &mut HashSet<String>,
+        health: &mut TreeMergeHealth,
+    ) -> (u64, usize, usize) {
+        let node_key = normalized_path_key_str(&node.path);
+        if !seen.insert(node_key) {
+            health.duplicate_paths += 1;
+            return (0, 0, 0);
+        }
+
+        let mut child_size_sum = 0u64;
+        let mut child_file_sum = 0usize;
+        let mut child_dir_sum = 0usize;
+        for child in &node.children {
+            let (size, files, dirs) = walk(child, root_path, seen, health);
+            child_size_sum += size;
+            child_file_sum += files;
+            child_dir_sum += dirs;
+        }
+
+        if !path_matches(&node.path, root_path) {
+            health.unique_dir_nodes += 1;
+            let expected_dir_count = 1 + child_dir_sum;
+            if node.dir_count != expected_dir_count {
+                health.inconsistent_node_count += 1;
+                if health.inconsistent_node_samples.len() < 5 {
+                    health.inconsistent_node_samples.push(format!(
+                        "{} dir_count={} expected={}",
+                        node.path, node.dir_count, expected_dir_count
+                    ));
+                }
+            }
+        }
+
+        if node.size < child_size_sum {
+            health.inconsistent_node_count += 1;
+            if health.inconsistent_node_samples.len() < 5 {
+                health.inconsistent_node_samples.push(format!(
+                    "{} size={} child_sum={}",
+                    node.path, node.size, child_size_sum
+                ));
+            }
+        }
+        if node.file_count < child_file_sum {
+            health.inconsistent_node_count += 1;
+            if health.inconsistent_node_samples.len() < 5 {
+                health.inconsistent_node_samples.push(format!(
+                    "{} file_count={} child_sum={}",
+                    node.path, node.file_count, child_file_sum
+                ));
+            }
+        }
+
+        let dir_total = if path_matches(&node.path, root_path) {
+            0
+        } else {
+            1 + child_dir_sum
+        };
+
+        (node.size, node.file_count, dir_total)
+    }
+
+    let root_key = normalized_path_key(root_path);
+    let mut health = TreeMergeHealth::default();
+    let mut seen = HashSet::new();
+
+    for node in nodes {
+        if !path_matches(&node.path, root_path) {
+            let is_direct_child = Path::new(&node.path)
+                .parent()
+                .map(|parent| normalized_path_key(parent) == root_key)
+                .unwrap_or(false);
+            if !is_direct_child {
+                health.orphan_root_count += 1;
+                if health.orphan_root_samples.len() < 5 {
+                    health.orphan_root_samples.push(node.path.clone());
+                }
+            }
+        }
+        let _ = walk(node, root_path, &mut seen, &mut health);
+    }
+
+    health
 }
 
 #[cfg(test)]
@@ -920,5 +1426,66 @@ mod tests {
         assert_eq!(merged_a.dir_count, 2);
         assert_eq!(merged_a.children.len(), 1);
         assert_eq!(merged_a.children[0].path, dir_c.to_string_lossy());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn merge_scan_results_matches_paths_case_insensitively() {
+        let root = PathBuf::from(r"C:\");
+        let dir_a = PathBuf::from(r"C:\Data");
+        let dir_b = PathBuf::from(r"C:\Data\Logs");
+
+        let old_tree = vec![make_node(
+            &dir_a,
+            100,
+            2,
+            2,
+            vec![make_node(&dir_b, 40, 1, 1, vec![])],
+        )];
+
+        let merged = merge_scan_results(
+            old_tree,
+            vec![make_node(Path::new(r"c:\data\logs"), 80, 2, 1, vec![])],
+            vec![],
+            &root,
+        );
+
+        assert_eq!(merged.len(), 1);
+        let merged_a = &merged[0];
+        assert_eq!(normalized_path_key_str(&merged_a.path), normalized_path_key(&dir_a));
+        assert_eq!(merged_a.size, 140);
+        assert_eq!(merged_a.file_count, 3);
+        assert_eq!(merged_a.dir_count, 2);
+        assert_eq!(merged_a.children.len(), 1);
+        assert_eq!(normalized_path_key_str(&merged_a.children[0].path), normalized_path_key(&dir_b));
+        assert_eq!(merged_a.children[0].size, 80);
+        assert_eq!(merged_a.children[0].file_count, 2);
+    }
+
+    #[test]
+    fn apply_direct_file_refreshes_updates_ancestors_without_rebuilding_tree() {
+        let root = PathBuf::from("root");
+        let dir_a = root.join("a");
+        let dir_b = dir_a.join("b");
+
+        let old_tree = vec![make_node(
+            &dir_a,
+            140,
+            3,
+            2,
+            vec![make_node(&dir_b, 40, 1, 1, vec![])],
+        )];
+
+        let refreshed = vec![make_node(&dir_a, 180, 4, 2, vec![make_node(&dir_b, 40, 1, 1, vec![])])];
+        let merged = apply_direct_file_refreshes(old_tree, refreshed, &root);
+
+        assert_eq!(merged.len(), 1);
+        let merged_a = &merged[0];
+        assert_eq!(merged_a.size, 180);
+        assert_eq!(merged_a.file_count, 4);
+        assert_eq!(merged_a.dir_count, 2);
+        assert_eq!(merged_a.children.len(), 1);
+        assert_eq!(merged_a.children[0].size, 40);
+        assert_eq!(merged_a.children[0].file_count, 1);
     }
 }

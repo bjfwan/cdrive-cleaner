@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref } from 'vue';
-import { IconArrowLeft, IconInfo, IconDeepScan } from './icons';
+import { IconArrowLeft, IconInfo } from './icons';
 import type { DirectoryNode, DiskInfo, FileInfo, ScanResult } from '../types';
 import { formatBytes, formatNumber, formatTime } from '../utils/format';
 
@@ -32,6 +32,31 @@ const showMigrate = ref(false);
 const selectedDir = ref<DirectoryNode | null>(null);
 const selectedFile = ref<FileInfo | null>(null);
 const selectedItems = ref<Array<DirectoryNode | FileInfo>>([]);
+
+const currentDriveLetter = computed(() => props.currentPath.substring(0, 2));
+const currentDisk = computed(() => {
+  const drive = currentDriveLetter.value;
+  return props.availableDisks.find((disk) => disk.drive_letter === drive) ?? null;
+});
+const diskUsedBytes = computed(() => currentDisk.value?.used_space ?? null);
+const isVolumeRoot = computed(() => /^[A-Za-z]:\\$/.test(props.currentPath));
+const showVolumeGap = computed(
+  () => diskUsedBytes.value !== null && isVolumeRoot.value && props.currentPath === props.result.root_path,
+);
+const missingBytes = computed(() => {
+  if (!showVolumeGap.value || diskUsedBytes.value === null) {
+    return null;
+  }
+  const scanned = props.result.total_size ?? 0;
+  const used = diskUsedBytes.value;
+  return Math.max(used - scanned, 0);
+});
+const missingPercent = computed(() => {
+  if (!showVolumeGap.value || diskUsedBytes.value === null || missingBytes.value === null) {
+    return null;
+  }
+  return diskUsedBytes.value > 0 ? (missingBytes.value / diskUsedBytes.value) * 100 : 0;
+});
 
 const sortedDirectories = computed(() => {
   if (!props.result?.directories || props.result.directories.length === 0) {
@@ -91,10 +116,10 @@ function closeMigrateDialog() {
           </button>
 
           <div class="path-copy">
-            <span class="path-kicker">{{ hasDeepScanned ? 'Deep Snapshot' : 'Quick Snapshot' }}</span>
+            <span class="path-kicker">Indexed</span>
             <h2>{{ currentPath }}</h2>
             <div class="path-meta">
-              <span class="path-badge">{{ hasDeepScanned ? '完整目录树' : '顶层目录概览' }}</span>
+              <span class="path-badge">深度扫描快照</span>
               <span v-if="deepScanning" class="path-badge path-badge-live">扫描更新中</span>
             </div>
           </div>
@@ -118,50 +143,46 @@ function closeMigrateDialog() {
 
       <div class="metric-grid">
         <div class="metric-card">
-          <span class="metric-label">占用体积</span>
+          <span class="metric-label">扫描到的文件大小</span>
           <strong>{{ formatBytes(result.total_size) }}</strong>
-          <span class="metric-note">当前路径的累计空间占用</span>
+          <span class="metric-note">仅统计可枚举文件体积</span>
+        </div>
+
+        <div class="metric-card">
+          <span class="metric-label">磁盘已用空间</span>
+          <strong>{{ diskUsedBytes === null ? '--' : formatBytes(diskUsedBytes) }}</strong>
+          <span class="metric-note">{{ currentDisk ? `${currentDisk.drive_letter} 卷级统计 (Windows)` : '无法读取卷占用' }}</span>
+        </div>
+
+        <div class="metric-card">
+          <span class="metric-label">漏算量</span>
+          <strong>{{ missingBytes === null ? '--' : formatBytes(missingBytes) }}</strong>
+          <span class="metric-note">
+            {{ missingPercent === null ? '仅在卷根对比' : `已用 - 扫描到 · 约 ${missingPercent.toFixed(1)}% · 含系统保留/无权限` }}
+          </span>
         </div>
 
         <div class="metric-card">
           <span class="metric-label">文件数量</span>
           <strong>{{ formatNumber(result.total_files) }}</strong>
-          <span class="metric-note">纳入当前统计的文件总数</span>
+          <span class="metric-note">当前统计文件数</span>
         </div>
 
         <div class="metric-card">
           <span class="metric-label">目录数量</span>
           <strong>{{ formatNumber(result.total_dirs) }}</strong>
-          <span class="metric-note">当前层级下可见目录规模</span>
+          <span class="metric-note">当前层级目录数</span>
         </div>
 
         <div class="metric-card">
           <span class="metric-label">扫描耗时</span>
           <strong>{{ formatTime(result.scan_duration_ms) }}</strong>
-          <span class="metric-note">{{ hasDeepScanned ? '深度索引结果' : '快速扫描结果' }}</span>
+          <span class="metric-note">深度扫描结果</span>
         </div>
       </div>
     </header>
 
     <div class="body">
-      <div v-if="!hasDeepScanned" class="deep-scan-notice">
-        <div class="notice-icon-wrapper">
-          <IconInfo :size="24" />
-        </div>
-
-        <div class="notice-content">
-          <div class="notice-title">深度扫描会把这个页面变成真正可操作的分析台</div>
-          <div class="notice-text">
-            快速扫描适合先看轮廓；开启深度扫描后，你可以获得完整目录树、更精确的统计，以及迁移能力和回溯能力。
-          </div>
-        </div>
-
-        <button class="notice-action" :disabled="deepScanning" @click="$emit('start-deep-scan')">
-          <IconDeepScan :size="18" />
-          <span>{{ deepScanning ? '深度扫描中...' : '开始深度扫描' }}</span>
-        </button>
-      </div>
-
       <TreemapView
         v-if="viewMode === 'treemap'"
         :directories="sortedDirectories"
@@ -212,24 +233,22 @@ function closeMigrateDialog() {
 
 <style scoped>
 .results {
-  position: relative;
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  padding: 1rem;
+  min-height: 100%;
+  gap: 1rem;
+  padding: 0.1rem;
 }
 
 .header {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding: 1rem;
+  padding: 1.05rem 1.1rem;
   border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(247, 241, 232, 0.88));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(247, 242, 235, 0.92));
   border: 1px solid var(--color-border-light);
   box-shadow: var(--shadow-xs);
-  flex-shrink: 0;
 }
 
 .header-main {
@@ -369,7 +388,7 @@ function closeMigrateDialog() {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.85rem;
 }
 
@@ -410,7 +429,7 @@ function closeMigrateDialog() {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding-top: 1rem;
+  gap: 1rem;
 }
 
 .deep-scan-notice {
@@ -418,11 +437,12 @@ function closeMigrateDialog() {
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 1rem;
   align-items: center;
-  margin-bottom: 1rem;
   padding: 1rem 1.1rem;
   border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(229, 241, 255, 0.8));
-  border: 1px solid rgba(37, 99, 235, 0.12);
+  background:
+    radial-gradient(circle at top right, rgba(93, 201, 194, 0.14), transparent 28%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(240, 246, 244, 0.92));
+  border: 1px solid rgba(15, 118, 110, 0.12);
   box-shadow: var(--shadow-xs);
 }
 
@@ -433,8 +453,8 @@ function closeMigrateDialog() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(37, 99, 235, 0.12);
-  color: var(--color-info);
+  background: rgba(15, 118, 110, 0.1);
+  color: var(--color-highlight);
 }
 
 .notice-title {
@@ -455,14 +475,14 @@ function closeMigrateDialog() {
   align-items: center;
   gap: 0.55rem;
   padding: 0.9rem 1.15rem;
-  border: none;
+  border: 1px solid rgba(15, 118, 110, 0.16);
   border-radius: 1rem;
-  background: linear-gradient(135deg, var(--color-accent-primary), var(--color-accent-secondary));
+  background: linear-gradient(135deg, #21464b, #2a6a66);
   color: var(--color-text-inverse);
   font-size: 0.9rem;
   font-weight: 800;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 16px 30px rgba(22, 73, 80, 0.18);
   transition: transform var(--transition-base), box-shadow var(--transition-base), opacity var(--transition-fast);
 }
 
@@ -477,18 +497,15 @@ function closeMigrateDialog() {
 }
 
 .notice {
-  position: absolute;
-  left: 50%;
-  bottom: 1rem;
-  transform: translateX(-50%);
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.78rem 1rem;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 251, 235, 0.9);
-  border: 1px solid rgba(217, 119, 6, 0.16);
-  color: #92400e;
+  border-radius: 1rem;
+  background: rgba(255, 251, 235, 0.92);
+  border: 1px solid rgba(217, 119, 6, 0.14);
+  color: #8f5a12;
   box-shadow: var(--shadow-sm);
   backdrop-filter: blur(18px);
   font-size: 0.84rem;
@@ -502,7 +519,7 @@ function closeMigrateDialog() {
 
 @media (max-width: 900px) {
   .results {
-    padding: 0.8rem;
+    padding: 0;
   }
 
   .header-main,
@@ -517,14 +534,11 @@ function closeMigrateDialog() {
   }
 
   .notice {
-    position: static;
-    transform: none;
-    margin-top: 0.85rem;
+    width: 100%;
   }
 }
 
 @media (max-width: 640px) {
-  .results,
   .header {
     padding: 0.72rem;
   }

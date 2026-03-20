@@ -44,8 +44,8 @@ function handleSkip() {
               <IconScan :size="24" />
             </div>
             <div class="feature-content">
-              <h3>快速扫描</h3>
-              <p>分析磁盘空间占用，找出大文件和目录</p>
+              <h3>扫描分析</h3>
+              <p>分析空间占用，并对比磁盘已用空间，明确统计差异</p>
             </div>
           </div>
 

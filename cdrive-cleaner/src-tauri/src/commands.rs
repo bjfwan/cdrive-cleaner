@@ -61,20 +61,31 @@ fn persist_scan_result_async(cache_db: ScanCacheDb, disk_path: String, scan_type
     });
 }
 
-#[tauri::command]
-pub async fn scan_disk(path: String, app: AppHandle, scanner: tauri::State<'_, DiskScanner>) -> Result<ScanResult, String> {
-    scanner.scan(&path, app).await.map_err(|e| e.to_string())
+fn ensure_deep_scan_type(scan_type: &str) -> Result<(), String> {
+    if scan_type == "deep" {
+        Ok(())
+    } else {
+        Err("仅支持深度扫描缓存".to_string())
+    }
 }
 
-#[tauri::command]
-pub async fn scan_disk_incremental(
-    path: String, app: AppHandle,
-    scanner: tauri::State<'_, DiskScanner>,
-    cache_db: tauri::State<'_, ScanCacheDb>,
-) -> Result<ScanResult, String> {
-    let result = scanner.scan(&path, app).await.map_err(|e| e.to_string())?;
-    persist_scan_result_async(cache_db.inner().clone(), path, "quick", result.clone());
-    Ok(result)
+fn cache_has_usable_usn_checkpoint(result: &ScanResult) -> bool {
+    result.usn_journal_id.is_some() && result.usn_next_usn.is_some()
+}
+
+fn should_rebuild_cached_deep_scan(path: &std::path::Path, result: &ScanResult) -> Option<&'static str> {
+    let backend = result.scan_backend.as_deref().unwrap_or("unknown");
+    let expects_usn = matches!(backend, "mft_usn" | "incremental_usn");
+
+    if expects_usn && !cache_has_usable_usn_checkpoint(result) {
+        return Some("cached_mft_snapshot_missing_usn_checkpoint");
+    }
+
+    if winfs::supports_mft_scan(path) && !cache_has_usable_usn_checkpoint(result) && result.total_dirs > 50_000 {
+        return Some("cached_snapshot_would_fall_back_to_slow_mtime_walk");
+    }
+
+    None
 }
 
 #[tauri::command]
@@ -85,33 +96,88 @@ pub async fn scan_disk_deep(
 ) -> Result<ScanResult, String> {
     use crate::scanner::incremental;
 
+    let estimated_files = estimated_files.unwrap_or(800000);
+    println!(
+        "[scan-deep] request path={} estimated_files={estimated_files}",
+        path
+    );
+
+    let mut strategy = "fresh_scan";
     let full_result = if let Ok(Some(cached)) = cache_db.get_scan_result(&path, "deep") {
+        println!("[scan-deep] found cached deep snapshot for {}", path);
         if let Ok(cached_result) = serde_json::from_str::<ScanResult>(&cached.result_json) {
-            let result = incremental::scan_incremental(
-                std::path::Path::new(&path),
-                cached_result,
-                app.clone(),
-            )
-                .await.map_err(|e| e.to_string())?;
-            persist_scan_result_async(cache_db.inner().clone(), path.clone(), "deep", result.clone());
-            result
+            println!(
+                "[scan-deep] cached summary backend={:?} files={} dirs={} size={} inaccessible={} root_file_id={:?} usn_journal_id={:?} usn_next_usn={:?}",
+                cached_result.scan_backend,
+                cached_result.total_files,
+                cached_result.total_dirs,
+                cached_result.total_size,
+                cached_result.inaccessible_count,
+                cached_result.root_file_id,
+                cached_result.usn_journal_id,
+                cached_result.usn_next_usn
+            );
+
+            if let Some(reason) = should_rebuild_cached_deep_scan(std::path::Path::new(&path), &cached_result) {
+                strategy = "fresh_rebuild_stale_deep_cache";
+                println!(
+                    "[scan-deep] cached deep snapshot is not eligible for incremental reuse: {reason}; rebuilding from scratch"
+                );
+                let result = scanner.scan_deep(&path, app, estimated_files)
+                    .await.map_err(|e| e.to_string())?;
+                persist_scan_result_async(cache_db.inner().clone(), path.clone(), "deep", result.clone());
+                result
+            } else {
+                strategy = "incremental_cache";
+                let result = incremental::scan_incremental(
+                    std::path::Path::new(&path),
+                    cached_result,
+                    app.clone(),
+                )
+                    .await.map_err(|e| e.to_string())?;
+                persist_scan_result_async(cache_db.inner().clone(), path.clone(), "deep", result.clone());
+                result
+            }
         } else {
-            let result = scanner.scan_deep(&path, app, estimated_files.unwrap_or(800000))
+            strategy = "fresh_rebuild_corrupt_deep_cache";
+            println!("[scan-deep] cached deep snapshot is corrupt, rebuilding from scratch");
+            let result = scanner.scan_deep(&path, app, estimated_files)
                 .await.map_err(|e| e.to_string())?;
             persist_scan_result_async(cache_db.inner().clone(), path.clone(), "deep", result.clone());
             result
         }
     } else {
-        let result = scanner.scan_deep(&path, app, estimated_files.unwrap_or(800000))
+        println!("[scan-deep] no cached deep snapshot for {}, running fresh deep scan", path);
+        let result = scanner.scan_deep(&path, app, estimated_files)
             .await.map_err(|e| e.to_string())?;
         persist_scan_result_async(cache_db.inner().clone(), path.clone(), "deep", result.clone());
         result
     };
 
+    println!(
+        "[scan-deep] completed strategy={} backend={:?} files={} dirs={} size={} inaccessible={} duration_ms={}",
+        strategy,
+        full_result.scan_backend,
+        full_result.total_files,
+        full_result.total_dirs,
+        full_result.total_size,
+        full_result.inaccessible_count,
+        full_result.scan_duration_ms
+    );
+
     scanner.store_indexed_scan_result(&full_result);
-    scanner
+    let snapshot = scanner
         .get_directory_snapshot(&path, &path)
-        .ok_or_else(|| "无法建立深度扫描索引".to_string())
+        .ok_or_else(|| "无法建立深度扫描索引".to_string())?;
+    println!(
+        "[scan-deep] indexed root snapshot ready path={} backend={:?} files={} dirs={} size={}",
+        snapshot.root_path,
+        snapshot.scan_backend,
+        snapshot.total_files,
+        snapshot.total_dirs,
+        snapshot.total_size
+    );
+    Ok(snapshot)
 }
 
 #[tauri::command]
@@ -190,6 +256,14 @@ pub async fn migrate_file(
     known_size: Option<u64>, known_files: Option<usize>,
     app: AppHandle, migration_db: tauri::State<'_, MigrationDb>,
 ) -> Result<MigrationResult, String> {
+    println!(
+        "[migration] request source={} target_disk={} requested_link_type={:?} known_size={:?} known_files={:?}",
+        source,
+        target_disk,
+        link_type,
+        known_size,
+        known_files
+    );
     let migrator = FileMigrator::new();
     let lt = link_type.unwrap_or(LinkType::Auto);
     let known_stats = match (known_size, known_files) {
@@ -206,6 +280,12 @@ pub async fn migrate_file(
         .await.map_err(|e| e.to_string())?;
 
     if !result.success {
+        eprintln!(
+            "[migration] failed source={} target_disk={} error={:?}",
+            source,
+            target_disk,
+            result.error
+        );
         return Err(result.error.take().unwrap_or_else(|| "迁移失败".to_string()));
     }
 
@@ -216,6 +296,15 @@ pub async fn migrate_file(
     if let Ok(id) = migration_db.insert_migration(&result.source_path, &result.target_path, lt_str, result.file_size) {
         result.migration_id = id;
     }
+    println!(
+        "[migration] completed source={} target={} actual_link_type={:?} size={} duration_ms={} history_id={}",
+        result.source_path,
+        result.target_path,
+        result.link_type,
+        result.file_size,
+        result.duration_ms,
+        result.migration_id
+    );
     Ok(result)
 }
 
@@ -301,19 +390,40 @@ pub async fn rollback_migration(migration_id: i64, db: tauri::State<'_, Migratio
     let record = db.get_migration_by_id(migration_id).map_err(|e| e.to_string())?
         .ok_or("Migration record not found")?;
     if record.status != "active" { return Err("Migration is not active".to_string()); }
+    println!(
+        "[migration] rollback request id={} source={} target={}",
+        migration_id,
+        record.source_path,
+        record.target_path
+    );
 
     let migrator = FileMigrator::new();
     let result = migrator.rollback(std::path::Path::new(&record.source_path), std::path::Path::new(&record.target_path))
         .await.map_err(|e| e.to_string())?;
     if !result.success {
+        eprintln!(
+            "[migration] rollback failed id={} source={} target={} error={:?}",
+            migration_id,
+            record.source_path,
+            record.target_path,
+            result.error
+        );
         return Err(result.error.unwrap_or_else(|| "回滚失败".to_string()));
     }
     db.update_status(migration_id, "rolled_back").map_err(|e| e.to_string())?;
+    println!(
+        "[migration] rollback completed id={} source={} target={} duration_ms={}",
+        migration_id,
+        result.source_path,
+        result.target_path,
+        result.duration_ms
+    );
     Ok(result)
 }
 
 #[tauri::command]
 pub async fn save_scan_cache(disk_path: String, scan_type: String, result: ScanResult, cache_db: tauri::State<'_, ScanCacheDb>) -> Result<(), String> {
+    ensure_deep_scan_type(&scan_type)?;
     let json = serde_json::to_string(&result).map_err(|e| e.to_string())?;
     cache_db.save_scan_result(&disk_path, &scan_type, &json, result.total_files as i64, result.total_size as i64)
         .map_err(|e| e.to_string())?;
@@ -322,6 +432,7 @@ pub async fn save_scan_cache(disk_path: String, scan_type: String, result: ScanR
 
 #[tauri::command]
 pub async fn get_scan_cache(disk_path: String, scan_type: String, cache_db: tauri::State<'_, ScanCacheDb>) -> Result<Option<ScanResult>, String> {
+    ensure_deep_scan_type(&scan_type)?;
     match cache_db.get_scan_result(&disk_path, &scan_type).map_err(|e| e.to_string())? {
         Some(cached) => Ok(Some(serde_json::from_str(&cached.result_json).map_err(|e| e.to_string())?)),
         None => Ok(None),
@@ -430,6 +541,7 @@ pub async fn get_cache_info(cache_db: tauri::State<'_, ScanCacheDb>) -> Result<C
 
 #[tauri::command]
 pub async fn delete_cache_entry(disk_path: String, scan_type: String, cache_db: tauri::State<'_, ScanCacheDb>) -> Result<(), String> {
+    ensure_deep_scan_type(&scan_type)?;
     cache_db.delete_entry(&disk_path, &scan_type).map_err(|e| e.to_string())
 }
 

@@ -82,6 +82,12 @@ impl ScanCacheDb {
         Ok(())
     }
 
+    pub fn purge_legacy_scan_types(&self) -> Result<()> {
+        let conn = self.lock_conn();
+        conn.execute("DELETE FROM scan_cache WHERE scan_type <> 'deep'", [])?;
+        Ok(())
+    }
+
     pub fn vacuum(&self) -> Result<()> {
         let conn = self.lock_conn();
         conn.execute_batch("VACUUM")?;
@@ -93,6 +99,7 @@ impl ScanCacheDb {
         let mut stmt = conn.prepare(
             "SELECT disk_path, scan_type, file_count, total_size, datetime(created_at, 'localtime'), LENGTH(result_json)
              FROM scan_cache
+             WHERE scan_type = 'deep'
              ORDER BY created_at DESC"
         )?;
         let rows = stmt.query_map([], |row| {

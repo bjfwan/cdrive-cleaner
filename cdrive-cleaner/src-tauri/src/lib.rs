@@ -4,7 +4,6 @@ mod database;
 mod commands;
 pub mod diagnostics;
 pub mod safety;
-pub mod cache;
 mod utils;
 mod winfs;
 
@@ -16,6 +15,9 @@ pub fn run() {
     let scan_cache_db = utils::get_scan_cache_db_path()
         .and_then(|p| ScanCacheDb::new(p.to_string_lossy().as_ref()).map_err(Into::into))
         .expect("Failed to open scan cache database");
+    scan_cache_db
+        .purge_legacy_scan_types()
+        .expect("Failed to purge legacy scan cache types");
 
     let migration_db = utils::get_migrations_db_path()
         .and_then(|p| MigrationDb::new(p.to_string_lossy().as_ref()).map_err(Into::into))
@@ -27,8 +29,6 @@ pub fn run() {
         .manage(scan_cache_db)
         .manage(migration_db)
         .invoke_handler(tauri::generate_handler![
-            commands::scan_disk,
-            commands::scan_disk_incremental,
             commands::scan_disk_deep,
             commands::get_directory_snapshot,
             commands::cancel_scan,

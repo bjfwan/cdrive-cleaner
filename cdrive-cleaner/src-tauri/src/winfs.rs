@@ -21,8 +21,17 @@ pub struct UsnJournalCheckpoint {
 
 #[derive(Debug, Clone)]
 pub struct UsnChangeSet {
-    pub changed_dirs: HashSet<String>,
+    pub recursive_dirs: HashSet<String>,
+    pub direct_file_dirs: HashSet<String>,
     pub root_files_changed: bool,
+}
+
+impl UsnChangeSet {
+    pub fn all_changed_dirs(&self) -> HashSet<String> {
+        let mut all = self.recursive_dirs.clone();
+        all.extend(self.direct_file_dirs.iter().cloned());
+        all
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -133,14 +142,24 @@ pub fn query_file_metadata_by_id(
     ))
 }
 
+#[cfg(not(windows))]
+pub fn enable_best_effort_scan_privileges() -> Vec<String> {
+    Vec::new()
+}
+
 #[cfg(windows)]
 mod windows_impl {
     use super::{FileIdMetadata, MftEntry, NativeDirEntry, UsnChangeSet, UsnJournalCheckpoint, VolumeDetails};
     use std::collections::{HashMap, HashSet};
     use std::ffi::c_void;
+    use std::iter::once;
     use std::mem::size_of;
     use std::path::{Path, PathBuf};
-    use windows::Win32::Foundation::{CloseHandle, FILETIME, HANDLE, ERROR_HANDLE_EOF, GENERIC_READ, GENERIC_WRITE};
+    use windows::Win32::Foundation::{CloseHandle, FILETIME, HANDLE, LUID, ERROR_HANDLE_EOF, GENERIC_READ, GENERIC_WRITE};
+    use windows::Win32::Security::{
+        AdjustTokenPrivileges, LookupPrivilegeValueW, LUID_AND_ATTRIBUTES,
+        SE_PRIVILEGE_ENABLED, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
+    };
     use windows::Win32::Storage::FileSystem::{
         BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_ATTRIBUTE_DIRECTORY,
         FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_REPARSE_POINT, FILE_BASIC_INFO,
@@ -157,6 +176,7 @@ mod windows_impl {
         FSCTL_ENUM_USN_DATA, FSCTL_QUERY_USN_JOURNAL, FSCTL_READ_USN_JOURNAL,
         MFT_ENUM_DATA_V0, READ_USN_JOURNAL_DATA_V0, USN_JOURNAL_DATA_V0, USN_RECORD_V2,
     };
+    use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
     use windows::core::PCWSTR;
 
     struct FindHandle(HANDLE);
@@ -177,6 +197,60 @@ mod windows_impl {
                 let _ = CloseHandle(self.0);
             }
         }
+    }
+
+    pub fn enable_best_effort_scan_privileges() -> Vec<String> {
+        let mut token = HANDLE::default();
+        let mut enabled = Vec::new();
+
+        unsafe {
+            if OpenProcessToken(
+                GetCurrentProcess(),
+                TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY,
+                &mut token,
+            )
+            .is_err()
+            {
+                return enabled;
+            }
+        }
+
+        let _guard = OwnedHandle(token);
+        for privilege_name in [
+            "SeBackupPrivilege",
+            "SeRestorePrivilege",
+            "SeSecurityPrivilege",
+            "SeManageVolumePrivilege",
+        ] {
+            if enable_named_privilege(token, privilege_name).is_ok() {
+                enabled.push(privilege_name.to_string());
+            }
+        }
+
+        enabled
+    }
+
+    fn enable_named_privilege(token: HANDLE, privilege_name: &str) -> std::io::Result<()> {
+        let wide_name: Vec<u16> = privilege_name.encode_utf16().chain(once(0)).collect();
+        let mut luid = LUID::default();
+
+        unsafe {
+            LookupPrivilegeValueW(None, PCWSTR(wide_name.as_ptr()), &mut luid).map_err(to_io_error)?;
+        }
+
+        let mut privileges = TOKEN_PRIVILEGES {
+            PrivilegeCount: 1,
+            Privileges: [LUID_AND_ATTRIBUTES {
+                Luid: luid,
+                Attributes: SE_PRIVILEGE_ENABLED,
+            }],
+        };
+
+        unsafe {
+            AdjustTokenPrivileges(token, false, Some(&mut privileges), 0, None, None).map_err(to_io_error)?;
+        }
+
+        Ok(())
     }
 
     pub fn enumerate_directory(path: &Path, include_dir_file_ids: bool) -> std::io::Result<Vec<NativeDirEntry>> {
@@ -378,7 +452,7 @@ mod windows_impl {
         let flags = if open_as_directory {
             FILE_FLAG_BACKUP_SEMANTICS.0 | FILE_FLAG_OPEN_REPARSE_POINT.0
         } else {
-            FILE_FLAG_OPEN_REPARSE_POINT.0
+            FILE_FLAG_BACKUP_SEMANTICS.0 | FILE_FLAG_OPEN_REPARSE_POINT.0
         };
         let handle = unsafe {
             OpenFileById(
@@ -423,12 +497,22 @@ mod windows_impl {
     }
 
     pub fn query_usn_checkpoint(path: &Path) -> Option<UsnJournalCheckpoint> {
-        let volume = open_volume_handle(path).ok()?;
+        let volume = match open_volume_handle(path) {
+            Ok(handle) => handle,
+            Err(err) => {
+                eprintln!(
+                    "[winfs] failed to open volume for USN checkpoint {}: {}",
+                    path.display(),
+                    err
+                );
+                return None;
+            }
+        };
         let _guard = OwnedHandle(volume);
         let mut journal = USN_JOURNAL_DATA_V0::default();
         let mut bytes_returned = 0u32;
 
-        unsafe {
+        if let Err(err) = unsafe {
             DeviceIoControl(
                 volume,
                 FSCTL_QUERY_USN_JOURNAL,
@@ -440,7 +524,14 @@ mod windows_impl {
                 None,
             )
         }
-        .ok()?;
+        {
+            eprintln!(
+                "[winfs] FSCTL_QUERY_USN_JOURNAL failed for {}: {}",
+                path.display(),
+                err
+            );
+            return None;
+        }
 
         Some(UsnJournalCheckpoint {
             journal_id: journal.UsnJournalID,
@@ -456,7 +547,14 @@ mod windows_impl {
     ) -> std::io::Result<Option<UsnChangeSet>> {
         let volume = match open_volume_handle(root_path) {
             Ok(handle) => handle,
-            Err(_) => return Ok(None),
+            Err(err) => {
+                eprintln!(
+                    "[winfs] failed to open volume for USN read {}: {}",
+                    root_path.display(),
+                    err
+                );
+                return Ok(None);
+            }
         };
         let _guard = OwnedHandle(volume);
 
@@ -476,6 +574,10 @@ mod windows_impl {
         }
         .is_err()
         {
+            eprintln!(
+                "[winfs] FSCTL_QUERY_USN_JOURNAL failed before delta read for {}",
+                root_path.display()
+            );
             return Ok(None);
         }
 
@@ -494,7 +596,8 @@ mod windows_impl {
         };
 
         let mut root_files_changed = false;
-        let mut changed_dirs = HashSet::new();
+        let mut recursive_dirs = HashSet::new();
+        let mut direct_file_dirs = HashSet::new();
         let mut buffer = vec![0u8; 256 * 1024];
 
         while input.StartUsn < current.NextUsn {
@@ -513,6 +616,11 @@ mod windows_impl {
             }
             .is_err()
             {
+                eprintln!(
+                    "[winfs] FSCTL_READ_USN_JOURNAL failed for {} at start_usn={}",
+                    root_path.display(),
+                    input.StartUsn
+                );
                 return Ok(None);
             }
 
@@ -541,22 +649,20 @@ mod windows_impl {
 
                 if !is_dir {
                     if let Some(parent) = parent_path.as_ref() {
-                        changed_dirs.insert(parent.clone());
                         if parent == &root_path_str {
                             root_files_changed = true;
+                        } else {
+                            direct_file_dirs.insert(parent.clone());
                         }
                     } else if Some(record.ParentFileReferenceNumber) == root_file_id {
                         root_files_changed = true;
                     }
                 } else {
                     if let Some(path) = existing_path {
-                        changed_dirs.insert(path);
+                        recursive_dirs.insert(path);
                     }
                     if let Some(path) = candidate_path {
-                        changed_dirs.insert(path);
-                    }
-                    if let Some(parent) = parent_path {
-                        changed_dirs.insert(parent);
+                        recursive_dirs.insert(path);
                     }
                 }
 
@@ -565,7 +671,8 @@ mod windows_impl {
         }
 
         Ok(Some(UsnChangeSet {
-            changed_dirs,
+            recursive_dirs,
+            direct_file_dirs,
             root_files_changed,
         }))
     }
@@ -585,6 +692,10 @@ mod windows_impl {
     }
 
     pub(crate) fn open_volume_handle(path: &Path) -> std::io::Result<HANDLE> {
+        open_volume_handle_with_access(path, GENERIC_READ.0 | GENERIC_WRITE.0)
+    }
+
+    fn open_volume_handle_with_access(path: &Path, desired_access: u32) -> std::io::Result<HANDLE> {
         let volume_path = volume_device_path(path).ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::InvalidInput, "path is not on a local volume")
         })?;
@@ -592,7 +703,7 @@ mod windows_impl {
         unsafe {
             CreateFileW(
                 PCWSTR(wide.as_ptr()),
-                0,
+                desired_access,
                 FILE_SHARE_MODE(FILE_SHARE_READ.0 | FILE_SHARE_WRITE.0 | FILE_SHARE_DELETE.0),
                 None,
                 FILE_CREATION_DISPOSITION(OPEN_EXISTING.0),
@@ -604,22 +715,7 @@ mod windows_impl {
     }
 
     fn open_volume_handle_for_mft(path: &Path) -> std::io::Result<HANDLE> {
-        let volume_path = volume_device_path(path).ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::InvalidInput, "path is not on a local volume")
-        })?;
-        let wide = to_wide(Path::new(&volume_path));
-        unsafe {
-            CreateFileW(
-                PCWSTR(wide.as_ptr()),
-                GENERIC_READ.0 | GENERIC_WRITE.0,
-                FILE_SHARE_MODE(FILE_SHARE_READ.0 | FILE_SHARE_WRITE.0 | FILE_SHARE_DELETE.0),
-                None,
-                FILE_CREATION_DISPOSITION(OPEN_EXISTING.0),
-                FILE_FLAGS_AND_ATTRIBUTES(FILE_FLAG_BACKUP_SEMANTICS.0),
-                HANDLE::default(),
-            )
-        }
-        .map_err(to_io_error)
+        open_volume_handle_with_access(path, GENERIC_READ.0 | GENERIC_WRITE.0)
     }
 
     fn volume_device_path(path: &Path) -> Option<String> {
@@ -683,7 +779,7 @@ mod windows_impl {
 
 #[cfg(windows)]
 pub use windows_impl::{
-    collect_usn_changed_dirs, enumerate_directory, enumerate_mft, get_path_file_id,
+    collect_usn_changed_dirs, enable_best_effort_scan_privileges, enumerate_directory, enumerate_mft, get_path_file_id,
     query_file_metadata_by_id, query_usn_checkpoint, query_volume_details, supports_mft_scan,
 };
 #[cfg(windows)]

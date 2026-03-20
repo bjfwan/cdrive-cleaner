@@ -53,12 +53,15 @@ watch(
 
     loadSettings();
     checkElevation();
-
-    if (activeTab.value === 'cache') {
-      loadCacheInfo();
-    }
+    loadCacheInfo();
   },
 );
+
+watch(activeTab, (tab) => {
+  if (tab === 'cache') {
+    loadCacheInfo();
+  }
+});
 
 async function checkElevation() {
   try {
@@ -129,8 +132,9 @@ async function loadCacheInfo() {
 async function clearAllCache() {
   try {
     await invoke('clear_scan_cache');
-    await loadCacheInfo();
     showClearCacheConfirm.value = false;
+    await loadCacheInfo();
+    showToast('缓存已清空', '所有扫描缓存已成功删除', 'success');
   } catch {
     showToast('清理缓存失败', '无法清空缓存数据', 'error');
   }
@@ -156,7 +160,7 @@ function confirmDeleteCache(entry: CacheEntry) {
 }
 
 function getScanTypeLabel(scanType: string): string {
-  return scanType === 'quick' ? '快速扫描' : '深度扫描';
+  return '深度扫描';
 }
 </script>
 
@@ -376,7 +380,7 @@ function getScanTypeLabel(scanType: string): string {
               <div v-for="cache in cacheInfo.caches" :key="`${cache.disk_path}-${cache.scan_type}`" class="cache-item">
                 <div class="cache-item-header">
                   <div class="cache-disk">{{ cache.disk_path }}</div>
-                  <div class="cache-type-badge" :class="cache.scan_type">
+                  <div class="cache-type-badge cache-type-badge--deep">
                     {{ getScanTypeLabel(cache.scan_type) }}
                   </div>
                 </div>
@@ -1218,13 +1222,7 @@ function getScanTypeLabel(scanType: string): string {
   letter-spacing: 0.02em;
 }
 
-.cache-type-badge.quick {
-  color: var(--color-accent-primary);
-  background: rgba(139, 115, 85, 0.1);
-  border: 1px solid rgba(139, 115, 85, 0.2);
-}
-
-.cache-type-badge.deep {
+.cache-type-badge--deep {
   color: #8b5cf6;
   background: rgba(139, 92, 246, 0.1);
   border: 1px solid rgba(139, 92, 246, 0.2);

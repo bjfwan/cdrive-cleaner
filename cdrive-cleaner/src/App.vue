@@ -5,8 +5,7 @@ import appIcon from './assets/app-icon.svg';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import DeepScanProgress from './components/DeepScanProgress.vue';
 import DiskCard from './components/DiskCard.vue';
-import { IconDeepScan, IconHistory, IconScan, IconSettings } from './components/icons';
-import ScanProgress from './components/ScanProgress.vue';
+import { IconDeepScan, IconHistory, IconSettings } from './components/icons';
 import ScanResults from './components/ScanResults.vue';
 import Toast from './components/Toast.vue';
 import { TOAST_KEY } from './composables/useToast';
@@ -20,7 +19,6 @@ const Welcome = defineAsyncComponent(() => import('./components/Welcome.vue'));
 
 const disks = ref<DiskInfo[]>([]);
 const selectedDisk = ref<string>('');
-const scanning = ref(false);
 const deepScanning = ref(false);
 const scanResult = shallowRef<ScanResult | null>(null);
 const scanCapabilities = shallowRef<ScanCapabilities | null>(null);
@@ -49,6 +47,9 @@ const selectedDiskInfo = computed(() =>
 
 const totalStorage = computed(() => disks.value.reduce((sum, disk) => sum + disk.total_space, 0));
 const totalFreeSpace = computed(() => disks.value.reduce((sum, disk) => sum + disk.free_space, 0));
+const activeAnalysisPath = computed(
+  () => navigationStack.value[navigationStack.value.length - 1] || selectedDisk.value,
+);
 const scanCapabilityTone = computed<'ready' | 'warning' | 'fallback'>(() => {
   if (scanCapabilities.value?.mft_available) {
     return 'ready';
@@ -75,12 +76,20 @@ const scanCapabilityLabel = computed(() => {
 
   return '将回退到原生目录枚举';
 });
-const validationCommand = computed(() => {
-  if (!selectedDisk.value) {
-    return '';
+const scanCapabilityShortLabel = computed(() => {
+  if (loadingScanCapabilities.value) {
+    return '检测中';
   }
 
-  return `powershell -ExecutionPolicy Bypass -File .\\scripts\\run-admin-mft-validation.ps1 ${selectedDisk.value}`;
+  if (scanCapabilities.value?.mft_available) {
+    return 'MFT + USN';
+  }
+
+  if (scanCapabilities.value?.admin_recommended) {
+    return '需管理员';
+  }
+
+  return '目录枚举';
 });
 
 const selectedDiskMeterStyle = computed(() => {
@@ -108,9 +117,20 @@ onMounted(async () => {
   checkFirstLaunch();
 });
 
-watch(selectedDisk, (path) => {
-  void refreshScanCapabilities(path);
-});
+watch(
+  selectedDisk,
+  (path, prev) => {
+    void refreshScanCapabilities(path);
+
+    if (path && path !== prev) {
+      // Avoid mixing scan results / caches across volumes.
+      scanResult.value = null;
+      navigationStack.value = [];
+      error.value = '';
+      resetDeepState();
+    }
+  },
+);
 
 function checkFirstLaunch() {
   const hasShown = localStorage.getItem('cdrive-cleaner-welcome-shown');
@@ -125,10 +145,20 @@ function closeWelcome() {
 
 async function loadDisks() {
   try {
-    disks.value = await invoke<DiskInfo[]>('get_disk_info');
-    if (disks.value.length > 0) {
-      const cDrive = disks.value.find((disk) => disk.drive_letter === 'C:');
-      selectedDisk.value = cDrive ? 'C:\\' : `${disks.value[0].drive_letter}\\`;
+    const next = await invoke<DiskInfo[]>('get_disk_info');
+    const previousSelection = selectedDisk.value;
+    disks.value = next;
+
+    if (next.length > 0) {
+      const previousStillExists =
+        !!previousSelection && next.some((disk) => `${disk.drive_letter}\\` === previousSelection);
+      if (previousStillExists) {
+        selectedDisk.value = previousSelection;
+        return;
+      }
+
+      const cDrive = next.find((disk) => disk.drive_letter === 'C:');
+      selectedDisk.value = cDrive ? 'C:\\' : `${next[0].drive_letter}\\`;
     }
   } catch {
     error.value = '无法加载磁盘信息';
@@ -190,48 +220,13 @@ async function loadDeepSnapshot(path: string): Promise<ScanResult> {
   return snapshot;
 }
 
-async function startScan() {
-  if (!selectedDisk.value) {
-    return;
-  }
-
-  scanning.value = true;
-  deepScanning.value = false;
-  error.value = '';
-  scanResult.value = null;
-  navigationStack.value = [];
-  resetDeepState();
-
-  try {
-    const result = await invoke<ScanResult>('scan_disk_incremental', { path: selectedDisk.value });
-    scanResult.value = result;
-    navigationStack.value = [selectedDisk.value];
-
-    showToastNotification(
-      '快速扫描完成',
-      `发现 ${result.total_files.toLocaleString()} 个文件 · ${formatBytes(result.total_size)}`,
-      'success',
-    );
-  } catch (err) {
-    const msg = String(err);
-    if (msg.includes('取消')) {
-      showToastNotification('扫描已取消', '', 'info');
-    } else {
-      error.value = '扫描失败';
-      showToastNotification('扫描失败', '无法访问磁盘', 'error');
-    }
-  } finally {
-    scanning.value = false;
-  }
-}
-
 async function startDeepScan() {
   if (!selectedDisk.value) {
     return;
   }
 
   if (deepScanning.value) {
-    showToastNotification('深度扫描进行中', '请等待当前扫描完成', 'warning');
+    showToastNotification('扫描进行中', '请等待当前扫描完成', 'warning');
     return;
   }
 
@@ -255,6 +250,8 @@ async function startDeepScan() {
       estimatedFiles,
     });
 
+    // Refresh disk usage so the "磁盘已用" 对比更接近实时值。
+    await loadDisks();
     setRootSnapshot(rootSnapshot);
 
     if (navigationStack.value.length === 0 || currentPath === selectedDisk.value) {
@@ -269,17 +266,20 @@ async function startDeepScan() {
       }
     }
 
+    const diskUsed = selectedDiskInfo.value?.used_space;
+    const missing = diskUsed === undefined ? undefined : Math.max(diskUsed - rootSnapshot.total_size, 0);
+
     showToastNotification(
-      '深度扫描完成',
-      `${formatScanBackendLabel(rootSnapshot.scan_backend)} · ${rootSnapshot.total_files.toLocaleString()} 个文件 · ${formatBytes(rootSnapshot.total_size)}`,
+      '扫描完成',
+      `${formatScanBackendLabel(rootSnapshot.scan_backend)} · ${rootSnapshot.total_files.toLocaleString()} 个文件 · 扫描到 ${formatBytes(rootSnapshot.total_size)}${diskUsed === undefined ? '' : ` · 磁盘已用 ${formatBytes(diskUsed)} · 漏算 ${formatBytes(missing ?? 0)}`}`,
       'success',
     );
   } catch (err) {
     const msg = String(err);
     if (msg.includes('取消')) {
-      showToastNotification('深度扫描已取消', '', 'info');
+      showToastNotification('扫描已取消', '', 'info');
     } else {
-      showToastNotification('深度扫描失败', '无法完成深度分析', 'error');
+      showToastNotification('扫描失败', '无法完成扫描', 'error');
     }
   } finally {
     deepScanning.value = false;
@@ -315,26 +315,17 @@ async function navigateToPath(path: string) {
 
   error.value = '';
 
-  if (hasDeepScanned.value) {
-    try {
-      scanResult.value = await loadDeepSnapshot(path);
-      navigationStack.value.push(path);
-      return;
-    } catch {
-      showToastNotification('目录快照失效', '已回退到即时扫描，请考虑重新深度扫描', 'warning');
-    }
-  }
-
-  scanning.value = true;
-
   try {
-    const result = await invoke<ScanResult>('scan_disk', { path });
-    scanResult.value = result;
+    if (!hasDeepScanned.value) {
+      showToastNotification('需要先扫描', '请先执行一次扫描以启用目录下钻', 'warning');
+      return;
+    }
+
+    scanResult.value = await loadDeepSnapshot(path);
     navigationStack.value.push(path);
   } catch {
-    error.value = '无法访问该目录';
+    showToastNotification('目录快照失效', '请重新执行一次扫描', 'warning');
   } finally {
-    scanning.value = false;
   }
 }
 
@@ -346,30 +337,25 @@ async function refreshAfterMigration(paths: string[]) {
   const currentPath = navigationStack.value[navigationStack.value.length - 1] || selectedDisk.value;
 
   try {
-    if (hasDeepScanned.value) {
-      const estimatedFiles = deepScanResult?.total_files ?? scanResult.value?.total_files ?? 800000;
-      const rootSnapshot = await invoke<ScanResult>('scan_disk_deep', {
-        path: selectedDisk.value,
-        estimatedFiles,
-      });
+    const estimatedFiles = deepScanResult?.total_files ?? scanResult.value?.total_files ?? 800000;
+    const rootSnapshot = await invoke<ScanResult>('scan_disk_deep', {
+      path: selectedDisk.value,
+      estimatedFiles,
+    });
 
-      setRootSnapshot(rootSnapshot);
+    await loadDisks();
+    setRootSnapshot(rootSnapshot);
 
-      if (currentPath === selectedDisk.value) {
+    if (currentPath === selectedDisk.value) {
+      navigationStack.value = [selectedDisk.value];
+      scanResult.value = rootSnapshot;
+    } else {
+      try {
+        scanResult.value = await loadDeepSnapshot(currentPath);
+      } catch {
         navigationStack.value = [selectedDisk.value];
         scanResult.value = rootSnapshot;
-      } else {
-        try {
-          scanResult.value = await loadDeepSnapshot(currentPath);
-        } catch {
-          navigationStack.value = [selectedDisk.value];
-          scanResult.value = rootSnapshot;
-        }
       }
-    } else {
-      const result = await invoke<ScanResult>('scan_disk_incremental', { path: selectedDisk.value });
-      navigationStack.value = [selectedDisk.value];
-      scanResult.value = result;
     }
 
     showToastNotification('扫描结果已更新', `已同步 ${paths.length} 项迁移后的空间变化`, 'info');
@@ -386,23 +372,14 @@ async function goBack() {
   navigationStack.value.pop();
   const previousPath = navigationStack.value[navigationStack.value.length - 1];
 
-  if (hasDeepScanned.value) {
-    try {
-      scanResult.value = await loadDeepSnapshot(previousPath);
-      return;
-    } catch {
-      navigationStack.value = [selectedDisk.value];
-      scanResult.value = deepScanResult;
+  try {
+    if (!hasDeepScanned.value) {
+      navigationStack.value = [];
+      scanResult.value = null;
       return;
     }
-  }
 
-  if (previousPath === selectedDisk.value && scanResult.value) {
-    return;
-  }
-
-  try {
-    scanResult.value = await invoke<ScanResult>('scan_disk', { path: previousPath });
+    scanResult.value = await loadDeepSnapshot(previousPath);
   } catch {
     error.value = '无法返回上一层目录';
   }
@@ -461,247 +438,215 @@ async function restartAsAdmin() {
 <template>
   <div class="app">
     <aside class="sidebar">
-      <div class="brand">
+      <div class="brand brand--rail">
         <div class="brand-copy">
           <div class="brand-mark">
             <img :src="appIcon" alt="应用图标" width="40" height="40" />
           </div>
           <div class="brand-text">
-            <span class="brand-eyebrow">Space Intelligence</span>
-            <h1>存储空间</h1>
-            <p>像看产品仪表盘一样，看清磁盘压力、目录热区与迁移机会。</p>
-          </div>
-        </div>
-        <div class="header-actions">
-          <button class="settings-icon-btn" @click="openHistory" title="迁移历史">
-            <IconHistory :size="20" />
-          </button>
-          <button class="settings-icon-btn" @click="openSettings" title="设置">
-            <IconSettings :size="20" />
-          </button>
-        </div>
-      </div>
-
-      <div class="sidebar-summary">
-        <div class="summary-card">
-          <span class="summary-kicker">当前焦点</span>
-          <span class="summary-value">{{ selectedDiskInfo?.drive_letter || '--' }}</span>
-          <span class="summary-note">
-            {{ selectedDiskInfo ? `${selectedDiskInfo.label} · ${selectedDiskInfo.file_system}` : '正在读取磁盘信息' }}
-          </span>
-        </div>
-
-        <div class="summary-card">
-          <span class="summary-kicker">可用空间</span>
-          <span class="summary-value">{{ formatBytes(totalFreeSpace) }}</span>
-          <span class="summary-note">全部磁盘合计 · {{ disks.length }} 个分区</span>
-        </div>
-
-        <div class="summary-card summary-card--wide">
-          <div>
-            <span class="summary-kicker">容量概况</span>
-            <span class="summary-value">{{ formatBytes(totalStorage) }}</span>
-            <span class="summary-note">
-              {{ selectedDiskInfo ? `当前 ${selectedDiskInfo.drive_letter} 已用 ${selectedDiskInfo.usage_percent.toFixed(0)}%` : '选择磁盘后可立即开始分析' }}
-            </span>
-          </div>
-          <div class="summary-meter" :style="selectedDiskMeterStyle">
-            <strong>{{ selectedDiskInfo ? `${selectedDiskInfo.usage_percent.toFixed(0)}%` : '--' }}</strong>
-            <span>已用占比</span>
+            <span class="brand-eyebrow">CSD</span>
+            <h1>空间</h1>
+            <p>磁盘工作台</p>
           </div>
         </div>
       </div>
 
-      <section class="disk-panel">
-        <div class="disk-panel-header">
-          <div>
-            <h2>磁盘列表</h2>
-            <p>先选中目标磁盘，再决定是快速扫描还是深度分析。</p>
-          </div>
-          <span class="disk-panel-count">{{ disks.length }} 个磁盘</span>
+      <section class="drive-rail">
+        <div class="drive-rail-header">
+          <span>磁盘</span>
+          <strong>{{ disks.length }}</strong>
         </div>
 
-        <div class="disks-container">
-          <DiskCard
-            v-for="disk in disks"
-            :key="disk.drive_letter"
-            :disk="disk"
-            :active="selectedDisk === disk.drive_letter + '\\'"
-            @select="selectedDisk = disk.drive_letter + '\\'"
-          />
-        </div>
+        <button
+          v-for="disk in disks"
+          :key="disk.drive_letter"
+          class="drive-rail-item"
+          :class="{ active: selectedDisk === `${disk.drive_letter}\\` }"
+          @click="selectedDisk = `${disk.drive_letter}\\`"
+        >
+          <div class="drive-rail-main">
+            <strong>{{ disk.drive_letter }}</strong>
+            <span>{{ disk.file_system }}</span>
+          </div>
+          <small>{{ disk.usage_percent.toFixed(0) }}%</small>
+        </button>
       </section>
 
-      <div class="action">
-        <div class="action-header">
-          <div>
-            <h2>开始分析</h2>
-            <p>快速扫描适合先看整体结构，深度扫描适合拿到完整目录树与精确迁移决策。</p>
-          </div>
-          <span class="action-badge">{{ hasDeepScanned ? 'Deep Ready' : 'Quick Start' }}</span>
-        </div>
-
-        <div v-if="selectedDisk" class="scan-capability" :data-tone="scanCapabilityTone">
-          <div class="scan-capability-copy">
-            <span class="scan-capability-kicker">{{ scanCapabilityLabel }}</span>
-            <strong>
-              {{
-                loadingScanCapabilities
-                  ? '正在读取卷信息与当前权限状态'
-                  : `${selectedDiskInfo?.drive_letter || selectedDisk} · ${scanCapabilities?.file_system || 'Unknown'}`
-              }}
-            </strong>
-            <p>
-              {{
-                loadingScanCapabilities
-                  ? '检测完成后会告诉你本次深度扫描能否直接走 MFT + USN。'
-                  : scanCapabilities?.reason || '选择磁盘后会检测深度扫描能力。'
-              }}
-            </p>
-            <code
-              v-if="!loadingScanCapabilities && scanCapabilities?.file_system?.toUpperCase() === 'NTFS'"
-              class="scan-capability-command"
-            >
-              管理员端到端验证：{{ validationCommand }}
-            </code>
-          </div>
-
-          <div v-if="scanCapabilities?.admin_recommended" class="scan-capability-actions">
-            <button class="scan-capability-btn" @click="showAdminRestartConfirm = true">
-              开启管理员模式
-            </button>
-          </div>
-        </div>
-
-        <button
-          @click="startScan"
-          :disabled="scanning || deepScanning || !selectedDisk"
-          class="scan-btn primary"
-        >
-          <div class="btn-content">
-            <div class="btn-icon-shell">
-              <IconScan :size="20" class="btn-icon" />
-            </div>
-            <div class="btn-copy">
-              <span class="btn-label">{{ scanning ? '扫描中...' : '快速扫描' }}</span>
-              <span class="btn-hint">几秒内建立空间全景，适合先筛出热点目录。</span>
-            </div>
-            <span class="btn-tag">Fast</span>
-          </div>
-          <div class="btn-shimmer"></div>
-        </button>
-
-        <button
-          @click="startDeepScan"
-          :disabled="deepScanning || scanning || !selectedDisk"
-          class="scan-btn deep"
-        >
-          <div class="btn-content">
-            <div class="btn-icon-shell">
-              <IconDeepScan :size="20" class="btn-icon" />
-            </div>
-            <div class="btn-copy">
-              <span class="btn-label">{{ deepScanning ? '深度扫描中...' : '深度扫描' }}</span>
-              <span class="btn-hint">完整目录树、精确统计、迁移能力与更深层的空间洞察。</span>
-            </div>
-            <span class="btn-tag">Exact</span>
-          </div>
-          <div class="btn-glow"></div>
-        </button>
-
-        <div class="action-footnote">
-          {{ selectedDiskInfo ? `当前目标：${selectedDiskInfo.drive_letter} · ${formatBytes(selectedDiskInfo.free_space)} 可用` : '加载磁盘信息后可开始分析' }}
-        </div>
-
-        <DeepScanProgress :scanning="deepScanning" />
+      <div class="rail-footnote">
+        <span class="rail-footnote-dot"></span>
+        <span>
+          {{ selectedDiskInfo ? `${selectedDiskInfo.drive_letter} · ${formatBytes(selectedDiskInfo.free_space)} 可用` : '选择磁盘开始' }}
+        </span>
       </div>
     </aside>
 
     <main class="main">
-      <div v-if="!scanResult && !scanning" class="empty">
-        <div class="empty-shell">
-          <section class="empty-hero">
-            <div class="empty-visual">
-              <img :src="appIcon" alt="应用图标" class="empty-icon" width="84" height="84" />
-            </div>
-            <span class="empty-kicker">Ready To Inspect</span>
-            <h2>选择磁盘，开始一次真正有判断力的扫描。</h2>
+      <header class="workspace-topbar">
+        <div class="workspace-topbar-main">
+          <div class="workspace-title">
+            <span class="workspace-kicker">Workspace</span>
+            <h2>
+              {{ selectedDiskInfo ? `${selectedDiskInfo.drive_letter} · ${selectedDiskInfo.label || 'Local Disk'}` : '选择磁盘开始' }}
+            </h2>
             <p>
               {{ selectedDiskInfo
-                ? `当前已锁定 ${selectedDiskInfo.drive_letter}，你可以先用快速扫描看整体分布，再决定是否开启深度扫描获取完整目录树。`
-                : '先从左侧选择目标磁盘。应用会帮你识别空间压力、目录结构和潜在迁移目标。'
+                ? `${selectedDiskInfo.file_system} · ${formatBytes(selectedDiskInfo.total_space)} 总容量`
+                : '从左侧选择一个磁盘开始分析'
               }}
             </p>
+          </div>
 
-            <div class="empty-meta">
-              <div class="empty-meta-chip">
-                <strong>快速扫描</strong>
-                <span>适合先看空间热区与大体分布</span>
-              </div>
-              <div class="empty-meta-chip">
-                <strong>深度扫描</strong>
-                <span>拿到完整目录树与精确迁移能力</span>
-              </div>
-              <div class="empty-meta-chip">
-                <strong>迁移与历史</strong>
-                <span>迁移后可追踪与回滚，保持路径更可控</span>
-              </div>
-            </div>
-          </section>
-
-          <aside class="empty-preview">
-            <div class="empty-preview-header">
-              <div>
-                <h3>这次优化后的工作流</h3>
-                <span>更清晰，更少打扰，更强的状态层次</span>
-              </div>
+          <div class="workspace-chips">
+            <div class="workspace-chip">
+              <span>可用</span>
+              <strong>{{ selectedDiskInfo ? formatBytes(selectedDiskInfo.free_space) : formatBytes(totalFreeSpace) }}</strong>
             </div>
 
-            <div class="preview-stack">
-              <div class="preview-card">
-                <h4>更高级的操作层级</h4>
-                <p>把磁盘选择、扫描动作和结果视图拆成明确的三层，不再像普通工具页那样拥挤和平铺。</p>
-                <div class="preview-swatch">
-                  <span></span>
-                  <span></span>
-                  <span></span>
+            <div class="workspace-chip">
+              <span>已用</span>
+              <strong>{{ selectedDiskInfo ? `${selectedDiskInfo.usage_percent.toFixed(0)}%` : '--' }}</strong>
+            </div>
+
+            <div class="workspace-chip" :data-tone="scanCapabilityTone">
+              <span>后端</span>
+              <strong>{{ scanCapabilityShortLabel }}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="workspace-actions">
+          <button class="topbar-tool" @click="openHistory" title="迁移历史">
+            <IconHistory :size="18" />
+          </button>
+          <button class="topbar-tool" @click="openSettings" title="设置">
+            <IconSettings :size="18" />
+          </button>
+
+          <button
+            class="topbar-cta topbar-cta--strong"
+            @click="startDeepScan"
+            :disabled="deepScanning || !selectedDisk"
+          >
+            <IconDeepScan :size="18" />
+            <span>{{ deepScanning ? '扫描中' : '开始扫描' }}</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="main-frame">
+        <div class="main-scroll">
+          <DeepScanProgress v-show="deepScanning" :scanning="deepScanning" class="main-deep-progress" />
+
+          <div v-if="!scanResult && !deepScanning" class="empty">
+            <div class="dashboard">
+              <section class="dashboard-panel dashboard-panel--hero">
+                <div class="dashboard-hero-copy">
+                  <span class="dashboard-kicker">{{ selectedDiskInfo ? '当前焦点' : '准备开始' }}</span>
+                  <h2>{{ selectedDiskInfo ? `${selectedDiskInfo.drive_letter} 空间概览` : '选择磁盘开始扫描' }}</h2>
+                  <p>{{ selectedDiskInfo ? '先看概览，再开始扫描。' : '左侧选盘，右侧开始分析。' }}</p>
                 </div>
-              </div>
 
-              <div class="preview-card">
-                <h4>更细的反馈节奏</h4>
-                <p>按钮、通知、弹窗和列表动作会更统一，扫描、深扫、迁移都会有更明确的状态反馈。</p>
-              </div>
+                <div v-if="selectedDiskInfo" class="dashboard-meter" :style="selectedDiskMeterStyle">
+                  <strong>{{ selectedDiskInfo.usage_percent.toFixed(0) }}%</strong>
+                  <span>已用</span>
+                </div>
+              </section>
 
-              <div class="preview-card">
-                <h4>更可靠的结果阅读</h4>
-                <p>目录排行、列表视图和大文件视图会使用一致的视觉语言，减少切换成本，强化判断效率。</p>
-              </div>
+              <aside
+                v-if="selectedDisk"
+                class="dashboard-panel dashboard-panel--capability"
+                :data-tone="scanCapabilityTone"
+              >
+                <span class="dashboard-label">{{ scanCapabilityLabel }}</span>
+                <strong>{{ scanCapabilityShortLabel }}</strong>
+                <p>
+                  {{
+                    loadingScanCapabilities
+                      ? '正在检测可用后端'
+                      : scanCapabilities?.mft_available
+                        ? '适合直接做深度扫描'
+                        : scanCapabilities?.admin_recommended
+                          ? '管理员模式可启用 MFT + USN'
+                          : '将使用目录枚举'
+                  }}
+                </p>
+
+                <button
+                  v-if="scanCapabilities?.admin_recommended"
+                  class="dashboard-inline-btn"
+                  @click="showAdminRestartConfirm = true"
+                >
+                  开启管理员模式
+                </button>
+              </aside>
+
+              <section class="dashboard-metrics">
+                <div class="dashboard-stat">
+                  <span>当前焦点</span>
+                  <strong>{{ selectedDiskInfo?.drive_letter || '--' }}</strong>
+                  <small>{{ selectedDiskInfo ? `${selectedDiskInfo.label} · ${selectedDiskInfo.file_system}` : '等待选择磁盘' }}</small>
+                </div>
+
+                <div class="dashboard-stat">
+                  <span>可用空间</span>
+                  <strong>{{ selectedDiskInfo ? formatBytes(selectedDiskInfo.free_space) : formatBytes(totalFreeSpace) }}</strong>
+                  <small>{{ selectedDiskInfo ? '当前磁盘剩余' : '全部磁盘合计' }}</small>
+                </div>
+
+                <div class="dashboard-stat">
+                  <span>总容量</span>
+                  <strong>{{ selectedDiskInfo ? formatBytes(selectedDiskInfo.total_space) : formatBytes(totalStorage) }}</strong>
+                  <small>{{ selectedDiskInfo ? '当前磁盘容量' : `${disks.length} 个磁盘` }}</small>
+                </div>
+
+                <div class="dashboard-stat">
+                  <span>扫描建议</span>
+                  <strong>{{ hasDeepScanned ? '可继续下钻' : '直接开始扫描' }}</strong>
+                  <small>{{ hasDeepScanned ? '结果已支持下钻' : '扫描后可按目录层级浏览与迁移' }}</small>
+                </div>
+              </section>
+
+              <section class="dashboard-panel dashboard-panel--disks">
+                <div class="dashboard-section-head">
+                  <div>
+                    <h3>磁盘概览</h3>
+                    <p>完整卡片放到主工作区，方便比较。</p>
+                  </div>
+                </div>
+
+                <div class="dashboard-disk-grid">
+                  <DiskCard
+                    v-for="disk in disks"
+                    :key="disk.drive_letter"
+                    :disk="disk"
+                    :active="selectedDisk === disk.drive_letter + '\\'"
+                    @select="selectedDisk = disk.drive_letter + '\\'"
+                  />
+                </div>
+              </section>
             </div>
-          </aside>
+          </div>
+
+          <ScanResults
+            v-if="scanResult"
+            :result="scanResult"
+            :view-mode="viewMode"
+            :can-go-back="navigationStack.length > 1"
+            :current-path="activeAnalysisPath"
+            :deep-scanning="deepScanning"
+            :available-disks="disks"
+            :has-deep-scanned="hasDeepScanned"
+            @update:view-mode="viewMode = $event"
+            @navigate="navigateToPath"
+            @go-back="goBack"
+            @start-deep-scan="startDeepScan"
+            @migrated="refreshAfterMigration"
+          />
+
+          <div v-if="error" class="error">{{ error }}</div>
         </div>
       </div>
-
-      <ScanResults
-        v-if="scanResult"
-        :result="scanResult"
-        :view-mode="viewMode"
-        :can-go-back="navigationStack.length > 1"
-        :current-path="navigationStack[navigationStack.length - 1]"
-        :deep-scanning="deepScanning"
-        :available-disks="disks"
-        :has-deep-scanned="hasDeepScanned"
-        @update:view-mode="viewMode = $event"
-        @navigate="navigateToPath"
-        @go-back="goBack"
-        @start-deep-scan="startDeepScan"
-        @migrated="refreshAfterMigration"
-      />
-
-      <div v-if="error" class="error">{{ error }}</div>
     </main>
-
-    <ScanProgress :scanning="scanning" />
     
     <Toast 
       :show="showToast"
