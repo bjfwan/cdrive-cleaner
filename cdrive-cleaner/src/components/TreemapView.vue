@@ -19,379 +19,378 @@ interface Props {
 
 const props = defineProps<Props>();
 const emit = defineEmits<{
-  'navigate': [path: string];
+  navigate: [path: string];
 }>();
 
+const sortedDirectories = computed(() => [...props.directories].sort((a, b) => b.size - a.size));
+
 const treemapOption = computed(() => {
-  // 温暖、优雅的色调，与整体设计一致
   const colors = [
-    '#8b7355', '#a88d5f', '#c9a66b', '#d4a574', '#e8b86d',
-    '#b8956a', '#9d8264', '#c4a57b', '#dbb98a', '#f0d5a8',
-    '#8b6f47', '#a68a5c'
+    '#18181b',
+    '#2f2a24',
+    '#0f766e',
+    '#2563eb',
+    '#b7791f',
+    '#5b4c3f',
+    '#5d9c8f',
+    '#5c6f9e',
+    '#bf8a42',
+    '#48525d',
   ];
 
   return {
     tooltip: {
       formatter: (info: { name: string; value: number; data: { hasChildren: boolean } }) => {
-        const status = props.deepScanning && !info.data.hasChildren ? '<br/>(扫描中...)' : '';
+        const status = props.deepScanning && !info.data.hasChildren ? '<br/>(扫描更新中)' : '';
         return `${info.name}<br/>${formatBytes(info.value)}${status}`;
       },
-      backgroundColor: 'rgba(255, 252, 245, 0.98)',
-      borderColor: 'rgba(139, 92, 46, 0.15)',
+      backgroundColor: 'rgba(255, 255, 255, 0.96)',
+      borderColor: 'rgba(46, 33, 18, 0.08)',
       borderWidth: 1,
       textStyle: {
-        color: '#2d2d2d',
+        color: '#161616',
         fontSize: 13,
-        fontFamily: 'Inter, -apple-system, sans-serif'
+        fontFamily: 'Manrope, Microsoft YaHei UI, sans-serif',
       },
       padding: [10, 14],
-      borderRadius: 10,
-      shadowBlur: 12,
-      shadowColor: 'rgba(139, 92, 46, 0.12)'
+      borderRadius: 14,
+      shadowBlur: 18,
+      shadowColor: 'rgba(18, 18, 18, 0.12)',
     },
-    series: [{
-      type: 'treemap',
-      left: 0,
-      right: 0,
-      top: 0,
-      bottom: 0,
-      squareRatio: 0.7,
-      leafDepth: 1,
-      visibleMin: 120,
-      data: props.directories.map((dir, index) => ({
-        name: dir.name,
-        value: dir.size,
-        path: dir.path,
-        hasChildren: dir.has_children,
-        itemStyle: {
-          color: colors[index % colors.length],
-          opacity: props.deepScanning && !dir.has_children ? 0.6 : 0.92
-        }
-      })),
-      roam: false,
-      nodeClick: 'link',
-      breadcrumb: { show: false },
-      label: {
-        show: true,
-        formatter: (params: { name: string; width: number; height: number }) => {
-          const area = params.width * params.height;
-          if (area < 2000) return '';
-          if (area < 5000) return params.name.substring(0, 10);
-          return params.name;
-        },
-        fontSize: 13,
-        color: 'rgba(255, 255, 255, 0.95)',
-        fontWeight: 600,
-        fontFamily: 'Inter, -apple-system, sans-serif',
-        overflow: 'truncate',
-        padding: [4, 8],
-        backgroundColor: 'rgba(45, 35, 25, 0.15)',
-        borderRadius: 6
-      },
-      upperLabel: {
-        show: true,
-        height: 32,
-        color: 'rgba(255, 255, 255, 0.98)',
-        fontSize: 13,
-        fontWeight: 600,
-        fontFamily: 'Inter, -apple-system, sans-serif'
-      },
-      itemStyle: {
-        borderColor: 'rgba(255, 252, 245, 0.4)',
-        borderWidth: 2,
-        borderRadius: 12,
-        gapWidth: 3,
-        shadowBlur: 8,
-        shadowColor: 'rgba(139, 92, 46, 0.1)'
-      },
-      emphasis: {
-        itemStyle: {
-          shadowBlur: 16,
-          shadowColor: 'rgba(139, 92, 46, 0.25)',
-          borderWidth: 3,
-          borderColor: 'rgba(255, 252, 245, 0.6)'
-        }
-      },
-      levels: [
-        {
+    series: [
+      {
+        type: 'treemap',
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+        squareRatio: 0.82,
+        leafDepth: 1,
+        visibleMin: 120,
+        data: props.directories.map((dir, index) => ({
+          name: dir.name,
+          value: dir.size,
+          path: dir.path,
+          hasChildren: dir.has_children,
           itemStyle: {
-            borderWidth: 0,
-            borderRadius: 14,
-            gapWidth: 4
-          }
-        }
-      ]
-    }]
+            color: colors[index % colors.length],
+            opacity: props.deepScanning && !dir.has_children ? 0.62 : 0.94,
+          },
+        })),
+        roam: false,
+        nodeClick: 'link',
+        breadcrumb: { show: false },
+        label: {
+          show: true,
+          formatter: (params: { name: string; width: number; height: number }) => {
+            const area = params.width * params.height;
+            if (area < 1800) return '';
+            if (area < 4000) return params.name.slice(0, 10);
+            return params.name;
+          },
+          fontSize: 12,
+          color: 'rgba(255, 255, 255, 0.96)',
+          fontWeight: 700,
+          fontFamily: 'Manrope, Microsoft YaHei UI, sans-serif',
+          overflow: 'truncate',
+          padding: [4, 8],
+          backgroundColor: 'rgba(23, 23, 23, 0.18)',
+          borderRadius: 10,
+        },
+        upperLabel: {
+          show: true,
+          height: 28,
+          color: 'rgba(255, 255, 255, 0.98)',
+          fontSize: 12,
+          fontWeight: 700,
+          fontFamily: 'Manrope, Microsoft YaHei UI, sans-serif',
+        },
+        itemStyle: {
+          borderColor: 'rgba(255, 255, 255, 0.32)',
+          borderWidth: 2,
+          borderRadius: 16,
+          gapWidth: 4,
+          shadowBlur: 10,
+          shadowColor: 'rgba(18, 18, 18, 0.08)',
+        },
+        emphasis: {
+          itemStyle: {
+            shadowBlur: 18,
+            shadowColor: 'rgba(18, 18, 18, 0.2)',
+            borderWidth: 3,
+            borderColor: 'rgba(255, 255, 255, 0.52)',
+          },
+        },
+        levels: [
+          {
+            itemStyle: {
+              borderWidth: 0,
+              borderRadius: 18,
+              gapWidth: 4,
+            },
+          },
+        ],
+      },
+    ],
   };
-});
-
-const sortedDirectories = computed(() => {
-  return [...props.directories].sort((a, b) => b.size - a.size);
 });
 
 function handleChartClick(params: Record<string, unknown>) {
   const data = params.data as { path?: string } | undefined;
-  if (data?.path) {
-    if (!props.hasDeepScanned) {
-      return;
-    }
-    emit('navigate', data.path);
+  if (!data?.path || !props.hasDeepScanned) {
+    return;
   }
+
+  emit('navigate', data.path);
 }
 
 function handleItemClick(dir: DirectoryNode) {
   if (!props.hasDeepScanned) {
     return;
   }
+
   emit('navigate', dir.path);
 }
 </script>
 
 <template>
   <div class="treemap-view">
-    <div class="treemap-card">
-      <div class="treemap-container">
-        <v-chart 
-          :option="treemapOption" 
-          class="chart" 
-          autoresize 
-          @click="handleChartClick"
-        />
+    <section class="treemap-card">
+      <div class="panel-header">
+        <div>
+          <h3>空间热区</h3>
+          <p>用面积直接比较目录体积，快速找出最值得处理的区域。</p>
+        </div>
+        <span class="panel-chip">{{ hasDeepScanned ? '可深入导航' : '概览模式' }}</span>
       </div>
-    </div>
-    
-    <div class="list-preview">
-      <h3 class="preview-title">最大的目录</h3>
+
+      <div class="treemap-container">
+        <v-chart :option="treemapOption" class="chart" autoresize @click="handleChartClick" />
+      </div>
+    </section>
+
+    <aside class="list-preview">
+      <div class="panel-header panel-header-side">
+        <div>
+          <h3>目录排行</h3>
+          <p>右侧保留最重要的可读性视图，方便快速判断。</p>
+        </div>
+      </div>
+
       <div class="preview-items">
-        <div 
-          v-for="(dir, index) in sortedDirectories.slice(0, 10)" 
+        <div
+          v-for="(dir, index) in sortedDirectories.slice(0, 8)"
           :key="dir.path"
           class="preview-item"
+          :class="{ disabled: !hasDeepScanned }"
           @click="handleItemClick(dir)"
         >
           <div class="preview-rank">{{ index + 1 }}</div>
+
           <div class="preview-info">
-            <div class="preview-name">{{ dir.name }}</div>
+            <div class="preview-name-row">
+              <div class="preview-name">{{ dir.name }}</div>
+              <div class="preview-percent">{{ totalSize ? ((dir.size / totalSize) * 100).toFixed(1) : '0.0' }}%</div>
+            </div>
+
             <div class="preview-bar-container">
-              <div 
-                class="preview-bar" 
-                :style="{ width: `${(dir.size / totalSize) * 100}%` }"
-              ></div>
+              <div class="preview-bar" :style="{ width: `${totalSize ? (dir.size / totalSize) * 100 : 0}%` }"></div>
             </div>
           </div>
+
           <div class="preview-size">{{ formatBytes(dir.size) }}</div>
         </div>
       </div>
-    </div>
+    </aside>
   </div>
 </template>
 
 <style scoped>
 .treemap-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 21rem;
+  gap: 1rem;
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 1.25rem;
-  overflow: hidden;
 }
 
-.treemap-card {
-  background: linear-gradient(to bottom, var(--color-bg-primary) 0%, var(--color-bg-secondary) 100%);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  min-height: 280px;
-  transition: all var(--transition-base);
-}
-
-.treemap-card:hover {
-  box-shadow: var(--shadow-md);
-}
-
-.treemap-container {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  padding: 1rem;
-}
-
-.chart {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  right: 1rem;
-  bottom: 1rem;
-  width: calc(100% - 2rem);
-  height: calc(100% - 2rem);
-}
-
+.treemap-card,
 .list-preview {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(247, 241, 232, 0.88));
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-xs);
 }
 
-.preview-title {
-  font-family: var(--font-serif);
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin-bottom: 1rem;
-  letter-spacing: -0.01em;
+.panel-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1rem 0;
+}
+
+.panel-header h3 {
+  font-size: 1.2rem;
+  margin-bottom: 0.22rem;
+}
+
+.panel-header p {
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--color-text-tertiary);
+}
+
+.panel-chip {
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--radius-pill);
+  background: rgba(23, 23, 23, 0.06);
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.treemap-container {
+  position: relative;
+  flex: 1;
+  min-height: 20rem;
+  padding: 1rem;
+}
+
+.chart {
+  width: 100%;
+  height: 100%;
+}
+
+.panel-header-side {
+  padding-bottom: 0.4rem;
 }
 
 .preview-items {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
-  padding-right: 0.25rem;
-}
-
-.preview-items::-webkit-scrollbar {
-  width: 6px;
-}
-
-.preview-items::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.preview-items::-webkit-scrollbar-thumb {
-  background: rgba(139, 92, 46, 0.15);
-  border-radius: 3px;
-}
-
-.preview-items::-webkit-scrollbar-thumb:hover {
-  background: rgba(139, 92, 46, 0.25);
+  gap: 0.75rem;
+  overflow-y: auto;
+  padding: 0 1rem 1rem;
 }
 
 .preview-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.875rem;
-  padding: 0.875rem 1rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-light);
+  gap: 0.8rem;
+  padding: 0.9rem;
   border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid rgba(46, 33, 18, 0.08);
   cursor: pointer;
-  transition: all var(--transition-base);
+  transition: transform var(--transition-base), box-shadow var(--transition-base), background var(--transition-base);
 }
 
 .preview-item:hover {
+  transform: translateX(2px);
   background: var(--color-surface-hover);
-  border-color: var(--color-border-medium);
-  box-shadow: var(--shadow-md);
-  transform: translateX(4px);
+  box-shadow: var(--shadow-sm);
+}
+
+.preview-item.disabled {
+  cursor: not-allowed;
+}
+
+.preview-item.disabled:hover {
+  transform: none;
 }
 
 .preview-rank {
-  width: 28px;
-  height: 28px;
-  display: flex;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.8rem;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(139, 115, 85, 0.08) 0%, rgba(139, 115, 85, 0.12) 100%);
-  border-radius: 8px;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: var(--color-accent-primary);
-  flex-shrink: 0;
-  font-family: var(--font-serif);
+  background: rgba(23, 23, 23, 0.06);
+  font-weight: 800;
+  color: var(--color-text-secondary);
 }
 
 .preview-info {
-  flex: 1;
   min-width: 0;
 }
 
+.preview-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  margin-bottom: 0.45rem;
+}
+
 .preview-name {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin-bottom: 0.375rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  letter-spacing: -0.01em;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.preview-percent {
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: var(--color-text-tertiary);
 }
 
 .preview-bar-container {
-  height: 4px;
-  background: rgba(139, 92, 46, 0.08);
-  border-radius: 2px;
+  height: 0.38rem;
+  border-radius: var(--radius-pill);
+  background: rgba(23, 23, 23, 0.08);
   overflow: hidden;
 }
 
 .preview-bar {
   height: 100%;
-  background: linear-gradient(90deg, var(--color-accent-primary) 0%, var(--color-accent-secondary) 100%);
-  border-radius: 2px;
-  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 0 8px rgba(139, 115, 85, 0.3);
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(15, 118, 110, 0.9), rgba(37, 99, 235, 0.72));
+  transition: width var(--transition-slow);
 }
 
 .preview-size {
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
-  flex-shrink: 0;
-  font-family: var(--font-serif);
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--color-text-secondary);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 960px) {
   .treemap-view {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr;
-    gap: 1rem;
-  }
-
-  .treemap-card {
-    min-height: 260px;
   }
 
   .list-preview {
-    display: none;
-  }
-
-  .treemap-container {
-    padding: 0.875rem;
-  }
-
-  .chart {
-    top: 0.875rem;
-    left: 0.875rem;
-    right: 0.875rem;
-    bottom: 0.875rem;
-    width: calc(100% - 1.75rem);
-    height: calc(100% - 1.75rem);
+    min-height: 20rem;
   }
 }
 
-@media (max-width: 600px) {
-  .treemap-view {
-    gap: 0.875rem;
-  }
-
-  .treemap-card {
-    min-height: 220px;
-  }
-
+@media (max-width: 640px) {
+  .panel-header,
+  .preview-items,
   .treemap-container {
-    padding: 0.75rem;
+    padding-left: 0.8rem;
+    padding-right: 0.8rem;
   }
 
-  .chart {
-    top: 0.75rem;
-    left: 0.75rem;
-    right: 0.75rem;
-    bottom: 0.75rem;
-    width: calc(100% - 1.5rem);
-    height: calc(100% - 1.5rem);
+  .preview-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .preview-size {
+    grid-column: 2;
   }
 }
 </style>

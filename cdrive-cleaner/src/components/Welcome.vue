@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref } from 'vue';
 import appIcon from '../assets/app-icon.svg';
 import { IconScan, IconMigrate, IconLink, IconHistory } from './icons';
 

@@ -187,17 +187,15 @@ onUnmounted(() => {
 <style scoped>
 .scan-progress {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
+  inset: 0;
+  padding: 1rem;
+  background: rgba(18, 18, 18, 0.38);
+  backdrop-filter: blur(24px) saturate(120%);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 2000;
-  animation: fadeIn 0.3s ease-out;
+  animation: fadeIn 0.35s ease-out;
 }
 
 @keyframes fadeIn {
@@ -210,13 +208,15 @@ onUnmounted(() => {
 }
 
 .progress-container {
-  background: white;
-  border-radius: 24px;
-  padding: 2.5rem;
-  width: 90%;
-  max-width: 600px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
-  animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  width: min(100%, 40rem);
+  padding: 2rem;
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(circle at top right, rgba(215, 230, 242, 0.82), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 241, 232, 0.94));
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: var(--shadow-xl);
+  animation: slideUp 0.42s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes slideUp {
@@ -232,22 +232,22 @@ onUnmounted(() => {
 
 .cancel-btn {
   margin-left: auto;
-  padding: 0.5rem 1.25rem;
-  border: 1px solid #d6d3d1;
-  border-radius: 10px;
-  background: white;
-  color: #78716c;
-  font-size: 0.875rem;
-  font-weight: 500;
+  padding: 0.62rem 1rem;
+  border: 1px solid rgba(220, 38, 38, 0.18);
+  border-radius: 1rem;
+  background: rgba(220, 38, 38, 0.06);
+  color: var(--color-error);
+  font-size: 0.82rem;
+  font-weight: 800;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: transform var(--transition-base), background var(--transition-base), box-shadow var(--transition-base);
   flex-shrink: 0;
 }
 
 .cancel-btn:hover {
-  background: #fef2f2;
-  border-color: #fca5a5;
-  color: #dc2626;
+  transform: translateY(-1px);
+  background: rgba(220, 38, 38, 0.12);
+  box-shadow: var(--shadow-xs);
 }
 
 .progress-header {
@@ -263,10 +263,11 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #007aff 0%, #5856d6 100%);
-  border-radius: 14px;
-  color: white;
+  background: linear-gradient(135deg, var(--color-accent-primary) 0%, var(--color-accent-secondary) 100%);
+  border-radius: 1rem;
+  color: var(--color-text-inverse);
   flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
 }
 
 .spinner {
@@ -278,16 +279,14 @@ onUnmounted(() => {
 }
 
 .progress-title h3 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #2c2c2c;
+  font-size: 1.55rem;
+  color: var(--color-text-primary);
   margin: 0 0 0.375rem 0;
-  letter-spacing: -0.02em;
 }
 
 .current-path {
   font-size: 0.875rem;
-  color: #78716c;
+  color: var(--color-text-tertiary);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -306,9 +305,10 @@ onUnmounted(() => {
   align-items: center;
   gap: 1rem;
   padding: 1.25rem;
-  background: linear-gradient(135deg, #fafaf9 0%, #f5f5f4 100%);
-  border-radius: 14px;
-  border: 1px solid #e7e5e4;
+  background: rgba(255, 255, 255, 0.68);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-xs);
 }
 
 .stat-icon {
@@ -317,9 +317,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: white;
-  border-radius: 10px;
-  color: #007aff;
+  background: rgba(23, 23, 23, 0.06);
+  border-radius: 0.9rem;
+  color: var(--color-highlight);
   flex-shrink: 0;
 }
 
@@ -329,31 +329,30 @@ onUnmounted(() => {
 }
 
 .stat-value {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #2c2c2c;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--color-text-primary);
   margin-bottom: 0.125rem;
-  letter-spacing: -0.01em;
 }
 
 .stat-label {
   font-size: 0.75rem;
-  font-weight: 500;
-  color: #78716c;
+  font-weight: 800;
+  color: var(--color-text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.12em;
 }
 
 .progress-bar-section {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.08) 0%, rgba(37, 99, 235, 0.08) 100%);
+  border-radius: var(--radius-md);
   padding: 1.5rem;
-  border: 1px solid #bae6fd;
+  border: 1px solid rgba(15, 118, 110, 0.12);
 }
 
 .progress-bar-track {
   height: 8px;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(23, 23, 23, 0.08);
   border-radius: 4px;
   overflow: hidden;
   margin-bottom: 1rem;
@@ -361,7 +360,7 @@ onUnmounted(() => {
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #0ea5e9 0%, #06b6d4 100%);
+  background: linear-gradient(90deg, rgba(15, 118, 110, 0.9) 0%, rgba(37, 99, 235, 0.78) 100%);
   border-radius: 4px;
   transition: width 0.3s ease-out;
 }
@@ -374,20 +373,19 @@ onUnmounted(() => {
 
 .progress-size {
   font-size: 1rem;
-  font-weight: 600;
-  color: #0c4a6e;
+  font-weight: 800;
+  color: var(--color-text-primary);
 }
 
 .progress-percent {
   font-size: 1rem;
-  font-weight: 600;
-  color: #0c4a6e;
+  font-weight: 800;
+  color: var(--color-highlight);
 }
 
 @media (max-width: 600px) {
   .progress-container {
-    padding: 2rem;
-    max-width: 95%;
+    padding: 1.4rem;
   }
 
   .progress-stats {

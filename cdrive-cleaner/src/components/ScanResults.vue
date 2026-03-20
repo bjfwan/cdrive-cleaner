@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref } from 'vue';
 import { IconArrowLeft, IconInfo, IconDeepScan } from './icons';
-import type { DirectoryNode, FileInfo, DiskInfo, ScanResult } from '../types';
-import { formatBytes, formatNumber } from '../utils/format';
+import type { DirectoryNode, DiskInfo, FileInfo, ScanResult } from '../types';
+import { formatBytes, formatNumber, formatTime } from '../utils/format';
 
 const TreemapView = defineAsyncComponent(() => import('./TreemapView.vue'));
 const ListView = defineAsyncComponent(() => import('./ListView.vue'));
@@ -49,7 +49,7 @@ const sortedLargeFiles = computed(() => {
 
 const availableTargetDisks = computed(() => {
   const currentDriveLetter = props.currentPath.substring(0, 2);
-  return props.availableDisks.filter(disk => disk.drive_letter !== currentDriveLetter);
+  return props.availableDisks.filter((disk) => disk.drive_letter !== currentDriveLetter);
 });
 
 function showMigrateDialog(dir: DirectoryNode) {
@@ -79,71 +79,86 @@ function closeMigrateDialog() {
   selectedFile.value = null;
   selectedItems.value = [];
 }
-
-
 </script>
 
 <template>
   <div class="results">
     <header class="header">
-      <div class="header-info">
-        <div class="breadcrumb">
-          <button 
-            v-if="canGoBack"
-            @click="emit('goBack')"
-            class="back-btn"
-          >
-            <IconArrowLeft :size="20" />
+      <div class="header-main">
+        <div class="path-shell">
+          <button v-if="canGoBack" @click="emit('goBack')" class="back-btn" title="返回上一级">
+            <IconArrowLeft :size="18" />
           </button>
-          <h2>{{ currentPath }}</h2>
+
+          <div class="path-copy">
+            <span class="path-kicker">{{ hasDeepScanned ? 'Deep Snapshot' : 'Quick Snapshot' }}</span>
+            <h2>{{ currentPath }}</h2>
+            <div class="path-meta">
+              <span class="path-badge">{{ hasDeepScanned ? '完整目录树' : '顶层目录概览' }}</span>
+              <span v-if="deepScanning" class="path-badge path-badge-live">扫描更新中</span>
+            </div>
+          </div>
         </div>
-        <div class="stats">
-          <span class="stat-item">{{ formatBytes(result.total_size) }}</span>
-          <span class="separator">·</span>
-          <span class="stat-item">{{ formatNumber(result.total_files) }} 个文件</span>
-          <span class="separator">·</span>
-          <span class="stat-item">{{ formatNumber(result.total_dirs) }} 个目录</span>
+
+        <div class="view-switcher" role="tablist" aria-label="结果视图切换">
+          <button class="view-btn" :class="{ active: viewMode === 'treemap' }" @click="$emit('update:viewMode', 'treemap')">
+            <span>树状图</span>
+            <small>热区</small>
+          </button>
+          <button class="view-btn" :class="{ active: viewMode === 'list' }" @click="$emit('update:viewMode', 'list')">
+            <span>列表</span>
+            <small>明细</small>
+          </button>
+          <button class="view-btn" :class="{ active: viewMode === 'large-files' }" @click="$emit('update:viewMode', 'large-files')">
+            <span>大文件</span>
+            <small>聚焦</small>
+          </button>
         </div>
       </div>
-      <div class="view-switcher">
-        <button 
-          class="view-btn"
-          :class="{ active: viewMode === 'treemap' }"
-          @click="$emit('update:viewMode', 'treemap')"
-        >
-          树状图
-        </button>
-        <button 
-          class="view-btn"
-          :class="{ active: viewMode === 'list' }"
-          @click="$emit('update:viewMode', 'list')"
-        >
-          列表
-        </button>
-        <button 
-          class="view-btn"
-          :class="{ active: viewMode === 'large-files' }"
-          @click="$emit('update:viewMode', 'large-files')"
-        >
-          大文件
-        </button>
+
+      <div class="metric-grid">
+        <div class="metric-card">
+          <span class="metric-label">占用体积</span>
+          <strong>{{ formatBytes(result.total_size) }}</strong>
+          <span class="metric-note">当前路径的累计空间占用</span>
+        </div>
+
+        <div class="metric-card">
+          <span class="metric-label">文件数量</span>
+          <strong>{{ formatNumber(result.total_files) }}</strong>
+          <span class="metric-note">纳入当前统计的文件总数</span>
+        </div>
+
+        <div class="metric-card">
+          <span class="metric-label">目录数量</span>
+          <strong>{{ formatNumber(result.total_dirs) }}</strong>
+          <span class="metric-note">当前层级下可见目录规模</span>
+        </div>
+
+        <div class="metric-card">
+          <span class="metric-label">扫描耗时</span>
+          <strong>{{ formatTime(result.scan_duration_ms) }}</strong>
+          <span class="metric-note">{{ hasDeepScanned ? '深度索引结果' : '快速扫描结果' }}</span>
+        </div>
       </div>
     </header>
 
     <div class="body">
       <div v-if="!hasDeepScanned" class="deep-scan-notice">
         <div class="notice-icon-wrapper">
-          <IconInfo :size="28" />
+          <IconInfo :size="24" />
         </div>
+
         <div class="notice-content">
-          <div class="notice-title">深度扫描解锁完整功能</div>
+          <div class="notice-title">深度扫描会把这个页面变成真正可操作的分析台</div>
           <div class="notice-text">
-            快速扫描仅显示顶层目录概览。点击顶部「深度扫描」按钮，即可查看完整目录树、精确文件统计，并启用迁移功能。
+            快速扫描适合先看轮廓；开启深度扫描后，你可以获得完整目录树、更精确的统计，以及迁移能力和回溯能力。
           </div>
         </div>
-        <button class="notice-action" @click="$emit('start-deep-scan')">
+
+        <button class="notice-action" :disabled="deepScanning" @click="$emit('start-deep-scan')">
           <IconDeepScan :size="18" />
-          <span>开始深度扫描</span>
+          <span>{{ deepScanning ? '深度扫描中...' : '开始深度扫描' }}</span>
         </button>
       </div>
 
@@ -179,7 +194,8 @@ function closeMigrateDialog() {
     </div>
 
     <div v-if="result.inaccessible_count > 0" class="notice">
-      {{ result.inaccessible_count }} 个项目无法访问
+      <IconInfo :size="16" />
+      <span>{{ result.inaccessible_count }} 个项目无法访问，结果已自动跳过这些路径。</span>
     </div>
 
     <MigrateDialog
@@ -196,256 +212,338 @@ function closeMigrateDialog() {
 
 <style scoped>
 .results {
-  flex: 1;
+  position: relative;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: 1rem;
 }
 
 .header {
-  padding: 1.5rem 2rem;
-  border-bottom: 1px solid #e7e5e4;
-  background: linear-gradient(to bottom, #ffffff 0%, #fafaf9 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(247, 241, 232, 0.88));
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-xs);
   flex-shrink: 0;
+}
+
+.header-main {
   display: flex;
+  align-items: start;
   justify-content: space-between;
-  align-items: center;
-  gap: 1.5rem;
-  flex-wrap: wrap;
+  gap: 1rem;
 }
 
-.header-info h2 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #2c2c2c;
-  margin-bottom: 0.5rem;
-  letter-spacing: -0.01em;
-}
-
-.breadcrumb {
+.path-shell {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  align-items: start;
+  gap: 0.85rem;
+  min-width: 0;
 }
 
 .back-btn {
-  width: 32px;
-  height: 32px;
-  display: flex;
+  width: 2.8rem;
+  height: 2.8rem;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #f5f5f4;
-  border: none;
-  border-radius: 8px;
-  color: #2c2c2c;
+  border: 1px solid var(--color-border-light);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.66);
+  color: var(--color-text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
+  box-shadow: var(--shadow-xs);
+  transition: transform var(--transition-base), box-shadow var(--transition-base), background var(--transition-base), color var(--transition-fast);
 }
 
 .back-btn:hover {
-  background: #e7e5e4;
-  color: #007aff;
+  transform: translateX(-2px);
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-sm);
 }
 
-.stats {
-  font-size: 0.875rem;
-  color: #78716c;
-  display: flex;
+.path-copy {
+  min-width: 0;
+}
+
+.path-kicker {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
 }
 
-.separator {
-  color: #d6d3d1;
+.path-kicker::before {
+  content: '';
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 50%;
+  background: rgba(15, 118, 110, 0.88);
+}
+
+.path-copy h2 {
+  font-size: 1.7rem;
+  line-height: 0.98;
+  word-break: break-word;
+}
+
+.path-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+
+.path-badge {
+  padding: 0.42rem 0.72rem;
+  border-radius: var(--radius-pill);
+  background: rgba(23, 23, 23, 0.06);
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.path-badge-live {
+  background: rgba(15, 118, 110, 0.1);
+  color: var(--color-highlight);
 }
 
 .view-switcher {
-  display: flex;
-  gap: 0.5rem;
-  background: #f5f5f4;
-  padding: 0.25rem;
-  border-radius: 10px;
-  flex-shrink: 0;
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 0.28rem;
+  gap: 0.28rem;
+  min-width: 18rem;
+  border-radius: 1.05rem;
+  background: rgba(23, 23, 23, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .view-btn {
-  padding: 0.5rem 1.25rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  background: transparent;
-  color: #78716c;
   border: none;
-  border-radius: 8px;
+  border-radius: 0.85rem;
+  padding: 0.72rem 0.9rem;
+  background: transparent;
+  color: var(--color-text-tertiary);
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform var(--transition-base), background var(--transition-base), color var(--transition-fast), box-shadow var(--transition-base);
+}
+
+.view-btn span,
+.view-btn small {
+  display: block;
+}
+
+.view-btn span {
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.view-btn small {
+  margin-top: 0.12rem;
+  font-size: 0.72rem;
+  color: inherit;
+  opacity: 0.74;
 }
 
 .view-btn:hover {
-  color: #007aff;
-  background: rgba(0, 122, 255, 0.05);
+  color: var(--color-text-primary);
 }
 
 .view-btn.active {
-  background: white;
-  color: #007aff;
-  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.15);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--color-accent-primary);
+  box-shadow: var(--shadow-xs);
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.metric-card {
+  padding: 0.95rem 1rem;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(46, 33, 18, 0.08);
+}
+
+.metric-label {
+  display: block;
+  margin-bottom: 0.38rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.metric-card strong {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.metric-note {
+  display: block;
+  margin-top: 0.32rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--color-text-tertiary);
 }
 
 .body {
-  flex: 1;
-  min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 2rem;
-  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  padding-top: 1rem;
+}
+
+.deep-scan-notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(229, 241, 255, 0.8));
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  box-shadow: var(--shadow-xs);
+}
+
+.notice-icon-wrapper {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--color-info);
+}
+
+.notice-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.notice-text {
+  margin-top: 0.28rem;
+  font-size: 0.86rem;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.notice-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.9rem 1.15rem;
+  border: none;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, var(--color-accent-primary), var(--color-accent-secondary));
+  color: var(--color-text-inverse);
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-base), box-shadow var(--transition-base), opacity var(--transition-fast);
+}
+
+.notice-action:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.notice-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .notice {
   position: absolute;
-  bottom: 1rem;
   left: 50%;
+  bottom: 1rem;
   transform: translateX(-50%);
-  padding: 0.75rem 1.25rem;
-  background: rgba(255, 251, 235, 0.95);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.78rem 1rem;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 251, 235, 0.9);
+  border: 1px solid rgba(217, 119, 6, 0.16);
   color: #92400e;
-  border: 1px solid #fde68a;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  z-index: 10;
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(18px);
+  font-size: 0.84rem;
+}
+
+@media (max-width: 1100px) {
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 900px) {
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 1.25rem 1.5rem;
+  .results {
+    padding: 0.8rem;
+  }
+
+  .header-main,
+  .deep-scan-notice {
+    grid-template-columns: 1fr;
+    display: grid;
   }
 
   .view-switcher {
+    min-width: 0;
     width: 100%;
   }
 
-  .view-btn {
-    flex: 1;
-  }
-
-  .body {
-    padding: 1.5rem;
-  }
-
   .notice {
-    display: none;
+    position: static;
+    transform: none;
+    margin-top: 0.85rem;
   }
 }
 
-@media (max-width: 600px) {
-  .header-info h2 {
-    font-size: 1.125rem;
+@media (max-width: 640px) {
+  .results,
+  .header {
+    padding: 0.72rem;
   }
 
-  .stats {
-    font-size: 0.8125rem;
+  .path-copy h2 {
+    font-size: 1.35rem;
   }
 
-  .body {
-    padding: 1rem;
+  .metric-grid {
+    grid-template-columns: 1fr;
   }
-}
 
-.deep-scan-notice {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  padding: 1.75rem 2rem;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.04) 0%, rgba(37, 99, 235, 0.02) 100%);
-  border: 1px solid rgba(59, 130, 246, 0.15);
-  border-radius: var(--radius-lg);
-  margin-bottom: 1.5rem;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.06);
-  transition: all var(--transition-base);
-  position: relative;
-  overflow: hidden;
-}
+  .view-btn {
+    padding: 0.65rem 0.4rem;
+  }
 
-.deep-scan-notice::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 4px;
-  height: 100%;
-  background: linear-gradient(to bottom, var(--color-info) 0%, #2563eb 100%);
-}
-
-.deep-scan-notice:hover {
-  border-color: rgba(59, 130, 246, 0.25);
-  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.12);
-  transform: translateY(-1px);
-}
-
-.notice-icon-wrapper {
-  flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.08) 100%);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: var(--radius-md);
-  color: var(--color-info);
-}
-
-.notice-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.notice-title {
-  font-family: var(--font-serif);
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin-bottom: 0.5rem;
-  letter-spacing: -0.01em;
-}
-
-.notice-text {
-  font-size: 0.9375rem;
-  color: var(--color-text-secondary);
-  line-height: 1.6;
-}
-
-.notice-action {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: #ffffff;
-  background: linear-gradient(135deg, var(--color-info) 0%, #2563eb 100%);
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--transition-base);
-  letter-spacing: -0.01em;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
-}
-
-.notice-action:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
-}
-
-.notice-action:active {
-  transform: translateY(0);
+  .notice-action {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>

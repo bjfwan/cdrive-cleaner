@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import ConfirmDialog from './ConfirmDialog.vue';
 import { IconClose, IconRefresh, IconLink, IconInfo, IconWarning } from './icons';
@@ -43,6 +43,22 @@ onMounted(() => {
   checkElevation();
   loadCacheInfo();
 });
+
+watch(
+  () => props.show,
+  (show) => {
+    if (!show) {
+      return;
+    }
+
+    loadSettings();
+    checkElevation();
+
+    if (activeTab.value === 'cache') {
+      loadCacheInfo();
+    }
+  },
+);
 
 async function checkElevation() {
   try {
