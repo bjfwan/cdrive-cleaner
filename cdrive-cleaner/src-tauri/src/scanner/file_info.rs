@@ -47,6 +47,8 @@ pub struct ScanResult {
     pub large_files: Vec<FileInfo>,
     pub inaccessible_count: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scan_backend: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_file_id: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usn_journal_id: Option<u64>,

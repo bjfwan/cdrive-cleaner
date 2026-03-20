@@ -1,8 +1,9 @@
 use crate::scanner::{DiskScanner, file_info::{ScanResult, FileInfo}};
-use crate::migration::{FileMigrator, LinkType, file_migrator::MigrationResult};
+use crate::migration::{FileMigrator, LinkType, file_migrator::{MigrationProgress, MigrationProgressCallback, MigrationResult}};
 use crate::database::{ScanCacheDb, MigrationDb};
 use crate::winfs;
 use tauri::AppHandle;
+use tauri::Emitter;
 
 fn resolve_link_target(path: &std::path::Path) -> Option<String> {
     let resolved = if let Ok(target) = std::fs::read_link(path) {
@@ -185,7 +186,13 @@ pub async fn migrate_file(
         (Some(size), Some(files)) => Some((size, files)),
         _ => None,
     };
-    let mut result = migrator.migrate(&source, &target_disk, lt, known_stats, Some(app))
+    let progress_callback: MigrationProgressCallback = std::sync::Arc::new({
+        let app = app.clone();
+        move |progress: MigrationProgress| {
+            let _ = app.emit("migration-progress", progress);
+        }
+    });
+    let mut result = migrator.migrate(&source, &target_disk, lt, known_stats, Some(progress_callback))
         .await.map_err(|e| e.to_string())?;
 
     if !result.success {

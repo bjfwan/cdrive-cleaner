@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter};
 
 #[derive(Clone, serde::Serialize)]
 pub struct MigrationProgress {
@@ -19,6 +18,8 @@ pub struct MigrationProgress {
     pub current_file: String,
     pub progress_percent: f64,
 }
+
+pub type MigrationProgressCallback = Arc<dyn Fn(MigrationProgress) + Send + Sync>;
 
 pub struct FileMigrator {
     link_creator: LinkCreator,
@@ -107,7 +108,7 @@ impl FileMigrator {
         target_disk: P,
         link_type: LinkType,
         known_stats: Option<(u64, usize)>,
-        app: Option<AppHandle>,
+        progress: Option<MigrationProgressCallback>,
     ) -> Result<MigrationResult> {
         let start = Instant::now();
         let source = source.as_ref();
@@ -172,7 +173,7 @@ impl FileMigrator {
 
         // 带进度报告的复制
         self.emit_progress(
-            &app,
+            &progress,
             "copying",
             0,
             file_size,
@@ -180,13 +181,13 @@ impl FileMigrator {
             total_files,
             source.to_string_lossy().as_ref(),
         );
-        let copy_summary = match self.copy_with_progress(source, &target_path, file_size, total_files, &app) {
+        let copy_summary = match self.copy_with_progress(source, &target_path, file_size, total_files, &progress) {
             Ok(summary) => summary,
             Err(e) => return Ok(make_err_with_target(format!("Copy failed: {}", e))),
         };
 
         self.emit_progress(
-            &app,
+            &progress,
             "verifying",
             file_size,
             file_size,
@@ -207,7 +208,7 @@ impl FileMigrator {
 
         if link_type == LinkType::None {
             self.emit_progress(
-                &app,
+                &progress,
                 "cleaning_up",
                 file_size,
                 file_size,
@@ -229,7 +230,7 @@ impl FileMigrator {
         }
 
         self.emit_progress(
-            &app,
+            &progress,
             "creating_link",
             file_size,
             file_size,
@@ -257,7 +258,7 @@ impl FileMigrator {
         }
 
         self.emit_progress(
-            &app,
+            &progress,
             "cleaning_up",
             file_size,
             file_size,
@@ -445,12 +446,12 @@ impl FileMigrator {
     }
 
     fn start_progress_reporter(
-        app: &Option<AppHandle>,
+        progress: &Option<MigrationProgressCallback>,
         tracker: &Arc<CopyProgressTracker>,
         total_size: u64,
         total_files: usize,
     ) -> Option<std::thread::JoinHandle<()>> {
-        let app = app.clone()?;
+        let progress = progress.clone()?;
         let tracker = Arc::clone(tracker);
 
         Some(std::thread::spawn(move || {
@@ -459,7 +460,7 @@ impl FileMigrator {
 
                 let (copied_bytes, copied_files, current_file) = tracker.snapshot();
                 Self::emit_progress_impl(
-                    Some(&app),
+                    Some(&progress),
                     "copying",
                     copied_bytes,
                     total_size,
@@ -477,7 +478,7 @@ impl FileMigrator {
 
     fn finish_copy_progress(
         &self,
-        app: &Option<AppHandle>,
+        progress: &Option<MigrationProgressCallback>,
         tracker: Arc<CopyProgressTracker>,
         reporter: Option<std::thread::JoinHandle<()>>,
         total_size: u64,
@@ -497,7 +498,7 @@ impl FileMigrator {
         };
 
         self.emit_progress(
-            app,
+            progress,
             "copying",
             copied_bytes,
             total_size,
@@ -648,11 +649,11 @@ impl FileMigrator {
         plan: &DirectoryCopyPlan,
         total_size: u64,
         total_files: usize,
-        app: &Option<AppHandle>,
+        progress: &Option<MigrationProgressCallback>,
         fallback_path: &Path,
     ) -> Result<CopySummary> {
         let tracker = Arc::new(CopyProgressTracker::default());
-        let reporter = Self::start_progress_reporter(app, &tracker, total_size, total_files);
+        let reporter = Self::start_progress_reporter(progress, &tracker, total_size, total_files);
 
         let copy_result = (|| -> Result<()> {
             for task in &plan.files {
@@ -666,7 +667,7 @@ impl FileMigrator {
             return Err(err);
         }
 
-        Ok(self.finish_copy_progress(app, tracker, reporter, total_size, total_files, fallback_path))
+        Ok(self.finish_copy_progress(progress, tracker, reporter, total_size, total_files, fallback_path))
     }
 
     fn copy_directory_parallel(
@@ -674,11 +675,11 @@ impl FileMigrator {
         plan: &DirectoryCopyPlan,
         total_size: u64,
         total_files: usize,
-        app: &Option<AppHandle>,
+        progress: &Option<MigrationProgressCallback>,
         fallback_path: &Path,
     ) -> Result<CopySummary> {
         let tracker = Arc::new(CopyProgressTracker::default());
-        let reporter = Self::start_progress_reporter(app, &tracker, total_size, total_files);
+        let reporter = Self::start_progress_reporter(progress, &tracker, total_size, total_files);
 
         let copy_result = plan.files.par_iter().try_for_each(|task| -> Result<()> {
             self.copy_file_optimized(&task.source, &task.target, task.expected_size, Some(tracker.as_ref()))?;
@@ -690,7 +691,7 @@ impl FileMigrator {
             return Err(err);
         }
 
-        Ok(self.finish_copy_progress(app, tracker, reporter, total_size, total_files, fallback_path))
+        Ok(self.finish_copy_progress(progress, tracker, reporter, total_size, total_files, fallback_path))
     }
 
     /// 带进度报告的复制
@@ -700,27 +701,27 @@ impl FileMigrator {
         target: &Path,
         total_size: u64,
         total_files: usize,
-        app: &Option<AppHandle>,
+        progress: &Option<MigrationProgressCallback>,
     ) -> Result<CopySummary> {
         if source.is_file() {
             let tracker = Arc::new(CopyProgressTracker::default());
             let tracked_files = total_files.max(1);
-            let reporter = Self::start_progress_reporter(app, &tracker, total_size, tracked_files);
+            let reporter = Self::start_progress_reporter(progress, &tracker, total_size, tracked_files);
 
             if let Err(err) = self.copy_file_optimized(source, target, total_size, Some(tracker.as_ref())) {
                 Self::stop_progress_reporter(&tracker, reporter);
                 return Err(err);
             }
-            return Ok(self.finish_copy_progress(app, tracker, reporter, total_size, tracked_files, source));
+            return Ok(self.finish_copy_progress(progress, tracker, reporter, total_size, tracked_files, source));
         }
 
         let plan = self.build_directory_copy_plan(source, target)?;
         self.prepare_directory_copy_plan(&plan)?;
 
         if Self::should_parallelize_directory_copy(total_size, total_files) {
-            self.copy_directory_parallel(&plan, total_size, total_files, app, target)
+            self.copy_directory_parallel(&plan, total_size, total_files, progress, target)
         } else {
-            self.copy_directory_serial(&plan, total_size, total_files, app, target)
+            self.copy_directory_serial(&plan, total_size, total_files, progress, target)
         }
     }
 
@@ -756,7 +757,7 @@ impl FileMigrator {
 
     fn emit_progress(
         &self,
-        app: &Option<AppHandle>,
+        progress: &Option<MigrationProgressCallback>,
         status: &str,
         copied_bytes: u64,
         total_bytes: u64,
@@ -765,7 +766,7 @@ impl FileMigrator {
         current_file: &str,
     ) {
         Self::emit_progress_impl(
-            app.as_ref(),
+            progress.as_ref(),
             status,
             copied_bytes,
             total_bytes,
@@ -776,7 +777,7 @@ impl FileMigrator {
     }
 
     fn emit_progress_impl(
-        app: Option<&AppHandle>,
+        progress: Option<&MigrationProgressCallback>,
         status: &str,
         copied_bytes: u64,
         total_bytes: u64,
@@ -784,14 +785,14 @@ impl FileMigrator {
         total_files: usize,
         current_file: &str,
     ) {
-        if let Some(app) = app {
+        if let Some(progress) = progress {
             let pct = if total_bytes > 0 {
                 copied_bytes as f64 / total_bytes as f64 * 100.0
             } else {
                 100.0
             };
 
-            let _ = app.emit("migration-progress", MigrationProgress {
+            progress(MigrationProgress {
                 status: status.to_string(),
                 copied_bytes,
                 total_bytes,

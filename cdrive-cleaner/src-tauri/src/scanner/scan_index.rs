@@ -10,6 +10,7 @@ pub struct IndexedScanResult {
     total_dirs: usize,
     scan_duration_ms: u64,
     inaccessible_count: usize,
+    scan_backend: Option<String>,
     root_children: Vec<DirectoryNode>,
     nodes: HashMap<String, DirectoryNode>,
     children_by_path: HashMap<String, Vec<DirectoryNode>>,
@@ -28,6 +29,7 @@ impl IndexedScanResult {
             total_dirs: result.total_dirs,
             scan_duration_ms: result.scan_duration_ms,
             inaccessible_count: result.inaccessible_count,
+            scan_backend: result.scan_backend.clone(),
             root_children: result
                 .directories
                 .iter()
@@ -56,6 +58,7 @@ impl IndexedScanResult {
                 directories: self.root_children.clone(),
                 large_files: self.large_files.clone(),
                 inaccessible_count: self.inaccessible_count,
+                scan_backend: self.scan_backend.clone(),
                 root_file_id: self.root_file_id,
                 usn_journal_id: self.usn_journal_id,
                 usn_next_usn: self.usn_next_usn,
@@ -74,6 +77,7 @@ impl IndexedScanResult {
             directories,
             large_files: self.large_files_for_path(path),
             inaccessible_count: self.inaccessible_count,
+            scan_backend: self.scan_backend.clone(),
             root_file_id: self.root_file_id,
             usn_journal_id: self.usn_journal_id,
             usn_next_usn: self.usn_next_usn,

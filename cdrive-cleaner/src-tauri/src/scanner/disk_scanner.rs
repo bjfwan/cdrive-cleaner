@@ -1,4 +1,6 @@
+use super::backend::{self, ScanBackendKind};
 use super::file_info::{DirectoryNode, FileInfo, ScanResult};
+use super::progress::ScanProgress;
 use super::scan_index::IndexedScanResult;
 use anyhow::Result;
 use rayon::prelude::*;
@@ -19,17 +21,6 @@ use tauri::{AppHandle, Emitter};
 
 use crate::cache::ScanCache;
 use crate::winfs;
-
-#[derive(Clone, serde::Serialize)]
-pub struct ScanProgress {
-    pub scanned_files: u64,
-    pub scanned_dirs: u64,
-    pub total_size: u64,
-    pub current_path: String,
-    pub elapsed_ms: u64,
-    pub files_per_second: f64,
-    pub progress_percent: f64,
-}
 
 pub struct DiskScanner {
     cache: ScanCache,
@@ -483,6 +474,7 @@ impl DiskScanner {
             directories,
             large_files: large_files_vec,
             inaccessible_count,
+            scan_backend: Some(ScanBackendKind::Native.label().to_string()),
             root_file_id: None,
             usn_journal_id: None,
             usn_next_usn: None,
@@ -519,6 +511,21 @@ impl DiskScanner {
     // ======================== 深度扫描 ========================
 
     fn scan_deep_blocking(path: &Path, app: AppHandle, estimated_files: usize, cancelled: Arc<AtomicBool>) -> Result<ScanResult> {
+        if backend::select_backend(path) == ScanBackendKind::MftUsn {
+            let progress_callback: super::mft_usn::ProgressCallback = Arc::new({
+                let app = app.clone();
+                move |progress: ScanProgress| {
+                    let _ = app.emit("deep-scan-progress", progress);
+                }
+            });
+
+            match super::mft_usn::scan_path(path, Some(progress_callback), estimated_files, Arc::clone(&cancelled)) {
+                Ok(Some(result)) => return Ok(result),
+                Ok(None) => println!("[mft-usn] 路径不满足条件，回退到原生递归扫描"),
+                Err(err) => println!("[mft-usn] 扫描失败({err})，回退到原生递归扫描"),
+            }
+        }
+
         let start = Instant::now();
         let root_path = path.to_string_lossy().to_string();
 
@@ -786,6 +793,7 @@ impl DiskScanner {
             directories,
             large_files: large_files_vec,
             inaccessible_count: inaccessible_count.load(Ordering::Relaxed),
+            scan_backend: Some(ScanBackendKind::Native.label().to_string()),
             root_file_id: winfs::get_path_file_id(path),
             usn_journal_id: journal.map(|item| item.journal_id),
             usn_next_usn: journal.map(|item| item.next_usn),

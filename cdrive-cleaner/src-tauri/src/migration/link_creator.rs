@@ -114,23 +114,4 @@ impl LinkCreator {
             Ok(LinkType::Symlink)
         }
     }
-
-    fn get_root_path<P: AsRef<Path>>(&self, path: P) -> Result<String> {
-        let path = path.as_ref();
-        
-        #[cfg(target_os = "windows")]
-        {
-            let path_str = path.to_string_lossy();
-            if let Some(root) = path_str.chars().take(2).collect::<String>().strip_suffix(':') {
-                Ok(root.to_uppercase())
-            } else {
-                Err(anyhow!("Cannot determine root path"))
-            }
-        }
-
-        #[cfg(not(target_os = "windows"))]
-        {
-            Ok("/".to_string())
-        }
-    }
 }

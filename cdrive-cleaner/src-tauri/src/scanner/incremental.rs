@@ -679,6 +679,7 @@ pub async fn scan_incremental(
         directories: updated_tree,
         large_files,
         inaccessible_count: cached_result.inaccessible_count,
+        scan_backend: Some("incremental_usn".to_string()),
         root_file_id: winfs::get_path_file_id(path).or(cached_result.root_file_id),
         usn_journal_id: journal.map(|item| item.journal_id).or(cached_result.usn_journal_id),
         usn_next_usn: journal.map(|item| item.next_usn).or(cached_result.usn_next_usn),
