@@ -11,6 +11,16 @@ interface Props {
 
 defineProps<Props>();
 
+interface DeepScanProgressPayload {
+  scanned_files: number;
+  scanned_dirs: number;
+  total_size: number;
+  current_path: string;
+  elapsed_ms: number;
+  files_per_second: number;
+  progress_percent: number;
+}
+
 async function cancelScan() {
   try { await invoke('cancel_scan'); } catch {}
 }
@@ -19,6 +29,7 @@ const scannedFiles = ref(0);
 const totalSize = ref(0);
 const progressPercent = ref(0);
 const filesPerSecond = ref(0);
+const currentPath = ref('');
 const expanded = ref(false);
 
 const formattedSize = computed(() => formatBytes(totalSize.value));
@@ -28,16 +39,39 @@ const formattedSpeed = computed(() => {
   if (speed < 10) return `${speed.toFixed(1)} 文件/秒`;
   return `${Math.round(speed)} 文件/秒`;
 });
+const phaseText = computed(() => {
+  if (!currentPath.value) {
+    return '正在准备深度扫描...';
+  }
+
+  if (
+    currentPath.value.includes('MFT') ||
+    currentPath.value.endsWith('...') ||
+    currentPath.value.includes('扫描中')
+  ) {
+    return currentPath.value;
+  }
+
+  return '目录树统计与聚合中';
+});
+const displayPath = computed(() => {
+  if (!currentPath.value || currentPath.value === phaseText.value) {
+    return '';
+  }
+
+  return currentPath.value;
+});
 
 let unlisten: (() => void) | null = null;
 
 onMounted(async () => {
-  unlisten = await listen<Record<string, number>>('deep-scan-progress', (event) => {
+  unlisten = await listen<DeepScanProgressPayload>('deep-scan-progress', (event) => {
     const progress = event.payload;
     scannedFiles.value = progress.scanned_files;
     totalSize.value = progress.total_size;
     progressPercent.value = progress.progress_percent;
     filesPerSecond.value = progress.files_per_second;
+    currentPath.value = progress.current_path;
   });
 });
 
@@ -73,12 +107,20 @@ onUnmounted(() => {
     <transition name="expand">
       <div v-if="expanded" class="progress-details">
         <div class="detail-item">
+          <span class="detail-label">阶段</span>
+          <span class="detail-value detail-value--path">{{ phaseText }}</span>
+        </div>
+        <div class="detail-item">
           <span class="detail-label">大小</span>
           <span class="detail-value">{{ formattedSize }}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">速度</span>
           <span class="detail-value">{{ formattedSpeed }}</span>
+        </div>
+        <div v-if="displayPath" class="detail-item">
+          <span class="detail-label">路径</span>
+          <span class="detail-value detail-value--path">{{ displayPath }}</span>
         </div>
       </div>
     </transition>
@@ -87,11 +129,11 @@ onUnmounted(() => {
 
 <style scoped>
 .deep-scan-progress {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 1px solid #bae6fd;
-  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(93, 201, 194, 0.14) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
   padding: 1rem;
-  margin: 1rem 0;
+  margin-top: 0.2rem;
 }
 
 .progress-header {
@@ -117,9 +159,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: white;
-  border-radius: 8px;
-  color: #0ea5e9;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 0.8rem;
+  color: rgba(248, 246, 242, 0.94);
   flex-shrink: 0;
 }
 
@@ -138,33 +180,32 @@ onUnmounted(() => {
 
 .title {
   font-size: 0.875rem;
-  font-weight: 600;
-  color: #0c4a6e;
+  font-weight: 800;
+  color: var(--color-text-inverse);
   margin-bottom: 0.125rem;
 }
 
 .subtitle {
   font-size: 0.75rem;
-  color: #0369a1;
+  color: rgba(248, 246, 242, 0.66);
 }
 
 .cancel-btn {
   padding: 0.25rem 0.75rem;
-  border: 1px solid #bae6fd;
-  border-radius: 6px;
-  background: white;
-  color: #0369a1;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(248, 246, 242, 0.84);
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: transform var(--transition-base), background var(--transition-base);
   flex-shrink: 0;
 }
 
 .cancel-btn:hover {
-  background: #fef2f2;
-  border-color: #fca5a5;
-  color: #dc2626;
+  transform: translateY(-1px);
+  background: rgba(220, 38, 38, 0.12);
 }
 
 .expand-icon {
@@ -173,8 +214,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #0369a1;
-  transition: transform 0.2s ease;
+  color: rgba(248, 246, 242, 0.72);
+  transition: transform var(--transition-base);
   flex-shrink: 0;
 }
 
@@ -184,14 +225,14 @@ onUnmounted(() => {
 
 .progress-bar {
   height: 6px;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 3px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #0ea5e9 0%, #06b6d4 100%);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.95) 0%, rgba(93, 201, 194, 0.86) 100%);
   border-radius: 3px;
   transition: width 0.3s ease-out;
 }
@@ -199,7 +240,7 @@ onUnmounted(() => {
 .progress-details {
   margin-top: 0.75rem;
   padding-top: 0.75rem;
-  border-top: 1px solid #bae6fd;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -213,14 +254,21 @@ onUnmounted(() => {
 
 .detail-label {
   font-size: 0.75rem;
-  color: #0369a1;
-  font-weight: 500;
+  color: rgba(248, 246, 242, 0.62);
+  font-weight: 700;
 }
 
 .detail-value {
   font-size: 0.75rem;
-  color: #0c4a6e;
-  font-weight: 600;
+  color: var(--color-text-inverse);
+  font-weight: 800;
+}
+
+.detail-value--path {
+  max-width: 16rem;
+  text-align: right;
+  line-height: 1.5;
+  word-break: break-all;
 }
 
 .expand-enter-active,

@@ -51,6 +51,16 @@ export interface ScanResult {
   directories: DirectoryNode[];
   large_files: FileInfo[];
   inaccessible_count: number;
+  scan_backend?: string;
+}
+
+export interface ScanCapabilities {
+  is_elevated: boolean;
+  file_system: string;
+  mft_available: boolean;
+  preferred_backend: string;
+  admin_recommended: boolean;
+  reason: string;
 }
 
 export interface MigrationSafety {

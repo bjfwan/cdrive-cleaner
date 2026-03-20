@@ -123,6 +123,35 @@ That means:
 Real validation was split into two parts:
 
 - compile validation: `cargo test --no-run`
-- filesystem validation: temporary real-directory migration checks and an attempted MFT validation run
+- filesystem validation: temporary real-directory migration checks plus a dedicated admin-only `MFT + USN` end-to-end validation command
 
-On a non-elevated shell, migration validation can run end-to-end, while MFT validation is expected to skip because the volume cannot be opened with MFT privileges.
+### Admin End-to-End Validation
+
+From the repository root, the self-elevating command is:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run-admin-mft-validation.ps1 C:\
+```
+
+Behavior:
+
+- if the shell is not elevated, the script re-launches itself through Windows UAC
+- after elevation, it runs `cargo run --example admin_mft_validation -- C:\`
+- the example prints a JSON report and exits with code `2` when validation does not pass
+- the temporary validation directory is deleted automatically on exit
+
+If you are already in an elevated shell, you can run the example directly:
+
+```powershell
+cd .\cdrive-cleaner\src-tauri
+cargo run --example admin_mft_validation -- C:\
+```
+
+### User-Facing Admin Path
+
+The app now exposes the admin path in two places:
+
+- `设置 -> 权限 -> 管理员模式`
+- the main scan action card, which now detects whether the selected NTFS volume can use `MFT + USN` and shows a one-click `开启管理员模式` action when elevation is recommended
+
+When the restart prompt appears, the user needs to click `是` in the Windows UAC dialog. After restart, deep scan will prefer the `MFT + USN` backend whenever the target volume supports it.

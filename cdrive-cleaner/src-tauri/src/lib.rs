@@ -2,6 +2,7 @@ mod scanner;
 pub mod migration;
 mod database;
 mod commands;
+pub mod diagnostics;
 pub mod safety;
 pub mod cache;
 mod utils;
@@ -43,6 +44,7 @@ pub fn run() {
             commands::clear_scan_cache,
             commands::get_cache_info,
             commands::delete_cache_entry,
+            commands::get_scan_capabilities,
             commands::is_elevated,
             commands::restart_as_admin,
             commands::exit_app,

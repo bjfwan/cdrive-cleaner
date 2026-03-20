@@ -2,11 +2,26 @@ use super::link_creator::{LinkCreator, LinkType};
 use anyhow::{anyhow, Result};
 use rayon::prelude::*;
 use std::fs;
+#[cfg(target_os = "windows")]
+use std::ffi::c_void;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+#[cfg(target_os = "windows")]
+use windows::core::PCWSTR;
+#[cfg(target_os = "windows")]
+use windows::Win32::Storage::FileSystem::{
+    CopyFile2, COPYFILE2_CALLBACK_CHUNK_FINISHED, COPYFILE2_CALLBACK_STREAM_FINISHED,
+    COPYFILE2_EXTENDED_PARAMETERS, COPYFILE2_MESSAGE, COPYFILE2_MESSAGE_ACTION,
+    COPYFILE2_PROGRESS_CONTINUE,
+};
+#[cfg(target_os = "windows")]
+use windows::Win32::System::WindowsProgramming::{
+    COPY_FILE_FAIL_IF_EXISTS, COPY_FILE_NO_BUFFERING,
+};
 
 #[derive(Clone, serde::Serialize)]
 pub struct MigrationProgress {
@@ -52,6 +67,13 @@ struct CopyProgressTracker {
     current_file: Mutex<String>,
 }
 
+#[cfg(target_os = "windows")]
+struct CopyFile2ProgressContext {
+    tracker: *const CopyProgressTracker,
+    source: PathBuf,
+    last_reported: AtomicU64,
+}
+
 const LARGE_FILE_COPY_THRESHOLD: u64 = 128 * 1024 * 1024;
 const PARALLEL_COPY_MIN_BYTES: u64 = 512 * 1024 * 1024;
 const PARALLEL_COPY_MIN_FILES: usize = 128;
@@ -72,13 +94,14 @@ impl CopyProgressTracker {
         self.copied_bytes.fetch_add(bytes, Ordering::Relaxed);
     }
 
+    #[cfg(not(target_os = "windows"))]
     fn complete_file(&self, path: &Path, bytes: u64) {
         self.set_current_file(path);
         self.copied_bytes.fetch_add(bytes, Ordering::Relaxed);
         self.copied_files.fetch_add(1, Ordering::Relaxed);
     }
 
-    fn finish_buffered_file(&self, path: &Path) {
+    fn finish_file(&self, path: &Path) {
         self.set_current_file(path);
         self.copied_files.fetch_add(1, Ordering::Relaxed);
     }
@@ -370,12 +393,12 @@ impl FileMigrator {
     }
 
     #[cfg(target_os = "windows")]
-    fn should_use_buffered_copy(file_size: u64) -> bool {
+    fn should_use_copyfile_no_buffering(file_size: u64) -> bool {
         file_size >= LARGE_FILE_COPY_THRESHOLD
     }
 
     #[cfg(not(target_os = "windows"))]
-    fn should_use_buffered_copy(_file_size: u64) -> bool {
+    fn should_use_copyfile_no_buffering(_file_size: u64) -> bool {
         false
     }
 
@@ -575,30 +598,99 @@ impl FileMigrator {
         Ok(copied)
     }
 
-    #[cfg(windows)]
-    fn copy_file_via_copyfileex(&self, source: &Path, target: &Path) -> Result<u64> {
+    #[cfg(target_os = "windows")]
+    fn copy_file_via_copyfile2(
+        &self,
+        source: &Path,
+        target: &Path,
+        expected_size: u64,
+        progress: Option<&CopyProgressTracker>,
+    ) -> Result<u64> {
         use std::os::windows::ffi::OsStrExt;
-        use windows::Win32::Storage::FileSystem::CopyFileExW;
-        use windows::core::PCWSTR;
 
         let source_wide: Vec<u16> = source.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
         let target_wide: Vec<u16> = target.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        let mut progress_context = progress.map(|tracker| CopyFile2ProgressContext {
+            tracker: tracker as *const CopyProgressTracker,
+            source: source.to_path_buf(),
+            last_reported: AtomicU64::new(0),
+        });
+        let copy_flags = COPY_FILE_FAIL_IF_EXISTS
+            | if Self::should_use_copyfile_no_buffering(expected_size) {
+                COPY_FILE_NO_BUFFERING
+            } else {
+                0
+            };
+        let params = COPYFILE2_EXTENDED_PARAMETERS {
+            dwSize: std::mem::size_of::<COPYFILE2_EXTENDED_PARAMETERS>() as u32,
+            dwCopyFlags: copy_flags,
+            pfCancel: std::ptr::null_mut(),
+            pProgressRoutine: progress.map(|_| {
+                Self::copy_file2_progress_routine
+                    as unsafe extern "system" fn(
+                        *const COPYFILE2_MESSAGE,
+                        *const c_void,
+                    ) -> COPYFILE2_MESSAGE_ACTION
+            }),
+            pvCallbackContext: progress_context
+                .as_mut()
+                .map(|ctx| ctx as *mut CopyFile2ProgressContext as *mut c_void)
+                .unwrap_or(std::ptr::null_mut()),
+        };
 
         unsafe {
-            CopyFileExW(
+            CopyFile2(
                 PCWSTR(source_wide.as_ptr()),
                 PCWSTR(target_wide.as_ptr()),
-                None,
-                None,
-                None,
-                0,
+                Some(&params as *const COPYFILE2_EXTENDED_PARAMETERS),
             )?;
         }
 
-        Ok(fs::metadata(target)?.len())
+        let copied = fs::metadata(target)?.len();
+
+        if let (Some(progress), Some(context)) = (progress, progress_context.as_ref()) {
+            let reported = context.last_reported.load(Ordering::Relaxed);
+            if copied > reported {
+                progress.add_copied_bytes(source, copied - reported);
+            }
+        }
+
+        Ok(copied)
     }
 
-    #[cfg(windows)]
+    #[cfg(target_os = "windows")]
+    unsafe extern "system" fn copy_file2_progress_routine(
+        pmessage: *const COPYFILE2_MESSAGE,
+        pvcallbackcontext: *const c_void,
+    ) -> COPYFILE2_MESSAGE_ACTION {
+        if pmessage.is_null() || pvcallbackcontext.is_null() {
+            return COPYFILE2_PROGRESS_CONTINUE;
+        }
+
+        let context = &*(pvcallbackcontext as *const CopyFile2ProgressContext);
+        let message = &*pmessage;
+        let total_bytes_transferred = if message.Type == COPYFILE2_CALLBACK_CHUNK_FINISHED {
+            message.Info.ChunkFinished.uliTotalBytesTransferred
+        } else if message.Type == COPYFILE2_CALLBACK_STREAM_FINISHED {
+            message.Info.StreamFinished.uliTotalBytesTransferred
+        } else {
+            return COPYFILE2_PROGRESS_CONTINUE;
+        };
+        let previous = context
+            .last_reported
+            .swap(total_bytes_transferred, Ordering::Relaxed);
+
+        if total_bytes_transferred > previous {
+            let delta = total_bytes_transferred - previous;
+            if let Some(tracker) = context.tracker.as_ref() {
+                tracker.add_copied_bytes(&context.source, delta);
+            }
+        }
+
+        COPYFILE2_PROGRESS_CONTINUE
+    }
+
+    #[cfg(target_os = "windows")]
     fn copy_file_optimized(
         &self,
         source: &Path,
@@ -606,21 +698,22 @@ impl FileMigrator {
         expected_size: u64,
         progress: Option<&CopyProgressTracker>,
     ) -> Result<u64> {
-        let use_buffered_copy = Self::should_use_buffered_copy(expected_size);
-        let copied = if use_buffered_copy {
-            self.copy_file_buffered(source, target, expected_size, progress)?
-        } else {
-            self.copy_file_via_copyfileex(source, target)?
+        let copied = match self.copy_file_via_copyfile2(source, target, expected_size, progress) {
+            Ok(copied) => copied,
+            Err(copyfile2_err) => {
+                let _ = fs::remove_file(target);
+                eprintln!(
+                    "[migration] CopyFile2 failed for {}: {copyfile2_err}; falling back to buffered copy",
+                    source.display()
+                );
+                self.copy_file_buffered(source, target, expected_size, progress)?
+            }
         };
 
         self.verify_copied_file(expected_size, target)?;
 
         if let Some(progress) = progress {
-            if use_buffered_copy {
-                progress.finish_buffered_file(source);
-            } else {
-                progress.complete_file(source, copied);
-            }
+            progress.finish_file(source);
         }
 
         Ok(copied)
@@ -907,4 +1000,122 @@ pub struct RollbackResult {
     pub target_path: String,
     pub duration_ms: u64,
     pub error: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestWorkspace {
+        root: PathBuf,
+    }
+
+    impl TestWorkspace {
+        fn new(prefix: &str) -> Result<Self> {
+            let unique = format!(
+                "{prefix}-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)?
+                    .as_nanos()
+            );
+            let root = std::env::temp_dir().join(format!("cdrive-cleaner-{unique}"));
+            fs::create_dir_all(&root)?;
+            Ok(Self { root })
+        }
+
+        fn path(&self) -> &Path {
+            &self.root
+        }
+    }
+
+    impl Drop for TestWorkspace {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    fn write_test_file(path: &Path, bytes: &[u8]) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        fs::write(path, bytes)?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn migrate_directory_with_junction_and_rollback() -> Result<()> {
+        let workspace = TestWorkspace::new("migration-dir")?;
+        let source_disk = workspace.path().join("source");
+        let target_disk = workspace.path().join("target");
+        let source_dir = source_disk.join("dataset");
+        let nested_file = source_dir.join("nested").join("cache.bin");
+
+        fs::create_dir_all(&target_disk)?;
+        write_test_file(&nested_file, &[7u8; 1024 * 512])?;
+        write_test_file(&source_dir.join("index.txt"), b"junction-rollback-check")?;
+
+        let migrator = FileMigrator::new();
+        let result = migrator
+            .migrate(&source_dir, &target_disk, LinkType::Junction, None, None)
+            .await?;
+        assert!(result.success, "migration failed: {:?}", result.error);
+
+        let migrated_target = target_disk.join("dataset");
+        assert!(migrated_target.exists());
+        assert!(migrator.link_creator.verify_link(&source_dir, &migrated_target)?);
+
+        let rollback = migrator.rollback(&source_dir, &migrated_target).await?;
+        assert!(rollback.success, "rollback failed: {:?}", rollback.error);
+        assert!(source_dir.join("nested").join("cache.bin").exists());
+        assert!(!migrated_target.exists());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn migrate_file_without_link_emits_progress() -> Result<()> {
+        let workspace = TestWorkspace::new("migration-file")?;
+        let source_disk = workspace.path().join("source");
+        let target_disk = workspace.path().join("target");
+        let source_file = source_disk.join("archive.bin");
+        let payload = vec![42u8; 4 * 1024 * 1024];
+
+        fs::create_dir_all(&source_disk)?;
+        fs::create_dir_all(&target_disk)?;
+        write_test_file(&source_file, &payload)?;
+
+        let progress_events = Arc::new(Mutex::new(Vec::<MigrationProgress>::new()));
+        let progress_callback: MigrationProgressCallback = Arc::new({
+            let progress_events = Arc::clone(&progress_events);
+            move |progress| {
+                progress_events.lock().unwrap().push(progress);
+            }
+        });
+
+        let migrator = FileMigrator::new();
+        let result = migrator
+            .migrate(
+                &source_file,
+                &target_disk,
+                LinkType::None,
+                None,
+                Some(progress_callback),
+            )
+            .await?;
+        assert!(result.success, "migration failed: {:?}", result.error);
+
+        let target_file = target_disk.join("archive.bin");
+        assert!(target_file.exists());
+        assert!(!source_file.exists());
+        assert_eq!(fs::read(&target_file)?, payload);
+
+        let progress_events = progress_events.lock().unwrap();
+        assert!(!progress_events.is_empty());
+        assert!(progress_events.iter().any(|event| event.status == "copying"));
+        assert!(progress_events.iter().any(|event| event.status == "cleaning_up"));
+
+        Ok(())
+    }
 }

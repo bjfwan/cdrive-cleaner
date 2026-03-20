@@ -5,6 +5,16 @@ use crate::winfs;
 use tauri::AppHandle;
 use tauri::Emitter;
 
+#[derive(serde::Serialize)]
+pub struct ScanCapabilities {
+    pub is_elevated: bool,
+    pub file_system: String,
+    pub mft_available: bool,
+    pub preferred_backend: String,
+    pub admin_recommended: bool,
+    pub reason: String,
+}
+
 fn resolve_link_target(path: &std::path::Path) -> Option<String> {
     let resolved = if let Ok(target) = std::fs::read_link(path) {
         if target.is_absolute() {
@@ -350,14 +360,37 @@ pub fn is_elevated() -> bool {
 pub fn restart_as_admin(app: AppHandle) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
+        use std::path::Path;
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        use windows::core::PCWSTR;
+
+        fn to_wide(path: &Path) -> Vec<u16> {
+            use std::os::windows::ffi::OsStrExt;
+
+            path.as_os_str()
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect()
+        }
+
         let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
-        let status = std::process::Command::new("powershell")
-            .args(&["-Command", &format!("Start-Process -FilePath '{}' -Verb RunAs", exe_path.display())])
-            .creation_flags(0x08000000)
-            .status().map_err(|e| e.to_string())?;
-        if status.success() { app.exit(0); }
-        else { return Err("Failed to restart as administrator".to_string()); }
+        let operation: Vec<u16> = "runas\0".encode_utf16().collect();
+        let file = to_wide(&exe_path);
+        let result = unsafe {
+            ShellExecuteW(
+                None,
+                PCWSTR(operation.as_ptr()),
+                PCWSTR(file.as_ptr()),
+                PCWSTR::null(),
+                PCWSTR::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+        if result.0 as usize <= 32 {
+            return Err("Failed to restart as administrator".to_string());
+        }
+        app.exit(0);
     }
     #[cfg(not(target_os = "windows"))]
     { return Err("Not supported on this platform".to_string()); }
@@ -398,4 +431,39 @@ pub async fn get_cache_info(cache_db: tauri::State<'_, ScanCacheDb>) -> Result<C
 #[tauri::command]
 pub async fn delete_cache_entry(disk_path: String, scan_type: String, cache_db: tauri::State<'_, ScanCacheDb>) -> Result<(), String> {
     cache_db.delete_entry(&disk_path, &scan_type).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_scan_capabilities(path: String) -> Result<ScanCapabilities, String> {
+    let path_buf = std::path::PathBuf::from(path);
+    let elevated = is_elevated();
+    let volume = winfs::query_volume_details(&path_buf);
+    let file_system = volume
+        .as_ref()
+        .map(|details| details.file_system.clone())
+        .unwrap_or_else(|| "Unknown".to_string());
+    let mft_available = winfs::supports_mft_scan(&path_buf);
+
+    let reason = if mft_available {
+        "当前环境可直接使用 MFT + USN 深度扫描".to_string()
+    } else if !file_system.eq_ignore_ascii_case("NTFS") {
+        "当前卷不是 NTFS，深度扫描将回退到原生目录枚举".to_string()
+    } else if !elevated {
+        "当前是标准权限。启用管理员模式后，可切换到 MFT + USN 深度扫描".to_string()
+    } else {
+        "当前卷是 NTFS，但系统没有提供可用的 MFT 访问，深度扫描将回退到原生目录枚举".to_string()
+    };
+
+    Ok(ScanCapabilities {
+        is_elevated: elevated,
+        file_system,
+        mft_available,
+        preferred_backend: if mft_available {
+            "mft_usn".to_string()
+        } else {
+            "native".to_string()
+        },
+        admin_recommended: !mft_available && !elevated,
+        reason,
+    })
 }
