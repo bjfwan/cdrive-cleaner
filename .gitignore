@@ -27,6 +27,9 @@ lerna-debug.log*
 *.sln
 *.sw?
 
+# Local tooling / agent workspace
+.kiro/
+
 # Database
 *.db
 *.db-shm
