@@ -152,31 +152,31 @@ watch(
   { immediate: true },
 );
 
-function getRiskLabel(riskLevel?: string): string {
-  switch (riskLevel) {
+function getVerdictLabel(verdict?: string): string {
+  switch (verdict) {
     case 'safe':
       return '安全';
-    case 'moderate':
-      return '低风险';
-    case 'risky':
-      return '中风险';
-    case 'dangerous':
-      return '危险';
+    case 'safe_after_action':
+      return '需要操作';
+    case 'blocked':
+      return '阻塞';
+    case 'system_critical':
+      return '系统关键';
     default:
       return '未知';
   }
 }
 
-function getRiskClass(riskLevel?: string): string {
-  switch (riskLevel) {
+function getVerdictClass(verdict?: string): string {
+  switch (verdict) {
     case 'safe':
       return 'risk-safe';
-    case 'moderate':
-      return 'risk-moderate';
-    case 'risky':
-      return 'risk-risky';
-    case 'dangerous':
-      return 'risk-dangerous';
+    case 'safe_after_action':
+      return 'risk-warning';
+    case 'blocked':
+      return 'risk-blocked';
+    case 'system_critical':
+      return 'risk-danger';
     default:
       return '';
   }
@@ -262,13 +262,13 @@ function getRiskClass(riskLevel?: string): string {
               <span
                 v-if="dir.safety"
                 class="risk-badge"
-                :class="getRiskClass(dir.safety.risk_level)"
-                :title="`${getRiskLabel(dir.safety.risk_level)} - ${dir.safety.app_type}`"
+                :class="getVerdictClass(dir.safety.verdict)"
+                :title="`${getVerdictLabel(dir.safety.verdict)} - ${dir.safety.app_type}`"
               >
-                <IconRiskSafe v-if="dir.safety.risk_level === 'safe'" :size="16" />
-                <IconRiskLow v-else-if="dir.safety.risk_level === 'moderate'" :size="16" />
-                <IconRiskMedium v-else-if="dir.safety.risk_level === 'risky'" :size="16" />
-                <IconRiskDanger v-else-if="dir.safety.risk_level === 'dangerous'" :size="16" />
+                <IconRiskSafe v-if="dir.safety.verdict === 'safe'" :size="16" />
+                <IconRiskLow v-else-if="dir.safety.verdict === 'safe_after_action'" :size="16" />
+                <IconRiskMedium v-else-if="dir.safety.verdict === 'blocked'" :size="16" />
+                <IconRiskDanger v-else-if="dir.safety.verdict === 'system_critical'" :size="16" />
                 <IconRiskUnknown v-else :size="16" />
               </span>
               <span v-if="deepScanning && !dir.has_children" class="badge">扫描中</span>

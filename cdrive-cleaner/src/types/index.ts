@@ -64,15 +64,19 @@ export interface ScanCapabilities {
 }
 
 export interface MigrationSafety {
-  risk_level: 'safe' | 'moderate' | 'risky' | 'dangerous';
-  safety_score: number;
+  verdict: 'safe' | 'safe_after_action' | 'blocked' | 'system_critical';
   can_migrate: boolean;
-  reasons: string[];
-  recommendations: string[];
+  findings: SafetyFinding[];
+  required_actions: string[];
   app_type: string;
-  subdirs_checked?: number;
-  dangerous_subdirs?: string[];
-  risky_subdirs?: string[];
+  analysis_duration_ms: number;
+}
+
+export interface SafetyFinding {
+  gate: string;
+  severity: 'info' | 'warning' | 'blocker';
+  message: string;
+  detail?: string;
 }
 
 export interface MigrationResult {

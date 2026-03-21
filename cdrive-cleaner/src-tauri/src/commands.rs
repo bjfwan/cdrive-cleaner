@@ -366,10 +366,20 @@ pub struct DiskInfo {
 }
 
 #[tauri::command]
-pub async fn analyze_migration_safety(path: String, size: u64, app: AppHandle) -> Result<crate::safety::MigrationSafety, String> {
+pub async fn analyze_migration_safety(
+    path: String,
+    link_type: Option<String>,
+    target_disk: Option<String>,
+) -> Result<crate::safety::MigrationSafety, String> {
     tokio::task::spawn_blocking(move || {
-        let path_buf = std::path::PathBuf::from(path);
-        crate::safety::analyze_migration_safety(path_buf.as_path(), size, app)
+        let path_buf = std::path::PathBuf::from(&path);
+        let lt = match link_type.as_deref() {
+            Some("none") => crate::migration::LinkType::None,
+            Some("symlink") => crate::migration::LinkType::Symlink,
+            Some("junction") => crate::migration::LinkType::Junction,
+            _ => crate::migration::LinkType::Auto,
+        };
+        Ok(crate::safety::analyze(&path_buf, lt, target_disk.as_deref()))
     })
     .await
     .map_err(|e| e.to_string())?

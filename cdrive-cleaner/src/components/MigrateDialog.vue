@@ -45,8 +45,6 @@ const safetyAnalysis = ref<MigrationSafety | null>(null);
 const analyzingSafety = ref(false);
 const safetyAnalysisStartTime = ref(0);
 const safetyAnalysisDuration = ref(0);
-const safetyScannedDirs = ref(0);
-const safetyDirsPerSecond = ref(0);
 
 // 监听对话框打开，进行安全性分析和加载默认设置
 watch(() => props.show, async (newShow) => {
@@ -70,36 +68,26 @@ function loadDefaultTargetDisk() {
 
 async function analyzeSafety() {
   if (!itemPath.value) return;
-  
+
   analyzingSafety.value = true;
   safetyAnalysis.value = null;
   safetyAnalysisStartTime.value = Date.now();
-  safetyScannedDirs.value = 0;
-  safetyDirsPerSecond.value = 0;
-  let unlisten: (() => void) | null = null;
-  
+
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    const { listen } = await import('@tauri-apps/api/event');
-    
-    // 监听进度事件
-    unlisten = await listen<{ scanned_dirs: number; dirs_per_second: number }>('safety-analysis-progress', (event) => {
-      const progress = event.payload;
-      safetyScannedDirs.value = progress.scanned_dirs;
-      safetyDirsPerSecond.value = progress.dirs_per_second;
-    });
-    
+    const { createSymlink } = getSettings();
+
     const result = await invoke<MigrationSafety>('analyze_migration_safety', {
       path: itemPath.value,
-      size: itemSize.value
+      linkType: createSymlink ? null : 'none',
+      targetDisk: targetDisk.value || null,
     });
-    
+
     safetyAnalysisDuration.value = Date.now() - safetyAnalysisStartTime.value;
     safetyAnalysis.value = result;
   } catch {
     showToast('安全性分析失败', '无法完成迁移安全性评估', 'warning');
   } finally {
-    unlisten?.();
     analyzingSafety.value = false;
   }
 }
@@ -122,20 +110,20 @@ const canMigrate = computed(() => {
 
 const riskLevelText = computed(() => {
   if (!safetyAnalysis.value) return '';
-  
-  const levelMap = {
+
+  const levelMap: Record<string, string> = {
     safe: '安全',
-    moderate: '中等风险',
-    risky: '高风险',
-    dangerous: '危险'
+    safe_after_action: '需要操作',
+    blocked: '阻塞',
+    system_critical: '系统关键'
   };
-  
-  return levelMap[safetyAnalysis.value.risk_level] || '';
+
+  return levelMap[safetyAnalysis.value.verdict] || '';
 });
 
 const riskLevelClass = computed(() => {
   if (!safetyAnalysis.value) return '';
-  return `risk-${safetyAnalysis.value.risk_level}`;
+  return `risk-${safetyAnalysis.value.verdict}`;
 });
 
 const isBatchMode = computed(() => props.selectedItems && props.selectedItems.length > 0);
@@ -454,27 +442,36 @@ async function startBatchMigration() {
               <IconShield :size="20" />
               <div class="safety-title">
                 <span class="safety-level">{{ riskLevelText }}</span>
-                <span class="safety-score">安全评分: {{ safetyAnalysis.safety_score }}/100</span>
+                <span class="safety-score">检测耗时: {{ safetyAnalysis.analysis_duration_ms }}ms</span>
               </div>
             </div>
-            
+
             <div class="safety-details">
               <div v-if="safetyAnalysis.app_type !== '未知类型'" class="safety-item">
                 <span class="safety-label">应用类型</span>
                 <span class="safety-value">{{ safetyAnalysis.app_type }}</span>
               </div>
-              
-              <div v-if="safetyAnalysis.reasons.length > 0" class="safety-reasons">
-                <div class="safety-label">分析结果</div>
+
+              <div v-if="safetyAnalysis.findings.length > 0" class="safety-reasons">
+                <div class="safety-label">检测结果</div>
                 <ul class="safety-list">
-                  <li v-for="(reason, index) in safetyAnalysis.reasons" :key="index">{{ reason }}</li>
+                  <li v-for="(finding, index) in safetyAnalysis.findings" :key="index" :class="`finding-${finding.severity}`">
+                    {{ finding.message }}
+                  </li>
                 </ul>
               </div>
-              
-              <div v-if="safetyAnalysis.recommendations.length > 0" class="safety-recommendations">
-                <div class="safety-label">建议</div>
+
+              <div v-if="safetyAnalysis.required_actions.length > 0" class="safety-recommendations">
+                <div class="safety-label">需要执行的操作</div>
                 <ul class="safety-list">
-                  <li v-for="(rec, index) in safetyAnalysis.recommendations" :key="index">{{ rec }}</li>
+                  <li v-for="(action, index) in safetyAnalysis.required_actions" :key="index">{{ action }}</li>
+                </ul>
+              </div>
+
+              <div v-if="safetyAnalysis.findings.length === 0" class="safety-reasons">
+                <div class="safety-label">检测结果</div>
+                <ul class="safety-list">
+                  <li>未检测到任何迁移阻塞条件</li>
                 </ul>
               </div>
             </div>
@@ -484,14 +481,7 @@ async function startBatchMigration() {
             <svg class="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="30 10"/>
             </svg>
-            <div class="analyzing-content">
-              <span class="analyzing-text">正在分析安全性（扫描3层子目录）...</span>
-              <div class="analyzing-stats">
-                <span class="stat-item">已扫描: {{ safetyScannedDirs }} 个目录</span>
-                <span class="stat-divider">•</span>
-                <span class="stat-item">速度: {{ Math.round(safetyDirsPerSecond) }} 目录/秒</span>
-              </div>
-            </div>
+            <span class="analyzing-text">正在检测迁移安全性...</span>
           </div>
           
           <div class="warning">
@@ -1263,17 +1253,17 @@ async function startBatchMigration() {
   border-color: rgba(16, 185, 129, 0.2);
 }
 
-.safety-analysis.risk-moderate {
+.safety-analysis.risk-safe_after_action {
   background: rgba(245, 158, 11, 0.04);
   border-color: rgba(245, 158, 11, 0.2);
 }
 
-.safety-analysis.risk-risky {
+.safety-analysis.risk-blocked {
   background: rgba(249, 115, 22, 0.04);
   border-color: rgba(249, 115, 22, 0.2);
 }
 
-.safety-analysis.risk-dangerous {
+.safety-analysis.risk-system_critical {
   background: rgba(239, 68, 68, 0.04);
   border-color: rgba(239, 68, 68, 0.2);
 }
@@ -1294,15 +1284,15 @@ async function startBatchMigration() {
   color: var(--color-success);
 }
 
-.risk-moderate .safety-header svg {
+.risk-safe_after_action .safety-header svg {
   color: var(--color-warning);
 }
 
-.risk-risky .safety-header svg {
+.risk-blocked .safety-header svg {
   color: #f97316;
 }
 
-.risk-dangerous .safety-header svg {
+.risk-system_critical .safety-header svg {
   color: var(--color-error);
 }
 
@@ -1395,14 +1385,6 @@ async function startBatchMigration() {
 .analyzing .spinner {
   animation: spin 1s linear infinite;
   flex-shrink: 0;
-  margin-top: 0.125rem;
-}
-
-.analyzing-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  flex: 1;
 }
 
 .analyzing-text {
@@ -1410,22 +1392,17 @@ async function startBatchMigration() {
   color: var(--color-text-primary);
 }
 
-.analyzing-stats {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8125rem;
+.finding-blocker {
+  color: var(--color-error) !important;
+  font-weight: 600;
+}
+
+.finding-warning {
+  color: #92400e !important;
+}
+
+.finding-info {
   color: var(--color-text-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-}
-
-.stat-divider {
-  opacity: 0.3;
 }
 
 @media (max-width: 768px) {

@@ -469,11 +469,15 @@ impl DiskScanner {
     }
 
     #[allow(dead_code)]
-    fn analyze_directory_safety(dir: &mut DirectoryNode, app: &AppHandle) {
+    fn analyze_directory_safety(dir: &mut DirectoryNode, _app: &AppHandle) {
         let path = Path::new(&dir.path);
-        dir.safety = crate::safety::analyze_migration_safety(path, dir.size, app.clone()).ok();
+        dir.safety = Some(crate::safety::analyze(
+            path,
+            crate::migration::LinkType::Auto,
+            None,
+        ));
         for child in &mut dir.children {
-            Self::analyze_directory_safety(child, app);
+            Self::analyze_directory_safety(child, _app);
         }
     }
 }
