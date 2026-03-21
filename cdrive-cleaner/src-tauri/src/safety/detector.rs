@@ -416,6 +416,8 @@ fn normalize_reg_path(raw: &str) -> String {
         .map(|rest| format!("C:\\Windows\\{rest}"))
         .unwrap_or_else(|| s.to_string());
 
+    let s = s.replace('/', "\\");
+
     let s = s.replace("%SystemRoot%", "C:\\Windows")
         .replace("%SYSTEMROOT%", "C:\\Windows")
         .replace("%systemroot%", "C:\\Windows")
@@ -423,6 +425,17 @@ fn normalize_reg_path(raw: &str) -> String {
         .replace("%PROGRAMFILES%", "C:\\Program Files")
         .replace("%ProgramFiles(x86)%", "C:\\Program Files (x86)")
         .replace("%PROGRAMFILES(X86)%", "C:\\Program Files (x86)")
+        .replace("%ProgramW6432%", "C:\\Program Files")
+        .replace("%PROGRAMW6432%", "C:\\Program Files")
+        .replace("%CommonProgramFiles%", "C:\\Program Files\\Common Files")
+        .replace("%COMMONPROGRAMFILES%", "C:\\Program Files\\Common Files")
+        .replace("%CommonProgramFiles(x86)%", "C:\\Program Files (x86)\\Common Files")
+        .replace("%COMMONPROGRAMFILES(X86)%", "C:\\Program Files (x86)\\Common Files")
+        .replace("%ProgramData%", "C:\\ProgramData")
+        .replace("%PROGRAMDATA%", "C:\\ProgramData")
+        .replace("%ALLUSERSPROFILE%", "C:\\ProgramData")
+        .replace("%SystemDrive%", "C:")
+        .replace("%SYSTEMDRIVE%", "C:")
         .replace("%windir%", "C:\\Windows")
         .replace("%WINDIR%", "C:\\Windows");
 
@@ -448,6 +461,35 @@ fn path_is_under(candidate: &str, dir_upper: &str) -> bool {
     }
     let next_byte = normalized.as_bytes()[dir_upper.len()];
     next_byte == b'\\' || next_byte == b'/'
+}
+
+fn blob_contains_path(blob: &str, dir_upper: &str) -> bool {
+    let haystack = blob.to_uppercase();
+    let mut search_from = 0;
+    while let Some(pos) = haystack[search_from..].find(dir_upper) {
+        let abs_pos = search_from + pos;
+        let end_pos = abs_pos + dir_upper.len();
+
+        let left_ok = abs_pos == 0 || {
+            let prev = haystack.as_bytes()[abs_pos - 1];
+            prev == b'\0' || prev == b'"' || prev == b' ' || prev == b'\t'
+                || prev == b'\n' || prev == b'\r'
+        };
+
+        let right_ok = end_pos >= haystack.len() || {
+            let next = haystack.as_bytes()[end_pos];
+            next == b'\\' || next == b'/' || next == b'\0'
+                || next == b'"' || next == b' ' || next == b'\t'
+                || next == b'\n' || next == b'\r'
+        };
+
+        if left_ok && right_ok {
+            return true;
+        }
+
+        search_from = abs_pos + 1;
+    }
+    false
 }
 
 #[cfg(windows)]
@@ -771,8 +813,8 @@ fn gate_registry_bindings(path: &Path, link_type: &LinkType) -> Vec<Finding> {
         for name in tasks_key.enum_keys().filter_map(Result::ok) {
             if let Ok(subkey) = tasks_key.open_subkey(&name) {
                 if let Ok(raw) = subkey.get_raw_value("Actions") {
-                    let utf16_str = decode_reg_binary_as_paths(&raw.bytes);
-                    if path_is_under(&utf16_str, &path_upper) {
+                    let blob_text = decode_reg_binary_as_paths(&raw.bytes);
+                    if blob_contains_path(&blob_text, &path_upper) {
                         let display: String = subkey.get_value("Path").unwrap_or(name);
                         bound_tasks.push(display);
                     }
@@ -803,7 +845,7 @@ fn gate_registry_bindings(path: &Path, link_type: &LinkType) -> Vec<Finding> {
             for subkey_name in key.enum_keys().filter_map(Result::ok) {
                 if let Ok(subkey) = key.open_subkey(&subkey_name) {
                     if let Ok(loc) = subkey.get_value::<String, _>("InstallLocation") {
-                        if !loc.is_empty() && loc.to_uppercase().starts_with(&path_upper) {
+                        if !loc.is_empty() && path_is_under(&loc, &path_upper) {
                             let display: String = subkey
                                 .get_value("DisplayName")
                                 .unwrap_or(subkey_name);

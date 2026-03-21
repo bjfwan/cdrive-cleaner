@@ -44,6 +44,7 @@ pub struct FileMigrator {
 struct CopySummary {
     copied_bytes: u64,
     copied_files: usize,
+    buffered_fallback_count: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +67,7 @@ struct CopyProgressTracker {
     copied_files: AtomicUsize,
     should_stop: AtomicBool,
     current_file: Mutex<String>,
+    buffered_fallback_count: AtomicUsize,
 }
 
 #[cfg(target_os = "windows")]
@@ -147,6 +149,7 @@ impl FileMigrator {
             duration_ms: start.elapsed().as_millis() as u64,
             migration_id: 0,
             error: Some(error),
+            warnings: vec![],
         };
 
         if !source.exists() {
@@ -214,6 +217,7 @@ impl FileMigrator {
             duration_ms: start.elapsed().as_millis() as u64,
             migration_id: 0,
             error: Some(error),
+            warnings: vec![],
         };
 
         // 带进度报告的复制
@@ -264,6 +268,14 @@ impl FileMigrator {
         }
         println!("[migration-core] verification passed target={}", target_path.display());
 
+        let mut copy_warnings = Vec::new();
+        if copy_summary.buffered_fallback_count > 0 {
+            copy_warnings.push(format!(
+                "{} 个文件使用了降级复制模式，ADS 和显式 ACL 可能未保留",
+                copy_summary.buffered_fallback_count
+            ));
+        }
+
         let backup_path = self.create_backup_path(source);
         if let Err(e) = fs::rename(source, &backup_path) {
             let _ = self.cleanup_target(&target_path);
@@ -302,6 +314,7 @@ impl FileMigrator {
                 duration_ms: start.elapsed().as_millis() as u64,
                 migration_id: 0,
                 error: None,
+                warnings: copy_warnings,
             });
         }
 
@@ -377,6 +390,7 @@ impl FileMigrator {
             duration_ms: start.elapsed().as_millis() as u64,
             migration_id: 0,
             error: None,
+            warnings: copy_warnings,
         })
     }
 
@@ -612,6 +626,7 @@ impl FileMigrator {
         CopySummary {
             copied_bytes,
             copied_files,
+            buffered_fallback_count: tracker.buffered_fallback_count.load(Ordering::Relaxed),
         }
     }
 
@@ -783,9 +798,12 @@ impl FileMigrator {
             Err(copyfile2_err) => {
                 let _ = fs::remove_file(target);
                 eprintln!(
-                    "[migration] CopyFile2 failed for {}: {copyfile2_err}; falling back to buffered copy",
+                    "[migration] CopyFile2 failed for {}: {copyfile2_err}; falling back to buffered copy (ADS/ACL may be lost)",
                     source.display()
                 );
+                if let Some(p) = progress {
+                    p.buffered_fallback_count.fetch_add(1, Ordering::Relaxed);
+                }
                 self.copy_file_buffered(source, target, expected_size, progress)?
             }
         };
@@ -1105,6 +1123,7 @@ pub struct MigrationResult {
     pub duration_ms: u64,
     pub migration_id: i64,
     pub error: Option<String>,
+    pub warnings: Vec<String>,
 }
 
 impl FileMigrator {
