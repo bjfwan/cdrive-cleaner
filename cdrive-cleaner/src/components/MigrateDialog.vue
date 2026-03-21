@@ -49,14 +49,19 @@ const safetyAnalysisDuration = ref(0);
 // 监听对话框打开，进行安全性分析和加载默认设置
 watch(() => props.show, async (newShow) => {
   if (newShow) {
-    // 加载默认目标磁盘
     loadDefaultTargetDisk();
-    
-    // 进行安全性分析
     if (!isBatchMode.value && itemPath.value) {
       await analyzeSafety();
     }
   }
+});
+
+let safetyDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+watch(targetDisk, () => {
+  if (!props.show || isBatchMode.value || !itemPath.value) return;
+  if (safetyDebounceTimer) clearTimeout(safetyDebounceTimer);
+  safetyDebounceTimer = setTimeout(() => analyzeSafety(), 300);
 });
 
 function loadDefaultTargetDisk() {

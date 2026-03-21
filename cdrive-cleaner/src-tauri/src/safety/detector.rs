@@ -377,7 +377,7 @@ fn gate_boot_drivers(path: &Path) -> Vec<Finding> {
         };
 
         let resolved = resolve_driver_path(&image_path);
-        if resolved.to_uppercase().starts_with(&path_upper) {
+        if path_is_under(&resolved, &path_upper) {
             let severity = if start == 0 {
                 Severity::Blocker
             } else {
@@ -405,15 +405,49 @@ fn gate_boot_drivers(_path: &Path) -> Vec<Finding> {
 }
 
 fn resolve_driver_path(image_path: &str) -> String {
-    let trimmed = image_path.trim_start_matches("\\??\\");
-    let trimmed = trimmed.trim_start_matches("\\SystemRoot\\");
-    if trimmed.len() < image_path.len() && !trimmed.contains(':') {
-        return format!("C:\\Windows\\{trimmed}");
+    normalize_reg_path(image_path)
+}
+
+fn normalize_reg_path(raw: &str) -> String {
+    let s = raw.trim().trim_matches('"');
+
+    let s = s.strip_prefix("\\??\\").unwrap_or(s);
+    let s = s.strip_prefix("\\SystemRoot\\")
+        .map(|rest| format!("C:\\Windows\\{rest}"))
+        .unwrap_or_else(|| s.to_string());
+
+    let s = s.replace("%SystemRoot%", "C:\\Windows")
+        .replace("%SYSTEMROOT%", "C:\\Windows")
+        .replace("%systemroot%", "C:\\Windows")
+        .replace("%ProgramFiles%", "C:\\Program Files")
+        .replace("%PROGRAMFILES%", "C:\\Program Files")
+        .replace("%ProgramFiles(x86)%", "C:\\Program Files (x86)")
+        .replace("%PROGRAMFILES(X86)%", "C:\\Program Files (x86)")
+        .replace("%windir%", "C:\\Windows")
+        .replace("%WINDIR%", "C:\\Windows");
+
+    if (s.starts_with("system32\\") || s.starts_with("System32\\") || s.starts_with("SYSTEM32\\"))
+        && !s.contains(':')
+    {
+        return format!("C:\\Windows\\{s}");
     }
-    if trimmed.starts_with("system32\\") || trimmed.starts_with("System32\\") {
-        return format!("C:\\Windows\\{trimmed}");
+
+    s
+}
+
+fn path_is_under(candidate: &str, dir_upper: &str) -> bool {
+    let normalized = normalize_reg_path(candidate).to_uppercase();
+    if normalized.len() < dir_upper.len() {
+        return false;
     }
-    trimmed.to_string()
+    if !normalized.starts_with(dir_upper) {
+        return false;
+    }
+    if normalized.len() == dir_upper.len() {
+        return true;
+    }
+    let next_byte = normalized.as_bytes()[dir_upper.len()];
+    next_byte == b'\\' || next_byte == b'/'
 }
 
 #[cfg(windows)]
@@ -636,7 +670,7 @@ fn gate_registry_bindings(path: &Path, link_type: &LinkType) -> Vec<Finding> {
                 }
 
                 if let Ok(image_path) = subkey.get_value::<String, _>("ImagePath") {
-                    if resolve_driver_path(&image_path).to_uppercase().contains(&path_upper) {
+                    if path_is_under(&image_path, &path_upper) {
                         bound_services.push(format!("{name} (ImagePath)"));
                     }
                 }
@@ -645,7 +679,7 @@ fn gate_registry_bindings(path: &Path, link_type: &LinkType) -> Vec<Finding> {
                     .open_subkey("Parameters")
                     .and_then(|p| p.get_value::<String, _>("ServiceDll"))
                 {
-                    if service_dll.to_uppercase().contains(&path_upper) {
+                    if path_is_under(&service_dll, &path_upper) {
                         bound_services.push(format!("{name} (ServiceDll)"));
                     }
                 }
@@ -684,7 +718,7 @@ fn gate_registry_bindings(path: &Path, link_type: &LinkType) -> Vec<Finding> {
             for server_key_name in ["InprocServer32", "LocalServer32"] {
                 if let Ok(server_key) = subkey.open_subkey(server_key_name) {
                     if let Ok(dll_path) = server_key.get_value::<String, _>("") {
-                        if dll_path.to_uppercase().contains(&path_upper) {
+                        if path_is_under(&dll_path, &path_upper) {
                             let display: String = subkey.get_value("").unwrap_or(guid.clone());
                             bound_com.push(format!("{display} ({server_key_name})"));
                         }
@@ -711,7 +745,7 @@ fn gate_registry_bindings(path: &Path, link_type: &LinkType) -> Vec<Finding> {
         for name in app_paths_key.enum_keys().filter_map(Result::ok) {
             if let Ok(subkey) = app_paths_key.open_subkey(&name) {
                 if let Ok(exe_path) = subkey.get_value::<String, _>("") {
-                    if exe_path.to_uppercase().contains(&path_upper) {
+                    if path_is_under(&exe_path, &path_upper) {
                         bound_app_paths.push(name);
                     }
                 }
@@ -738,7 +772,7 @@ fn gate_registry_bindings(path: &Path, link_type: &LinkType) -> Vec<Finding> {
             if let Ok(subkey) = tasks_key.open_subkey(&name) {
                 if let Ok(raw) = subkey.get_raw_value("Actions") {
                     let utf16_str = decode_reg_binary_as_paths(&raw.bytes);
-                    if utf16_str.to_uppercase().contains(&path_upper) {
+                    if path_is_under(&utf16_str, &path_upper) {
                         let display: String = subkey.get_value("Path").unwrap_or(name);
                         bound_tasks.push(display);
                     }
