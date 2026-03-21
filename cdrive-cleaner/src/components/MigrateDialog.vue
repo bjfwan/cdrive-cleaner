@@ -79,6 +79,7 @@ async function analyzeSafety() {
 
     const result = await invoke<MigrationSafety>('analyze_migration_safety', {
       path: itemPath.value,
+      size: itemSize.value,
       linkType: createSymlink ? null : 'none',
       targetDisk: targetDisk.value || null,
     });
@@ -321,8 +322,23 @@ async function startBatchMigration() {
   for (let i = 0; i < props.selectedItems.length; i++) {
     currentMigratingIndex.value = i;
     const item = props.selectedItems[i];
-    
+
     try {
+      const safety = await invoke<MigrationSafety>('analyze_migration_safety', {
+        path: item.path,
+        size: item.size || 0,
+        linkType: createSymlink ? null : 'none',
+        targetDisk: targetDisk.value || null,
+      });
+
+      if (!safety.can_migrate) {
+        const reason = safety.findings
+          .filter(f => f.severity === 'blocker')
+          .map(f => f.message)
+          .join('; ') || '安全检测未通过';
+        throw new Error(reason);
+      }
+
       const result = await invoke<MigrationResult>('migrate_file', {
         source: item.path,
         targetDisk: targetDisk.value,

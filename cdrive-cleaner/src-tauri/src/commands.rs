@@ -368,6 +368,7 @@ pub struct DiskInfo {
 #[tauri::command]
 pub async fn analyze_migration_safety(
     path: String,
+    size: Option<u64>,
     link_type: Option<String>,
     target_disk: Option<String>,
 ) -> Result<crate::safety::MigrationSafety, String> {
@@ -379,7 +380,7 @@ pub async fn analyze_migration_safety(
             Some("junction") => crate::migration::LinkType::Junction,
             _ => crate::migration::LinkType::Auto,
         };
-        Ok(crate::safety::analyze(&path_buf, lt, target_disk.as_deref()))
+        Ok(crate::safety::analyze(&path_buf, lt, target_disk.as_deref(), size.unwrap_or(0)))
     })
     .await
     .map_err(|e| e.to_string())?

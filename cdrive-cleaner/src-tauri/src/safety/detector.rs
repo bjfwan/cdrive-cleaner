@@ -42,6 +42,7 @@ pub fn analyze(
     path: &Path,
     link_type: LinkType,
     target_disk: Option<&str>,
+    source_size: u64,
 ) -> MigrationSafety {
     let start = Instant::now();
     let path_upper = path.to_string_lossy().to_uppercase();
@@ -51,7 +52,7 @@ pub fn analyze(
     gate_system_critical(&path_upper, &mut findings);
 
     if !has_blocker(&findings) {
-        let handles = GateHandles::run_parallel(path, &link_type, target_disk);
+        let handles = GateHandles::run_parallel(path, &link_type, target_disk, source_size);
         findings.extend(handles.collect());
     }
 
@@ -104,7 +105,7 @@ struct GateHandles {
 }
 
 impl GateHandles {
-    fn run_parallel(path: &Path, link_type: &LinkType, target_disk: Option<&str>) -> Self {
+    fn run_parallel(path: &Path, link_type: &LinkType, target_disk: Option<&str>, source_size: u64) -> Self {
         let p1 = path.to_path_buf();
         let p2 = path.to_path_buf();
         let p3 = path.to_path_buf();
@@ -118,7 +119,7 @@ impl GateHandles {
             boot_drivers: std::thread::spawn(move || gate_boot_drivers(&p2)),
             hardlinks: std::thread::spawn(move || gate_hardlinks(&p3)),
             reparse_points: std::thread::spawn(move || gate_reparse_points(&p4)),
-            target_volume: std::thread::spawn(move || gate_target_volume(td.as_deref())),
+            target_volume: std::thread::spawn(move || gate_target_volume(td.as_deref(), source_size)),
             registry_bindings: std::thread::spawn(move || gate_registry_bindings(&p5, &lt)),
         }
     }
@@ -513,8 +514,7 @@ fn gate_reparse_points(path: &Path) -> Vec<Finding> {
 
     let walker = jwalk::WalkDir::new(path)
         .skip_hidden(false)
-        .follow_links(false)
-        .max_depth(3);
+        .follow_links(false);
 
     for entry in walker.into_iter().filter_map(|e| e.ok()) {
         if entry.path() == path {
@@ -529,9 +529,9 @@ fn gate_reparse_points(path: &Path) -> Vec<Finding> {
         let sample: Vec<_> = reparse_dirs.iter().take(3).cloned().collect();
         findings.push(Finding {
             gate: "reparse_points".into(),
-            severity: Severity::Warning,
+            severity: Severity::Blocker,
             message: format!(
-                "目录内包含 {} 个符号链接或重解析点，迁移时需要特殊处理",
+                "目录内包含 {} 个符号链接或重解析点，复制阶段会中止",
                 reparse_dirs.len()
             ),
             detail: Some(sample.join("\n")),
@@ -554,7 +554,7 @@ fn is_reparse_point(_path: &Path) -> bool {
     false
 }
 
-fn gate_target_volume(target_disk: Option<&str>) -> Vec<Finding> {
+fn gate_target_volume(target_disk: Option<&str>, source_size: u64) -> Vec<Finding> {
     let mut findings = Vec::new();
 
     let target = match target_disk {
@@ -588,13 +588,25 @@ fn gate_target_volume(target_disk: Option<&str>) -> Vec<Finding> {
             GetDiskFreeSpaceExW(PCWSTR(wide.as_ptr()), None, None, Some(&mut free_bytes))
         };
 
-        if ok.is_ok() && free_bytes < 1024 * 1024 * 100 {
-            findings.push(Finding {
-                gate: "target_volume".into(),
-                severity: Severity::Blocker,
-                message: "目标卷剩余空间不足 100MB".into(),
-                detail: Some(format!("剩余空间: {} 字节", free_bytes)),
-            });
+        if ok.is_ok() {
+            let required = if source_size > 0 {
+                source_size + 100 * 1024 * 1024
+            } else {
+                100 * 1024 * 1024
+            };
+
+            if free_bytes < required {
+                findings.push(Finding {
+                    gate: "target_volume".into(),
+                    severity: Severity::Blocker,
+                    message: format!(
+                        "目标卷空间不足: 需要 {:.1} GB，可用 {:.1} GB",
+                        required as f64 / (1024.0 * 1024.0 * 1024.0),
+                        free_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
+                    ),
+                    detail: None,
+                });
+            }
         }
     }
 
@@ -622,9 +634,19 @@ fn gate_registry_bindings(path: &Path, link_type: &LinkType) -> Vec<Finding> {
                 if start > 3 {
                     continue;
                 }
+
                 if let Ok(image_path) = subkey.get_value::<String, _>("ImagePath") {
-                    if image_path.to_uppercase().contains(&path_upper) {
-                        bound_services.push(name);
+                    if resolve_driver_path(&image_path).to_uppercase().contains(&path_upper) {
+                        bound_services.push(format!("{name} (ImagePath)"));
+                    }
+                }
+
+                if let Ok(service_dll) = subkey
+                    .open_subkey("Parameters")
+                    .and_then(|p| p.get_value::<String, _>("ServiceDll"))
+                {
+                    if service_dll.to_uppercase().contains(&path_upper) {
+                        bound_services.push(format!("{name} (ServiceDll)"));
                     }
                 }
             }
@@ -643,14 +665,80 @@ fn gate_registry_bindings(path: &Path, link_type: &LinkType) -> Vec<Finding> {
         });
     }
 
+    let mut bound_com = Vec::new();
+    let clsid_paths = [
+        "SOFTWARE\\Classes\\CLSID",
+        "SOFTWARE\\WOW6432Node\\Classes\\CLSID",
+    ];
+    for clsid_root in &clsid_paths {
+        let clsid_key = match hklm.open_subkey(clsid_root) {
+            Ok(k) => k,
+            Err(_) => continue,
+        };
+        for guid in clsid_key.enum_keys().filter_map(Result::ok) {
+            let subkey = match clsid_key.open_subkey(&guid) {
+                Ok(k) => k,
+                Err(_) => continue,
+            };
+
+            for server_key_name in ["InprocServer32", "LocalServer32"] {
+                if let Ok(server_key) = subkey.open_subkey(server_key_name) {
+                    if let Ok(dll_path) = server_key.get_value::<String, _>("") {
+                        if dll_path.to_uppercase().contains(&path_upper) {
+                            let display: String = subkey.get_value("").unwrap_or(guid.clone());
+                            bound_com.push(format!("{display} ({server_key_name})"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if !bound_com.is_empty() {
+        findings.push(Finding {
+            gate: "registry_bindings".into(),
+            severity: Severity::Blocker,
+            message: format!(
+                "无链接模式下，{} 个 COM 组件的路径绑定将断裂",
+                bound_com.len()
+            ),
+            detail: Some(bound_com.into_iter().take(5).collect::<Vec<_>>().join(", ")),
+        });
+    }
+
+    let mut bound_app_paths = Vec::new();
+    if let Ok(app_paths_key) = hklm.open_subkey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths") {
+        for name in app_paths_key.enum_keys().filter_map(Result::ok) {
+            if let Ok(subkey) = app_paths_key.open_subkey(&name) {
+                if let Ok(exe_path) = subkey.get_value::<String, _>("") {
+                    if exe_path.to_uppercase().contains(&path_upper) {
+                        bound_app_paths.push(name);
+                    }
+                }
+            }
+        }
+    }
+
+    if !bound_app_paths.is_empty() {
+        findings.push(Finding {
+            gate: "registry_bindings".into(),
+            severity: Severity::Warning,
+            message: format!(
+                "无链接模式下，{} 个 App Paths 注册项将断裂",
+                bound_app_paths.len()
+            ),
+            detail: Some(bound_app_paths.into_iter().take(5).collect::<Vec<_>>().join(", ")),
+        });
+    }
+
     let mut bound_tasks = Vec::new();
     let task_path = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Tasks";
     if let Ok(tasks_key) = hklm.open_subkey(task_path) {
         for name in tasks_key.enum_keys().filter_map(Result::ok) {
             if let Ok(subkey) = tasks_key.open_subkey(&name) {
                 if let Ok(raw) = subkey.get_raw_value("Actions") {
-                    let actions_str = String::from_utf8_lossy(&raw.bytes).to_uppercase();
-                    if actions_str.contains(&path_upper) {
+                    let utf16_str = decode_reg_binary_as_paths(&raw.bytes);
+                    if utf16_str.to_uppercase().contains(&path_upper) {
                         let display: String = subkey.get_value("Path").unwrap_or(name);
                         bound_tasks.push(display);
                     }
@@ -706,6 +794,19 @@ fn gate_registry_bindings(path: &Path, link_type: &LinkType) -> Vec<Finding> {
     }
 
     findings
+}
+
+fn decode_reg_binary_as_paths(bytes: &[u8]) -> String {
+    if bytes.len() >= 2 {
+        let u16_iter = bytes
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]));
+        let decoded = String::from_utf16_lossy(&u16_iter.collect::<Vec<u16>>());
+        if decoded.contains('\\') || decoded.contains(':') {
+            return decoded;
+        }
+    }
+    String::from_utf8_lossy(bytes).to_string()
 }
 
 #[cfg(not(windows))]

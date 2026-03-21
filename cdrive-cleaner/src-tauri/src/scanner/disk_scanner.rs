@@ -475,6 +475,7 @@ impl DiskScanner {
             path,
             crate::migration::LinkType::Auto,
             None,
+            dir.size,
         ));
         for child in &mut dir.children {
             Self::analyze_directory_safety(child, _app);

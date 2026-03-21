@@ -56,6 +56,7 @@ struct CopyTask {
 #[derive(Debug, Default)]
 struct DirectoryCopyPlan {
     directories: Vec<PathBuf>,
+    dir_pairs: Vec<(PathBuf, PathBuf)>,
     files: Vec<CopyTask>,
 }
 
@@ -491,6 +492,7 @@ impl FileMigrator {
     fn build_directory_copy_plan(&self, source: &Path, target: &Path) -> Result<DirectoryCopyPlan> {
         let mut plan = DirectoryCopyPlan {
             directories: vec![target.to_path_buf()],
+            dir_pairs: vec![(source.to_path_buf(), target.to_path_buf())],
             files: Vec::new(),
         };
         let mut pending = vec![(source.to_path_buf(), target.to_path_buf())];
@@ -512,6 +514,7 @@ impl FileMigrator {
 
                 if file_type.is_dir() {
                     plan.directories.push(dst.clone());
+                    plan.dir_pairs.push((src.clone(), dst.clone()));
                     pending.push((src, dst));
                     continue;
                 }
@@ -669,6 +672,7 @@ impl FileMigrator {
 
         if let Ok(source_metadata) = fs::metadata(source) {
             let _ = fs::set_permissions(target, source_metadata.permissions());
+            Self::copy_timestamps(source, target);
         }
 
         Ok(copied)
@@ -887,11 +891,15 @@ impl FileMigrator {
         let plan = self.build_directory_copy_plan(source, target)?;
         self.prepare_directory_copy_plan(&plan)?;
 
-        if Self::should_parallelize_directory_copy(total_size, total_files) {
+        let result = if Self::should_parallelize_directory_copy(total_size, total_files) {
             self.copy_directory_parallel(&plan, total_size, total_files, progress, target)
         } else {
             self.copy_directory_serial(&plan, total_size, total_files, progress, target)
-        }
+        };
+
+        Self::finalize_directory_metadata(&plan);
+
+        result
     }
 
     fn create_backup_path(&self, path: &Path) -> PathBuf {
@@ -912,6 +920,77 @@ impl FileMigrator {
 
         unreachable!()
     }
+
+    fn finalize_directory_metadata(plan: &DirectoryCopyPlan) {
+        for (src, dst) in plan.dir_pairs.iter().rev() {
+            Self::copy_timestamps(src, dst);
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn copy_timestamps(source: &Path, target: &Path) {
+        use std::os::windows::ffi::OsStrExt;
+        use windows::Win32::Foundation::{HANDLE, CloseHandle};
+        use windows::Win32::Storage::FileSystem::{
+            CreateFileW, GetFileTime, SetFileTime,
+            FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAGS_AND_ATTRIBUTES,
+            FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_SHARE_MODE,
+            FILE_CREATION_DISPOSITION, OPEN_EXISTING, FILE_GENERIC_WRITE,
+        };
+        use windows::Win32::Foundation::FILETIME;
+        use windows::core::PCWSTR;
+
+        let src_wide: Vec<u16> = source.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        let dst_wide: Vec<u16> = target.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+
+        let src_handle = unsafe {
+            CreateFileW(
+                PCWSTR(src_wide.as_ptr()),
+                0,
+                FILE_SHARE_MODE(FILE_SHARE_READ.0 | FILE_SHARE_WRITE.0),
+                None,
+                FILE_CREATION_DISPOSITION(OPEN_EXISTING.0),
+                FILE_FLAGS_AND_ATTRIBUTES(FILE_FLAG_BACKUP_SEMANTICS.0),
+                HANDLE::default(),
+            )
+        };
+        let src_handle = match src_handle {
+            Ok(h) => h,
+            Err(_) => return,
+        };
+
+        let mut ct = FILETIME::default();
+        let mut at = FILETIME::default();
+        let mut wt = FILETIME::default();
+        let ok = unsafe { GetFileTime(src_handle, Some(&mut ct), Some(&mut at), Some(&mut wt)) };
+        let _ = unsafe { CloseHandle(src_handle) };
+
+        if ok.is_err() {
+            return;
+        }
+
+        let dst_handle = unsafe {
+            CreateFileW(
+                PCWSTR(dst_wide.as_ptr()),
+                FILE_GENERIC_WRITE.0,
+                FILE_SHARE_MODE(FILE_SHARE_READ.0 | FILE_SHARE_WRITE.0),
+                None,
+                FILE_CREATION_DISPOSITION(OPEN_EXISTING.0),
+                FILE_FLAGS_AND_ATTRIBUTES(FILE_FLAG_BACKUP_SEMANTICS.0),
+                HANDLE::default(),
+            )
+        };
+        let dst_handle = match dst_handle {
+            Ok(h) => h,
+            Err(_) => return,
+        };
+
+        let _ = unsafe { SetFileTime(dst_handle, Some(&ct), Some(&at), Some(&wt)) };
+        let _ = unsafe { CloseHandle(dst_handle) };
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn copy_timestamps(_source: &Path, _target: &Path) {}
 
     fn cleanup_target(&self, path: &Path) -> Result<()> {
         if path.exists() {
