@@ -645,6 +645,13 @@ async function startBatchMigration() {
             <span class="value">{{ ((migrationResult?.duration_ms ?? 0) / 1000).toFixed(2) }} 秒</span>
           </div>
         </div>
+
+        <div v-if="migrationResult?.warnings?.length" class="migration-warnings">
+          <IconWarning :size="16" />
+          <ul>
+            <li v-for="(w, i) in migrationResult.warnings" :key="i">{{ w }}</li>
+          </ul>
+        </div>
         
         <button class="btn btn-primary btn-full" @click="close">完成</button>
       </div>
@@ -1103,6 +1110,34 @@ async function startBatchMigration() {
   margin-bottom: 2rem;
   text-align: left;
   border: 1px solid var(--color-border-light);
+}
+
+.migration-warnings {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.15);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  color: #92400e;
+  margin-bottom: 2rem;
+  align-items: flex-start;
+}
+
+.migration-warnings svg {
+  flex-shrink: 0;
+  color: var(--color-warning);
+  margin-top: 0.125rem;
+}
+
+.migration-warnings ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .detail-row {

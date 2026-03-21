@@ -88,6 +88,7 @@ export interface MigrationResult {
   duration_ms: number;
   migration_id: number;
   error?: string | null;
+  warnings: string[];
 }
 
 export interface MigrationRecord {
