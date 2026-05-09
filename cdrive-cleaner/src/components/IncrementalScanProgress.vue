@@ -202,7 +202,7 @@ onUnmounted(() => {
   font-weight: 600;
   color: #2c2c2c;
   margin: 0 0 0.375rem 0;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .phase-text {
@@ -250,7 +250,7 @@ onUnmounted(() => {
   font-weight: 600;
   color: #2c2c2c;
   margin-bottom: 0.125rem;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .stat-label {

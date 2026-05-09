@@ -2,6 +2,62 @@ use super::file_info::{DirectoryNode, FileInfo, ScanResult};
 use std::collections::HashMap;
 use std::path::Path;
 
+#[cfg(windows)]
+fn normalized_path_key(path: &Path) -> String {
+    let mut text = path
+        .to_string_lossy()
+        .replace('/', "\\")
+        .to_ascii_lowercase();
+    while text.ends_with('\\') && text.len() > 3 {
+        text.pop();
+    }
+    text
+}
+
+#[cfg(not(windows))]
+fn normalized_path_key(path: &Path) -> String {
+    path.to_string_lossy().to_string()
+}
+
+fn normalized_path_key_str(path: &str) -> String {
+    normalized_path_key(Path::new(path))
+}
+
+fn path_matches(a: &str, b: &str) -> bool {
+    normalized_path_key_str(a) == normalized_path_key_str(b)
+}
+
+fn path_starts_with(candidate: &Path, prefix: &Path) -> bool {
+    let candidate_components: Vec<String> = candidate
+        .components()
+        .map(|component| {
+            #[cfg(windows)]
+            {
+                component.as_os_str().to_string_lossy().to_ascii_lowercase()
+            }
+            #[cfg(not(windows))]
+            {
+                component.as_os_str().to_string_lossy().to_string()
+            }
+        })
+        .collect();
+    let prefix_components: Vec<String> = prefix
+        .components()
+        .map(|component| {
+            #[cfg(windows)]
+            {
+                component.as_os_str().to_string_lossy().to_ascii_lowercase()
+            }
+            #[cfg(not(windows))]
+            {
+                component.as_os_str().to_string_lossy().to_string()
+            }
+        })
+        .collect();
+
+    candidate_components.starts_with(&prefix_components)
+}
+
 #[derive(Clone)]
 pub struct IndexedScanResult {
     root_path: String,
@@ -30,11 +86,7 @@ impl IndexedScanResult {
             scan_duration_ms: result.scan_duration_ms,
             inaccessible_count: result.inaccessible_count,
             scan_backend: result.scan_backend.clone(),
-            root_children: result
-                .directories
-                .iter()
-                .map(Self::strip_node)
-                .collect(),
+            root_children: result.directories.iter().map(Self::strip_node).collect(),
             nodes: HashMap::new(),
             children_by_path: HashMap::new(),
             large_files: result.large_files.clone(),
@@ -48,7 +100,8 @@ impl IndexedScanResult {
     }
 
     pub fn snapshot_for_path(&self, path: &str) -> Option<ScanResult> {
-        if path == self.root_path {
+        let path_key = normalized_path_key_str(path);
+        if path_matches(path, &self.root_path) {
             return Some(ScanResult {
                 root_path: self.root_path.clone(),
                 total_size: self.total_size,
@@ -65,8 +118,12 @@ impl IndexedScanResult {
             });
         }
 
-        let node = self.nodes.get(path)?;
-        let directories = self.children_by_path.get(path).cloned().unwrap_or_default();
+        let node = self.nodes.get(&path_key)?;
+        let directories = self
+            .children_by_path
+            .get(&path_key)
+            .cloned()
+            .unwrap_or_default();
 
         Some(ScanResult {
             root_path: node.path.clone(),
@@ -89,7 +146,7 @@ impl IndexedScanResult {
         let mut filtered: Vec<FileInfo> = self
             .large_files
             .iter()
-            .filter(|file| Path::new(&file.path).starts_with(current))
+            .filter(|file| path_starts_with(Path::new(&file.path), current))
             .cloned()
             .collect();
         filtered.sort_by(|a, b| b.size.cmp(&a.size));
@@ -99,14 +156,17 @@ impl IndexedScanResult {
     fn index_children(&mut self, parent_path: &str, children: &[DirectoryNode]) {
         let compact_children: Vec<DirectoryNode> = children.iter().map(Self::strip_node).collect();
         self.children_by_path
-            .insert(parent_path.to_string(), compact_children);
+            .insert(normalized_path_key_str(parent_path), compact_children);
 
         for child in children {
             if Self::is_root_files_node(&self.root_path, child) {
                 continue;
             }
 
-            self.nodes.insert(child.path.clone(), Self::strip_node(child));
+            self.nodes.insert(
+                normalized_path_key_str(&child.path),
+                Self::strip_node(child),
+            );
             self.index_children(&child.path, &child.children);
         }
     }
@@ -129,6 +189,6 @@ impl IndexedScanResult {
     }
 
     fn is_root_files_node(root_path: &str, node: &DirectoryNode) -> bool {
-        node.path == root_path && node.name == "根目录文件"
+        path_matches(&node.path, root_path) && node.name == "根目录文件"
     }
 }

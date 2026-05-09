@@ -121,7 +121,7 @@ const emit = defineEmits<{
   font-weight: 600;
   color: var(--color-text-primary);
   margin-bottom: 0.75rem;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .confirm-dialog p {
@@ -146,7 +146,7 @@ const emit = defineEmits<{
   border-radius: 12px;
   cursor: pointer;
   transition: all var(--transition-base);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .btn-secondary {

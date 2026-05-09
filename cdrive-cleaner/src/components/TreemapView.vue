@@ -22,22 +22,34 @@ const emit = defineEmits<{
   navigate: [path: string];
 }>();
 
+const colors = [
+  '#18242f',
+  '#28566a',
+  '#0f766e',
+  '#2563eb',
+  '#b7791f',
+  '#37515f',
+  '#5d9c8f',
+  '#5c6f9e',
+  '#bf8a42',
+  '#48525d',
+];
+
 const sortedDirectories = computed(() => [...props.directories].sort((a, b) => b.size - a.size));
+const treemapData = computed(() =>
+  sortedDirectories.value.map((dir, index) => ({
+    name: dir.name,
+    value: dir.size,
+    path: dir.path,
+    hasChildren: dir.has_children,
+    itemStyle: {
+      color: colors[index % colors.length],
+      opacity: props.deepScanning && !dir.has_children ? 0.62 : 0.94,
+    },
+  })),
+);
 
 const treemapOption = computed(() => {
-  const colors = [
-    '#18181b',
-    '#2f2a24',
-    '#0f766e',
-    '#2563eb',
-    '#b7791f',
-    '#5b4c3f',
-    '#5d9c8f',
-    '#5c6f9e',
-    '#bf8a42',
-    '#48525d',
-  ];
-
   return {
     tooltip: {
       formatter: (info: { name: string; value: number; data: { hasChildren: boolean } }) => {
@@ -67,16 +79,7 @@ const treemapOption = computed(() => {
         squareRatio: 0.82,
         leafDepth: 1,
         visibleMin: 120,
-        data: props.directories.map((dir, index) => ({
-          name: dir.name,
-          value: dir.size,
-          path: dir.path,
-          hasChildren: dir.has_children,
-          itemStyle: {
-            color: colors[index % colors.length],
-            opacity: props.deepScanning && !dir.has_children ? 0.62 : 0.94,
-          },
-        })),
+        data: treemapData.value,
         roam: false,
         nodeClick: 'link',
         breadcrumb: { show: false },
@@ -164,8 +167,12 @@ function handleItemClick(dir: DirectoryNode) {
         <span class="panel-chip">{{ hasDeepScanned ? '可深入导航' : '概览模式' }}</span>
       </div>
 
-      <div class="treemap-container">
+      <div v-if="treemapData.length > 0" class="treemap-container">
         <v-chart :option="treemapOption" class="chart" autoresize @click="handleChartClick" />
+      </div>
+      <div v-else class="treemap-empty">
+        <h4>当前层级没有子目录</h4>
+        <p>切换到列表或大文件视图查看直接文件。</p>
       </div>
     </section>
 
@@ -177,7 +184,7 @@ function handleItemClick(dir: DirectoryNode) {
         </div>
       </div>
 
-      <div class="preview-items">
+      <div v-if="sortedDirectories.length > 0" class="preview-items">
         <div
           v-for="(dir, index) in sortedDirectories.slice(0, 8)"
           :key="dir.path"
@@ -201,6 +208,7 @@ function handleItemClick(dir: DirectoryNode) {
           <div class="preview-size">{{ formatBytes(dir.size) }}</div>
         </div>
       </div>
+      <div v-else class="preview-empty">暂无可排行目录</div>
     </aside>
   </div>
 </template>
@@ -265,6 +273,29 @@ function handleItemClick(dir: DirectoryNode) {
 .chart {
   width: 100%;
   height: 100%;
+}
+
+.treemap-empty,
+.preview-empty {
+  flex: 1;
+  min-height: 16rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 1rem;
+  color: var(--color-text-tertiary);
+}
+
+.treemap-empty h4 {
+  font-size: 1rem;
+  color: var(--color-text-primary);
+}
+
+.treemap-empty p,
+.preview-empty {
+  font-size: 0.84rem;
+  line-height: 1.55;
 }
 
 .panel-header-side {

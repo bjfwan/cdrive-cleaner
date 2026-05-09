@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 use serde::Serialize;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -30,7 +30,8 @@ pub struct MigrationDb {
 impl MigrationDb {
     pub fn new(db_path: &str) -> Result<Self> {
         let conn = Connection::open(db_path)?;
-        conn.execute_batch("
+        conn.execute_batch(
+            "
             PRAGMA journal_mode=WAL;
             PRAGMA synchronous=NORMAL;
             CREATE TABLE IF NOT EXISTS migrations (
@@ -42,15 +43,24 @@ impl MigrationDb {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 status TEXT NOT NULL DEFAULT 'active'
             );
-        ")?;
-        Ok(Self { conn: Arc::new(Mutex::new(conn)) })
+        ",
+        )?;
+        Ok(Self {
+            conn: Arc::new(Mutex::new(conn)),
+        })
     }
 
     fn lock_conn(&self) -> MutexGuard<'_, Connection> {
         self.conn.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    pub fn insert_migration(&self, source_path: &str, target_path: &str, link_type: &str, file_size: u64) -> Result<i64> {
+    pub fn insert_migration(
+        &self,
+        source_path: &str,
+        target_path: &str,
+        link_type: &str,
+        file_size: u64,
+    ) -> Result<i64> {
         let conn = self.lock_conn();
         conn.execute(
             "INSERT INTO migrations (source_path, target_path, link_type, file_size) VALUES (?1, ?2, ?3, ?4)",
@@ -64,13 +74,19 @@ impl MigrationDb {
         let mut stmt = conn.prepare(
             "SELECT id, source_path, target_path, link_type, file_size, created_at, status FROM migrations ORDER BY created_at DESC"
         )?;
-        let records = stmt.query_map([], |row| {
-            Ok(MigrationRecord {
-                id: row.get(0)?, source_path: row.get(1)?, target_path: row.get(2)?,
-                link_type: row.get(3)?, file_size: row.get::<_, i64>(4)? as u64,
-                created_at: row.get(5)?, status: row.get(6)?,
-            })
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let records = stmt
+            .query_map([], |row| {
+                Ok(MigrationRecord {
+                    id: row.get(0)?,
+                    source_path: row.get(1)?,
+                    target_path: row.get(2)?,
+                    link_type: row.get(3)?,
+                    file_size: row.get::<_, i64>(4)? as u64,
+                    created_at: row.get(5)?,
+                    status: row.get(6)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(records)
     }
 
@@ -82,9 +98,13 @@ impl MigrationDb {
         let mut rows = stmt.query(params![id])?;
         match rows.next()? {
             Some(row) => Ok(Some(MigrationRecord {
-                id: row.get(0)?, source_path: row.get(1)?, target_path: row.get(2)?,
-                link_type: row.get(3)?, file_size: row.get::<_, i64>(4)? as u64,
-                created_at: row.get(5)?, status: row.get(6)?,
+                id: row.get(0)?,
+                source_path: row.get(1)?,
+                target_path: row.get(2)?,
+                link_type: row.get(3)?,
+                file_size: row.get::<_, i64>(4)? as u64,
+                created_at: row.get(5)?,
+                status: row.get(6)?,
             })),
             None => Ok(None),
         }
@@ -92,7 +112,10 @@ impl MigrationDb {
 
     pub fn update_status(&self, id: i64, status: &str) -> Result<()> {
         let conn = self.lock_conn();
-        conn.execute("UPDATE migrations SET status = ?1 WHERE id = ?2", params![status, id])?;
+        conn.execute(
+            "UPDATE migrations SET status = ?1 WHERE id = ?2",
+            params![status, id],
+        )?;
         Ok(())
     }
 
@@ -108,6 +131,7 @@ impl MigrationDb {
                 active_count: row.get(2)?,
                 rolled_back_count: row.get(3)?,
             })
-        }).map_err(Into::into)
+        })
+        .map_err(Into::into)
     }
 }

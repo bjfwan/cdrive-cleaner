@@ -110,7 +110,7 @@ const incrementalStatusLine = computed(() => {
 });
 
 const hasBackendPhaseText = computed(() =>
-  /(MFT|USN|初始化|水合|索引)/.test(currentPath.value),
+  /(MFT|USN|初始化|水合|索引|切换到全量深度扫描)/.test(currentPath.value),
 );
 const hasRunningPhaseText = computed(() =>
   /(扫描中|聚合|统计|\.\.\.)/.test(currentPath.value),
@@ -141,6 +141,10 @@ const phaseDescription = computed(() => {
 
   if (!currentPath.value) {
     return '正在读取卷能力、准备目录索引，并建立第一批统计结果。';
+  }
+
+  if (currentPath.value.includes('切换到全量深度扫描')) {
+    return '增量变化集不足以安全快速合并，系统已自动切换为全量深度扫描，并继续持续上报进度。';
   }
 
   if (hasBackendPhaseText.value) {
@@ -192,31 +196,37 @@ let unlistenDeep: (() => void) | null = null;
 let unlistenIncremental: (() => void) | null = null;
 
 onMounted(async () => {
-  const [deepListener, incrementalListener] = await Promise.all([
-    listen<DeepScanProgressPayload>('deep-scan-progress', (event) => {
-      const progress = event.payload;
-      mode.value = 'deep';
-      scannedFiles.value = progress.scanned_files;
-      scannedDirs.value = progress.scanned_dirs;
-      totalSize.value = progress.total_size;
-      progressPercent.value = progress.progress_percent;
-      filesPerSecond.value = progress.files_per_second;
-      elapsedMs.value = progress.elapsed_ms;
-      currentPath.value = progress.current_path;
-    }),
-    listen<IncrementalScanProgressPayload>('incremental-scan-progress', (event) => {
-      const progress = event.payload;
-      mode.value = 'incremental';
-      incrementalPhase.value = progress.phase;
-      totalIncrementalDirs.value = progress.total_dirs;
-      checkedDirs.value = progress.checked_dirs;
-      changedDirs.value = progress.changed_dirs;
-      rescannedDirs.value = progress.scanned_dirs;
-    }),
-  ]);
+  if (!('__TAURI_INTERNALS__' in window)) {
+    return;
+  }
 
-  unlistenDeep = deepListener;
-  unlistenIncremental = incrementalListener;
+  try {
+    const [deepListener, incrementalListener] = await Promise.all([
+      listen<DeepScanProgressPayload>('deep-scan-progress', (event) => {
+        const progress = event.payload;
+        mode.value = 'deep';
+        scannedFiles.value = progress.scanned_files;
+        scannedDirs.value = progress.scanned_dirs;
+        totalSize.value = progress.total_size;
+        progressPercent.value = progress.progress_percent;
+        filesPerSecond.value = progress.files_per_second;
+        elapsedMs.value = progress.elapsed_ms;
+        currentPath.value = progress.current_path;
+      }),
+      listen<IncrementalScanProgressPayload>('incremental-scan-progress', (event) => {
+        const progress = event.payload;
+        mode.value = 'incremental';
+        incrementalPhase.value = progress.phase;
+        totalIncrementalDirs.value = progress.total_dirs;
+        checkedDirs.value = progress.checked_dirs;
+        changedDirs.value = progress.changed_dirs;
+        rescannedDirs.value = progress.scanned_dirs;
+      }),
+    ]);
+
+    unlistenDeep = deepListener;
+    unlistenIncremental = incrementalListener;
+  } catch {}
 });
 
 onUnmounted(() => {

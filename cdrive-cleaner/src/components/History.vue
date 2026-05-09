@@ -380,7 +380,7 @@ onMounted(() => {
 .stat-value {
   font-size: 1.55rem;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   color: var(--color-text-primary);
 }
 

@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Result};
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -11,6 +10,7 @@ use super::backend::ScanBackendKind;
 use super::file_info::{DirectoryNode, FileInfo, ScanResult};
 use super::incremental;
 use super::progress::ScanProgress;
+use super::timing::StageTimer;
 use crate::winfs::{self, MftEntry};
 
 #[cfg(windows)]
@@ -156,7 +156,10 @@ impl ChunkScanState {
         self.metadata_fallback_count += other.metadata_fallback_count;
         self.metadata_fallback_bytes += other.metadata_fallback_bytes;
         while self.inaccessible_samples.len() < 5 {
-            let Some(sample) = other.inaccessible_samples.get(self.inaccessible_samples.len()) else {
+            let Some(sample) = other
+                .inaccessible_samples
+                .get(self.inaccessible_samples.len())
+            else {
                 break;
             };
             self.inaccessible_samples.push(sample.clone());
@@ -173,11 +176,32 @@ pub fn scan_path(
     estimated_files: usize,
     cancelled: Arc<AtomicBool>,
 ) -> Result<Option<ScanResult>> {
-    if !winfs::supports_mft_scan(path) {
+    let total_timer = StageTimer::start("mft-usn", format!("scan_path path={}", path.display()));
+    let support_timer = StageTimer::start(
+        "mft-usn",
+        format!("supports_mft_scan_check path={}", path.display()),
+    );
+    let supported = winfs::supports_mft_scan(path);
+    support_timer.finish_with(format!("supported={supported}"));
+    if !supported {
+        total_timer.finish_with("status=unsupported");
         return Ok(None);
     }
 
+    let privilege_timer = StageTimer::start(
+        "mft-usn",
+        format!("enable_scan_privileges path={}", path.display()),
+    );
     let enabled_privileges = winfs::enable_best_effort_scan_privileges();
+    privilege_timer.finish_with(format!(
+        "count={} names={}",
+        enabled_privileges.len(),
+        if enabled_privileges.is_empty() {
+            "none".to_string()
+        } else {
+            enabled_privileges.join(",")
+        }
+    ));
     if !enabled_privileges.is_empty() {
         println!(
             "[mft-usn] enabled privileges: {}",
@@ -185,16 +209,46 @@ pub fn scan_path(
         );
     }
 
+    let file_id_timer = StageTimer::start(
+        "mft-usn",
+        format!("query_root_file_id path={}", path.display()),
+    );
     let root_file_id = match winfs::get_path_file_id(path) {
-        Some(file_id) => file_id,
-        None => return Ok(None),
+        Some(file_id) => {
+            file_id_timer.finish_with(format!("found=true file_id={file_id}"));
+            file_id
+        }
+        None => {
+            file_id_timer.finish_with("found=false");
+            total_timer.finish_with("status=no_root_file_id");
+            return Ok(None);
+        }
     };
+    let volume_timer = StageTimer::start(
+        "mft-usn",
+        format!("query_volume_details path={}", path.display()),
+    );
     let volume = match winfs::query_volume_details(path) {
-        Some(volume) => volume,
-        None => return Ok(None),
+        Some(volume) => {
+            volume_timer.finish_with(format!(
+                "found=true volume_root={} file_system={}",
+                volume.volume_root.display(),
+                volume.file_system
+            ));
+            volume
+        }
+        None => {
+            volume_timer.finish_with("found=false");
+            total_timer.finish_with("status=no_volume_details");
+            return Ok(None);
+        }
     };
 
     for attempt in 0..=MAX_POST_SCAN_RETRIES {
+        let attempt_timer = StageTimer::start(
+            "mft-usn",
+            format!("scan_attempt index={} path={}", attempt + 1, path.display()),
+        );
         let Some(pass) = scan_path_once(
             path,
             &volume,
@@ -202,23 +256,65 @@ pub fn scan_path(
             progress.clone(),
             estimated_files,
             Arc::clone(&cancelled),
-        )? else {
+        )?
+        else {
+            attempt_timer.finish_with("status=unsupported_or_cancelled_before_pass");
+            total_timer.finish_with("status=unsupported_or_cancelled_before_pass");
             return Ok(None);
         };
 
-        match reconcile_post_scan_window(path, pass.result, pass.start_checkpoint, pass.end_checkpoint) {
-            PostScanDecision::Complete(result) => return Ok(Some(result)),
+        let reconcile_timer = StageTimer::start(
+            "mft-usn",
+            format!(
+                "reconcile_post_scan attempt={} path={}",
+                attempt + 1,
+                path.display()
+            ),
+        );
+        match reconcile_post_scan_window(
+            path,
+            pass.result,
+            pass.start_checkpoint,
+            pass.end_checkpoint,
+        ) {
+            PostScanDecision::Complete(result) => {
+                let detail = format!(
+                    "status=complete files={} dirs={} size={} inaccessible={}",
+                    result.total_files,
+                    result.total_dirs,
+                    result.total_size,
+                    result.inaccessible_count
+                );
+                reconcile_timer.finish_with(&detail);
+                attempt_timer.finish_with(&detail);
+                total_timer.finish_with(&detail);
+                return Ok(Some(result));
+            }
             PostScanDecision::Retry(reason, result) if attempt < MAX_POST_SCAN_RETRIES => {
+                let detail = format!(
+                    "status=retry reason={} files={} dirs={} size={}",
+                    reason, result.total_files, result.total_dirs, result.total_size
+                );
+                reconcile_timer.finish_with(&detail);
+                attempt_timer.finish_with(&detail);
                 println!(
                     "[mft-usn] post-scan reconcile requires retry: {} | rerunning fresh scan",
                     reason
                 );
                 if cancelled.load(Ordering::Relaxed) {
+                    total_timer.finish_with("status=cancelled_during_retry");
                     return Err(anyhow!("扫描已取消"));
                 }
                 let _ = result;
             }
             PostScanDecision::Retry(reason, result) => {
+                let detail = format!(
+                    "status=retry_budget_exhausted reason={} files={} dirs={} size={}",
+                    reason, result.total_files, result.total_dirs, result.total_size
+                );
+                reconcile_timer.finish_with(&detail);
+                attempt_timer.finish_with(&detail);
+                total_timer.finish_with(&detail);
                 println!(
                     "[mft-usn] post-scan reconcile incomplete after retry budget: {} | returning latest fresh snapshot",
                     reason
@@ -228,6 +324,7 @@ pub fn scan_path(
         }
     }
 
+    total_timer.finish_with("status=completed_without_result");
     Ok(None)
 }
 
@@ -239,6 +336,10 @@ fn scan_path_once(
     estimated_files: usize,
     cancelled: Arc<AtomicBool>,
 ) -> Result<Option<ScanPassResult>> {
+    let total_timer = StageTimer::start(
+        "mft-usn-pass",
+        format!("scan_path_once path={}", path.display()),
+    );
     println!(
         "\n========== MFT + USN 深度扫描开始 ==========\n扫描路径: {}\n卷根路径: {}\n卷标识: {} | 文件系统: {}",
         path.display(),
@@ -248,7 +349,18 @@ fn scan_path_once(
     );
 
     let start = Instant::now();
+    let checkpoint_start_timer = StageTimer::start(
+        "mft-usn-pass",
+        format!("query_start_usn_checkpoint path={}", path.display()),
+    );
     let start_checkpoint = winfs::query_usn_checkpoint(path);
+    match &start_checkpoint {
+        Some(checkpoint) => checkpoint_start_timer.finish_with(format!(
+            "available=true journal_id={} next_usn={}",
+            checkpoint.journal_id, checkpoint.next_usn
+        )),
+        None => checkpoint_start_timer.finish_with("available=false"),
+    }
 
     let stage = Arc::new(AtomicUsize::new(STAGE_INIT));
     let estimated_total = Arc::new(AtomicUsize::new(estimated_files.max(1)));
@@ -288,7 +400,12 @@ fn scan_path_once(
     );
 
     stage.store(STAGE_ENUM_MFT, Ordering::Relaxed);
+    let mft_enum_timer = StageTimer::start(
+        "mft-usn-pass",
+        format!("enumerate_mft path={}", path.display()),
+    );
     let mft_entries = winfs::enumerate_mft(path)?;
+    mft_enum_timer.finish_with(format!("records={}", mft_entries.len()));
     if cancelled.load(Ordering::Relaxed) {
         return Err(anyhow!("扫描已取消"));
     }
@@ -303,6 +420,10 @@ fn scan_path_once(
 
     stage.store(STAGE_COLLECT_TREE, Ordering::Relaxed);
     stage.store(STAGE_RESOLVE_PATHS, Ordering::Relaxed);
+    let plan_timer = StageTimer::start(
+        "mft-usn-pass",
+        format!("build_descendant_plan path={}", path.display()),
+    );
     let plan = build_descendant_plan(
         root_file_id,
         path,
@@ -311,14 +432,27 @@ fn scan_path_once(
         prep_total.as_ref(),
         prep_done.as_ref(),
     );
+    plan_timer.finish_with(format!(
+        "entry_count={} directory_batches={} path_cache={}",
+        plan.entry_count,
+        plan.directory_batches.len(),
+        plan.path_cache.len()
+    ));
     if cancelled.load(Ordering::Relaxed) {
         return Err(anyhow!("扫描已取消"));
     }
 
     let path_cache = Arc::new(plan.path_cache);
-    estimated_total.store(estimated_files.max(plan.entry_count).max(1), Ordering::Relaxed);
+    estimated_total.store(
+        estimated_files.max(plan.entry_count).max(1),
+        Ordering::Relaxed,
+    );
     stage.store(STAGE_HYDRATE, Ordering::Relaxed);
 
+    let hydration_timer = StageTimer::start(
+        "mft-usn-pass",
+        format!("hydrate_directory_chunks path={}", path.display()),
+    );
     let partials: Vec<ChunkScanState> = plan
         .directory_batches
         .par_chunks(DIRECTORY_CHUNK_SIZE)
@@ -336,17 +470,39 @@ fn scan_path_once(
             )
         })
         .collect();
+    hydration_timer.finish_with(format!(
+        "directory_batches={} partials={}",
+        plan.directory_batches.len(),
+        partials.len()
+    ));
 
     stage.store(STAGE_AGGREGATE, Ordering::Relaxed);
     if cancelled.load(Ordering::Relaxed) {
         return Err(anyhow!("扫描已取消"));
     }
 
+    let aggregate_timer = StageTimer::start(
+        "mft-usn-pass",
+        format!("aggregate_chunk_results path={}", path.display()),
+    );
     let mut aggregate = ChunkScanState::default();
     for partial in partials {
         aggregate.merge(partial);
     }
+    aggregate_timer.finish_with(format!(
+        "dir_nodes={} file_stats={} large_files={} scanned_files={} scanned_dirs={} inaccessible={}",
+        aggregate.dir_nodes.len(),
+        aggregate.dir_file_stats.len(),
+        aggregate.large_files.len(),
+        aggregate.scanned_files,
+        aggregate.scanned_dirs,
+        aggregate.inaccessible_count
+    ));
 
+    let tree_timer = StageTimer::start(
+        "mft-usn-pass",
+        format!("build_directory_tree path={}", path.display()),
+    );
     let mut nodes_map = aggregate.dir_nodes;
     let (root_file_size, root_file_count) = aggregate
         .dir_file_stats
@@ -413,20 +569,42 @@ fn scan_path_once(
             file_id: None,
         });
     }
+    tree_timer.finish_with(format!(
+        "top_level_nodes={} total_paths={} root_file_count={} root_file_size={}",
+        directories.len(),
+        all_paths.len(),
+        root_file_count,
+        root_file_size
+    ));
 
+    let sort_timer = StageTimer::start(
+        "mft-usn-pass",
+        format!("sort_directory_tree path={}", path.display()),
+    );
     sort_directory_tree(&mut directories);
+    sort_timer.finish_with(format!("top_level_nodes={}", directories.len()));
 
     let scanned_files = aggregate.scanned_files;
     let scanned_size = aggregate.total_size;
     let scanned_dirs = sum_dir_count(&directories);
+    let checkpoint_end_timer = StageTimer::start(
+        "mft-usn-pass",
+        format!("query_end_usn_checkpoint path={}", path.display()),
+    );
     let end_checkpoint = winfs::query_usn_checkpoint(path);
+    match &end_checkpoint {
+        Some(checkpoint) => checkpoint_end_timer.finish_with(format!(
+            "available=true journal_id={} next_usn={}",
+            checkpoint.journal_id, checkpoint.next_usn
+        )),
+        None => checkpoint_end_timer.finish_with("available=false"),
+    }
     let duration = start.elapsed();
 
-    if let Some(checkpoint) = end_checkpoint {
+    if let Some(checkpoint) = &end_checkpoint {
         println!(
             "[mft-usn] captured USN checkpoint journal_id={} next_usn={}",
-            checkpoint.journal_id,
-            checkpoint.next_usn
+            checkpoint.journal_id, checkpoint.next_usn
         );
     } else {
         println!(
@@ -442,20 +620,29 @@ fn scan_path_once(
         scanned_size as f64 / 1024.0 / 1024.0 / 1024.0
     );
 
-    if let Some(disk_used) = get_disk_used_bytes(path) {
-        let missing = disk_used.saturating_sub(scanned_size);
-        let missing_pct = if disk_used > 0 {
-            missing as f64 / disk_used as f64 * 100.0
-        } else {
-            0.0
-        };
-        println!(
-            "磁盘已用: {:.2} GB | 扫描到: {:.2} GB | 漏算量: {:.2} GB ({:.1}%) (系统保留/无权限文件)",
-            disk_used as f64 / 1024.0 / 1024.0 / 1024.0,
-            scanned_size as f64 / 1024.0 / 1024.0 / 1024.0,
-            missing as f64 / 1024.0 / 1024.0 / 1024.0,
-            missing_pct
-        );
+    let disk_usage_timer = StageTimer::start(
+        "mft-usn-pass",
+        format!("query_disk_usage path={}", path.display()),
+    );
+    let disk_used = get_disk_used_bytes(path);
+    match disk_used {
+        Some(bytes) => {
+            disk_usage_timer.finish_with(format!("disk_used={bytes}"));
+            let missing = bytes.saturating_sub(scanned_size);
+            let missing_pct = if bytes > 0 {
+                missing as f64 / bytes as f64 * 100.0
+            } else {
+                0.0
+            };
+            println!(
+                "磁盘已用: {:.2} GB | 扫描到: {:.2} GB | 漏算量: {:.2} GB ({:.1}%) (系统保留/无权限文件)",
+                bytes as f64 / 1024.0 / 1024.0 / 1024.0,
+                scanned_size as f64 / 1024.0 / 1024.0 / 1024.0,
+                missing as f64 / 1024.0 / 1024.0 / 1024.0,
+                missing_pct
+            );
+        }
+        None => disk_usage_timer.finish_with("disk_used=unavailable"),
     }
 
     println!(
@@ -470,6 +657,15 @@ fn scan_path_once(
             aggregate.inaccessible_samples.join(" | ")
         );
     }
+
+    total_timer.finish_with(format!(
+        "files={} dirs={} size={} inaccessible={} large_files={}",
+        scanned_files,
+        scanned_dirs,
+        scanned_size,
+        aggregate.inaccessible_count,
+        aggregate.large_files.len()
+    ));
 
     Ok(Some(ScanPassResult {
         start_checkpoint,
@@ -734,7 +930,7 @@ fn insert_directory_node(
             has_children: false,
             is_symlink,
             link_target: if is_symlink {
-                resolve_link_target(entry_path)
+                winfs::resolve_link_target(entry_path)
             } else {
                 None
             },
@@ -795,7 +991,7 @@ fn add_file_to_state(
         is_readonly,
         is_symlink,
         link_target: if is_symlink {
-            resolve_link_target(entry_path)
+            winfs::resolve_link_target(entry_path)
         } else {
             None
         },
@@ -890,35 +1086,74 @@ fn reconcile_post_scan_window(
     start_checkpoint: Option<winfs::UsnJournalCheckpoint>,
     end_checkpoint: Option<winfs::UsnJournalCheckpoint>,
 ) -> PostScanDecision {
+    let total_timer = StageTimer::start(
+        "mft-usn-reconcile",
+        format!("reconcile_post_scan_window path={}", root_path.display()),
+    );
     let started = Instant::now();
 
-    if let Some(checkpoint) = end_checkpoint {
+    if let Some(checkpoint) = &end_checkpoint {
         result.usn_journal_id = Some(checkpoint.journal_id);
         result.usn_next_usn = Some(checkpoint.next_usn);
     }
 
     let (Some(start), Some(end)) = (start_checkpoint, end_checkpoint) else {
+        total_timer.finish_with("status=skipped_missing_checkpoint");
         return PostScanDecision::Complete(result);
     };
 
     if start.journal_id != end.journal_id {
+        total_timer.finish_with("status=retry reason=usn_journal_rotated_during_scan");
         return PostScanDecision::Retry("usn_journal_rotated_during_scan".to_string(), result);
     }
 
     if end.next_usn <= start.next_usn {
+        total_timer.finish_with("status=no_post_scan_delta");
         return PostScanDecision::Complete(result);
     }
 
+    let file_id_map_timer = StageTimer::start(
+        "mft-usn-reconcile",
+        format!("build_file_id_map path={}", root_path.display()),
+    );
     let mut frn_to_path = HashMap::new();
     if let Some(root_file_id) = result.root_file_id {
         frn_to_path.insert(root_file_id, root_path.to_string_lossy().to_string());
     }
     build_file_id_map(&result.directories, &mut frn_to_path);
+    file_id_map_timer.finish_with(format!("entries={}", frn_to_path.len()));
 
-    let change_set = match winfs::collect_usn_changed_dirs(root_path, start, result.root_file_id, &frn_to_path) {
-        Ok(Some(change_set)) => change_set,
-        Ok(None) => return PostScanDecision::Retry("post_scan_delta_unavailable".to_string(), result),
+    let change_set_timer = StageTimer::start(
+        "mft-usn-reconcile",
+        format!("collect_post_scan_change_set path={}", root_path.display()),
+    );
+    let change_set = match winfs::collect_usn_changed_dirs(
+        root_path,
+        start,
+        result.root_file_id,
+        &frn_to_path,
+    ) {
+        Ok(Some(change_set)) => {
+            change_set_timer.finish_with(format!(
+                "recursive_dirs={} direct_file_dirs={} root_files_changed={}",
+                change_set.recursive_dirs.len(),
+                change_set.direct_file_dirs.len(),
+                change_set.root_files_changed
+            ));
+            change_set
+        }
+        Ok(None) => {
+            change_set_timer.finish_with("status=retry reason=post_scan_delta_unavailable");
+            total_timer.finish_with("status=retry reason=post_scan_delta_unavailable");
+            return PostScanDecision::Retry("post_scan_delta_unavailable".to_string(), result);
+        }
         Err(err) => {
+            change_set_timer.finish_with(format!(
+                "status=retry reason=post_scan_delta_read_failed:{err}"
+            ));
+            total_timer.finish_with(format!(
+                "status=retry reason=post_scan_delta_read_failed:{err}"
+            ));
             return PostScanDecision::Retry(format!("post_scan_delta_read_failed: {err}"), result);
         }
     };
@@ -927,6 +1162,7 @@ fn reconcile_post_scan_window(
     let total_changes = changed_dirs.len() + usize::from(change_set.root_files_changed);
 
     if total_changes == 0 {
+        total_timer.finish_with("status=no_changes_after_normalization");
         return PostScanDecision::Complete(result);
     }
 
@@ -937,12 +1173,19 @@ fn reconcile_post_scan_window(
     );
 
     if total_changes > POST_SCAN_RESCAN_LIMIT {
+        total_timer.finish_with(format!(
+            "status=retry reason=post_scan_delta_too_large total_changes={total_changes}"
+        ));
         return PostScanDecision::Retry(
             format!("post_scan_delta_too_large({total_changes})"),
             result,
         );
     }
 
+    let rescan_timer = StageTimer::start(
+        "mft-usn-reconcile",
+        format!("rescan_changed_dirs path={}", root_path.display()),
+    );
     let mut rescanned_nodes = Vec::new();
     let mut rescanned_large_files = Vec::new();
     let mut deleted_paths = Vec::new();
@@ -961,9 +1204,24 @@ fn reconcile_post_scan_window(
             deleted_paths.push(changed_path.to_string_lossy().to_string());
         }
     }
+    rescan_timer.finish_with(format!(
+        "changed_dirs={} rescanned_nodes={} deleted_paths={} rescanned_large_files={}",
+        changed_dirs.len(),
+        rescanned_nodes.len(),
+        deleted_paths.len(),
+        rescanned_large_files.len()
+    ));
 
-    let mut directories =
-        incremental::merge_scan_results(result.directories, rescanned_nodes, deleted_paths, root_path);
+    let merge_timer = StageTimer::start(
+        "mft-usn-reconcile",
+        format!("merge_reconciled_delta path={}", root_path.display()),
+    );
+    let mut directories = incremental::merge_scan_results(
+        result.directories,
+        rescanned_nodes,
+        deleted_paths,
+        root_path,
+    );
 
     let root_large_files = if change_set.root_files_changed {
         let (root_size, root_files, root_large_files) =
@@ -998,11 +1256,22 @@ fn reconcile_post_scan_window(
     result.total_files = total_files;
     result.total_dirs = total_dirs;
     result.scan_duration_ms += started.elapsed().as_millis() as u64;
+    merge_timer.finish_with(format!(
+        "total_files={} total_dirs={} total_size={} large_files={}",
+        result.total_files,
+        result.total_dirs,
+        result.total_size,
+        result.large_files.len()
+    ));
 
     println!(
         "[mft-usn] post-scan delta reconciled in {:.2}ms",
         started.elapsed().as_secs_f64() * 1000.0
     );
+    total_timer.finish_with(format!(
+        "status=complete total_changes={} total_files={} total_dirs={} total_size={}",
+        total_changes, result.total_files, result.total_dirs, result.total_size
+    ));
 
     PostScanDecision::Complete(result)
 }
@@ -1023,7 +1292,7 @@ fn normalize_changed_dirs(root_path: &Path, change_set: &winfs::UsnChangeSet) ->
         .chain(change_set.direct_file_dirs.iter())
         .map(PathBuf::from)
         .filter(|candidate| candidate != root_path)
-        .filter(|candidate| candidate.starts_with(root_path))
+        .filter(|candidate| path_starts_with(candidate, root_path))
         .collect();
 
     paths.sort_by(|a, b| {
@@ -1182,33 +1451,6 @@ fn sum_dir_count(nodes: &[DirectoryNode]) -> usize {
     nodes.iter().map(|node| node.dir_count).sum()
 }
 
-fn resolve_link_target(path: &Path) -> Option<String> {
-    let resolved = if let Ok(target) = fs::read_link(path) {
-        if target.is_absolute() {
-            target
-        } else if let Some(parent) = path.parent() {
-            parent.join(&target)
-        } else {
-            target
-        }
-    } else {
-        let canonical = fs::canonicalize(path).ok()?;
-        let original = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            std::env::current_dir().ok()?.join(path)
-        };
-
-        if canonical == original {
-            return None;
-        }
-
-        canonical
-    };
-
-    Some(resolved.to_string_lossy().to_string())
-}
-
 fn emit_progress(callback: Option<&ProgressCallback>, progress: ScanProgress) {
     if let Some(callback) = callback {
         callback(progress);
@@ -1218,6 +1460,7 @@ fn emit_progress(callback: Option<&ProgressCallback>, progress: ScanProgress) {
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+    use std::fs;
     use std::io::Write;
     use std::sync::{Mutex, OnceLock};
     use std::time::Duration;
@@ -1288,19 +1531,17 @@ mod tests {
         write_file(&alpha.join("a.bin"), &[7u8; 128]);
         write_file(&beta.join("b.txt"), b"payload");
 
-        let result = scan_path(
-            &workspace.root,
-            None,
-            64,
-            Arc::new(AtomicBool::new(false)),
-        )
-        .unwrap()
-        .expect("expected NTFS MFT backend to run");
+        let result = scan_path(&workspace.root, None, 64, Arc::new(AtomicBool::new(false)))
+            .unwrap()
+            .expect("expected NTFS MFT backend to run");
 
         assert_eq!(result.scan_backend.as_deref(), Some("mft_usn"));
         assert_eq!(result.total_files, 3);
         assert_eq!(result.total_dirs, 3);
-        assert_eq!(result.total_size, "root-bytes".len() as u64 + 128 + "payload".len() as u64);
+        assert_eq!(
+            result.total_size,
+            "root-bytes".len() as u64 + 128 + "payload".len() as u64
+        );
 
         let alpha_node = result
             .directories
@@ -1331,18 +1572,15 @@ mod tests {
         let target_file = nested.join("target.txt");
         write_file(&target_file, b"before");
 
-        let result = scan_path(
-            &workspace.root,
-            None,
-            64,
-            Arc::new(AtomicBool::new(false)),
-        )
-        .unwrap()
-        .expect("expected NTFS MFT backend to run");
+        let result = scan_path(&workspace.root, None, 64, Arc::new(AtomicBool::new(false)))
+            .unwrap()
+            .expect("expected NTFS MFT backend to run");
 
-        let (Some(journal_id), Some(next_usn), Some(root_file_id)) =
-            (result.usn_journal_id, result.usn_next_usn, result.root_file_id)
-        else {
+        let (Some(journal_id), Some(next_usn), Some(root_file_id)) = (
+            result.usn_journal_id,
+            result.usn_next_usn,
+            result.root_file_id,
+        ) else {
             return;
         };
 

@@ -40,13 +40,9 @@ const migrationProgressPercent = ref(0);
 const migrationStatus = ref<'copying' | 'verifying' | 'creating_link' | 'cleaning_up'>('copying');
 const currentMigratingFile = ref('');
 
-// 安全性分析
 const safetyAnalysis = ref<MigrationSafety | null>(null);
 const analyzingSafety = ref(false);
-const safetyAnalysisStartTime = ref(0);
-const safetyAnalysisDuration = ref(0);
 
-// 监听对话框打开，进行安全性分析和加载默认设置
 watch(() => props.show, async (newShow) => {
   if (newShow) {
     loadDefaultTargetDisk();
@@ -57,60 +53,71 @@ watch(() => props.show, async (newShow) => {
 });
 
 let safetyDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let safetyRequestId = 0;
 
-watch(targetDisk, () => {
+watch(targetDisk, scheduleSafetyAnalysis);
+
+function scheduleSafetyAnalysis() {
   if (!props.show || isBatchMode.value || !itemPath.value) return;
   if (safetyDebounceTimer) clearTimeout(safetyDebounceTimer);
   safetyDebounceTimer = setTimeout(() => analyzeSafety(), 300);
-});
+}
 
 function loadDefaultTargetDisk() {
   const settings = getSettings();
-  if (settings.defaultTargetDisk) {
+  const defaultTargetExists = props.availableDisks.some((disk) => `${disk.drive_letter}\\` === settings.defaultTargetDisk);
+  if (settings.defaultTargetDisk && defaultTargetExists) {
     targetDisk.value = settings.defaultTargetDisk;
+    return;
   }
+
+  targetDisk.value = '';
 }
 
 async function analyzeSafety() {
   if (!itemPath.value) return;
 
+  const requestId = ++safetyRequestId;
+  const path = itemPath.value;
+  const size = itemSize.value;
+  const target = targetDisk.value || null;
+  const { createSymlink } = getSettings();
+
   analyzingSafety.value = true;
   safetyAnalysis.value = null;
-  safetyAnalysisStartTime.value = Date.now();
 
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    const { createSymlink } = getSettings();
 
     const result = await invoke<MigrationSafety>('analyze_migration_safety', {
-      path: itemPath.value,
-      size: itemSize.value,
+      path,
+      size,
       linkType: createSymlink ? null : 'none',
-      targetDisk: targetDisk.value || null,
+      targetDisk: target,
     });
 
-    safetyAnalysisDuration.value = Date.now() - safetyAnalysisStartTime.value;
+    if (requestId !== safetyRequestId) return;
     safetyAnalysis.value = result;
   } catch {
-    showToast('安全性分析失败', '无法完成迁移安全性评估', 'warning');
+    if (requestId === safetyRequestId) {
+      showToast('安全性分析失败', '无法完成迁移安全性评估', 'warning');
+    }
   } finally {
-    analyzingSafety.value = false;
+    if (requestId === safetyRequestId) {
+      analyzingSafety.value = false;
+    }
   }
 }
 
+const targetDiskOptions = computed(() => props.availableDisks.map((disk) => `${disk.drive_letter}\\`));
+const isTargetDiskAvailable = computed(() => targetDiskOptions.value.includes(targetDisk.value));
+
 const canMigrate = computed(() => {
-  // 批量模式暂时允许迁移
   if (isBatchMode.value) return true;
-  
-  // 如果正在分析，不允许迁移
   if (analyzingSafety.value) return false;
-  
-  // 如果有安全性分析结果，根据结果判断
   if (safetyAnalysis.value) {
     return safetyAnalysis.value.can_migrate;
   }
-  
-  // 默认允许
   return true;
 });
 
@@ -146,6 +153,8 @@ const itemSize = computed(() => {
   }
   return props.selectedFile?.size || props.selectedDir?.size || 0;
 });
+
+watch([itemPath, itemSize], scheduleSafetyAnalysis);
 
 const migrationStatusText = computed(() => {
   switch (migrationStatus.value) {
@@ -215,6 +224,11 @@ function stopProgressTimer() {
 
 function close() {
   stopProgressTimer();
+  safetyRequestId++;
+  if (safetyDebounceTimer) {
+    clearTimeout(safetyDebounceTimer);
+    safetyDebounceTimer = null;
+  }
   targetDisk.value = '';
   migrating.value = false;
   migrationError.value = '';
@@ -236,7 +250,7 @@ function close() {
 }
 
 async function startMigration() {
-  if (!targetDisk.value) {
+  if (!targetDisk.value || !isTargetDiskAvailable.value) {
     migrationError.value = '请选择目标磁盘';
     return;
   }
@@ -318,76 +332,83 @@ async function startBatchMigration() {
   migratedSize.value = 0;
   migrationProgressPercent.value = 0;
   migrationStatus.value = 'copying';
+  startProgressTimer();
 
-  const { invoke } = await import('@tauri-apps/api/core');
-  const totalSize = itemSize.value;
-  const { createSymlink } = getSettings();
-  const succeededPaths: string[] = [];
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const totalSize = Math.max(itemSize.value, 1);
+    const { createSymlink } = getSettings();
+    const succeededPaths: string[] = [];
 
-  for (let i = 0; i < props.selectedItems.length; i++) {
-    currentMigratingIndex.value = i;
-    const item = props.selectedItems[i];
+    for (let i = 0; i < props.selectedItems.length; i++) {
+      currentMigratingIndex.value = i;
+      const item = props.selectedItems[i];
 
-    try {
-      const safety = await invoke<MigrationSafety>('analyze_migration_safety', {
-        path: item.path,
-        size: item.size || 0,
-        linkType: createSymlink ? null : 'none',
-        targetDisk: targetDisk.value || null,
-      });
+      try {
+        const safety = await invoke<MigrationSafety>('analyze_migration_safety', {
+          path: item.path,
+          size: item.size || 0,
+          linkType: createSymlink ? null : 'none',
+          targetDisk: targetDisk.value || null,
+        });
 
-      if (!safety.can_migrate) {
-        const reason = safety.findings
-          .filter(f => f.severity === 'blocker')
-          .map(f => f.message)
-          .join('; ') || '安全检测未通过';
-        throw new Error(reason);
+        if (!safety.can_migrate) {
+          const reason = safety.findings
+            .filter(f => f.severity === 'blocker')
+            .map(f => f.message)
+            .join('; ') || '安全检测未通过';
+          throw new Error(reason);
+        }
+
+        const result = await invoke<MigrationResult>('migrate_file', {
+          source: item.path,
+          targetDisk: targetDisk.value,
+          linkType: createSymlink ? null : 'none',
+          knownSize: item.size || 0,
+          knownFiles: 'file_count' in item ? item.file_count : 1
+        });
+        if (!result.success) {
+          throw new Error(result.error || '迁移失败');
+        }
+
+        migratedSize.value += item.size || 0;
+        migrationProgressPercent.value = Math.min(100, (migratedSize.value / totalSize) * 100);
+
+        const elapsedSeconds = (Date.now() - migrationStartTime.value) / 1000;
+        if (elapsedSeconds > 0) {
+          migrationSpeed.value = migratedSize.value / elapsedSeconds;
+          const remainingSize = Math.max(totalSize - migratedSize.value, 0);
+          estimatedTimeRemaining.value = migrationSpeed.value > 0 ? remainingSize / migrationSpeed.value : 0;
+        }
+
+        migrationResults.value.push({
+          path: item.path,
+          success: true
+        });
+        succeededPaths.push(item.path);
+      } catch (err) {
+        migrationResults.value.push({
+          path: item.path,
+          success: false,
+          error: String(err)
+        });
       }
-
-      const result = await invoke<MigrationResult>('migrate_file', {
-        source: item.path,
-        targetDisk: targetDisk.value,
-        linkType: createSymlink ? null : 'none',
-        knownSize: item.size || 0,
-        knownFiles: 'file_count' in item ? item.file_count : 1
-      });
-      if (!result.success) {
-        throw new Error(result.error || '迁移失败');
-      }
-      
-      migratedSize.value += item.size || 0;
-      migrationProgressPercent.value = (migratedSize.value / totalSize) * 100;
-      
-      const elapsedSeconds = (Date.now() - migrationStartTime.value) / 1000;
-      if (elapsedSeconds > 0) {
-        migrationSpeed.value = migratedSize.value / elapsedSeconds;
-        const remainingSize = totalSize - migratedSize.value;
-        estimatedTimeRemaining.value = remainingSize / migrationSpeed.value;
-      }
-      
-      migrationResults.value.push({
-        path: item.path,
-        success: true
-      });
-      succeededPaths.push(item.path);
-    } catch (err) {
-      migrationResults.value.push({
-        path: item.path,
-        success: false,
-        error: String(err)
-      });
     }
-  }
 
-  migrating.value = false;
-  migrationSuccess.value = migrationResults.value.some(r => r.success);
+    migrationSuccess.value = migrationResults.value.some(r => r.success);
 
-  const failedCount = migrationResults.value.filter(r => !r.success).length;
-  if (failedCount > 0) {
-    migrationError.value = `${failedCount} 项迁移失败`;
-  }
-  if (succeededPaths.length > 0) {
-    emit('migrated', succeededPaths);
+    const failedCount = migrationResults.value.filter(r => !r.success).length;
+    if (failedCount > 0) {
+      migrationError.value = `${failedCount} 项迁移失败`;
+    }
+    if (succeededPaths.length > 0) {
+      emit('migrated', succeededPaths);
+    }
+  } catch (err) {
+    migrationError.value = String(err);
+  } finally {
+    migrating.value = false;
+    stopProgressTimer();
   }
 }
 </script>
@@ -457,7 +478,6 @@ async function startBatchMigration() {
             </select>
           </div>
           
-          <!-- 安全性分析结果 -->
           <div v-if="!isBatchMode && safetyAnalysis" class="safety-analysis" :class="riskLevelClass">
             <div class="safety-header">
               <IconShield :size="20" />
@@ -574,7 +594,7 @@ async function startBatchMigration() {
           <button 
             class="btn btn-primary" 
             @click="startMigration" 
-            :disabled="!targetDisk || migrating || !canMigrate || analyzingSafety"
+            :disabled="!targetDisk || !isTargetDiskAvailable || migrating || !canMigrate || analyzingSafety"
             :title="!canMigrate ? '此项目不允许迁移' : ''"
           >
             <span v-if="migrating">
@@ -730,7 +750,7 @@ async function startBatchMigration() {
   font-weight: 600;
   color: var(--color-text-primary);
   margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .close-btn {
@@ -1008,7 +1028,7 @@ async function startBatchMigration() {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .btn-secondary {
@@ -1088,7 +1108,7 @@ async function startBatchMigration() {
   font-weight: 600;
   color: var(--color-text-primary);
   margin: 0 0 0.75rem 0;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .success-message {

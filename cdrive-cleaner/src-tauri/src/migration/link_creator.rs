@@ -1,3 +1,4 @@
+use crate::winfs;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -78,7 +79,7 @@ impl LinkCreator {
     pub fn verify_link<P: AsRef<Path>>(&self, link_path: P, expected_target: P) -> Result<bool> {
         let path = link_path.as_ref();
         let expected = expected_target.as_ref();
-        
+
         if !path.exists() {
             return Ok(false);
         }
@@ -91,23 +92,38 @@ impl LinkCreator {
 
             const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
             if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
-                let actual_canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-                let expected_canonical = expected.canonicalize().unwrap_or_else(|_| expected.to_path_buf());
-                return Ok(actual_canonical == expected_canonical && expected.exists());
+                let Ok(actual_canonical) = path.canonicalize() else {
+                    return Ok(false);
+                };
+                let Ok(expected_canonical) = expected.canonicalize() else {
+                    return Ok(false);
+                };
+                return Ok(
+                    winfs::paths_refer_to_same_file(&actual_canonical, &expected_canonical)
+                        .unwrap_or_else(|| {
+                            actual_canonical
+                                .to_string_lossy()
+                                .eq_ignore_ascii_case(&expected_canonical.to_string_lossy())
+                        }),
+                );
             }
         }
-        
+
         if metadata.file_type().is_symlink() {
             let target = fs::read_link(path)?;
             let target_canonical = target.canonicalize().unwrap_or(target.clone());
             let expected_canonical = expected.canonicalize().unwrap_or(expected.to_path_buf());
             Ok(target_canonical == expected_canonical && expected.exists())
         } else {
-            Ok(path.exists() && expected.exists())
+            Ok(winfs::paths_refer_to_same_file(path, expected).unwrap_or(false))
         }
     }
 
-    fn determine_link_type<P: AsRef<Path>>(&self, _target: P, is_directory: bool) -> Result<LinkType> {
+    fn determine_link_type<P: AsRef<Path>>(
+        &self,
+        _target: P,
+        is_directory: bool,
+    ) -> Result<LinkType> {
         if is_directory {
             Ok(LinkType::Junction)
         } else {

@@ -8,16 +8,28 @@ const DEFAULT_SETTINGS: AppSettings = {
   createSymlink: true,
 };
 
+function normalizeSettings(value: Partial<AppSettings>): AppSettings {
+  const threshold = Number(value.largeFileThreshold);
+  const theme = value.theme === 'dark' || value.theme === 'auto' ? value.theme : 'light';
+
+  return {
+    defaultTargetDisk: typeof value.defaultTargetDisk === 'string' ? value.defaultTargetDisk : '',
+    largeFileThreshold: Number.isFinite(threshold) ? Math.min(Math.max(Math.round(threshold), 1), 10000) : DEFAULT_SETTINGS.largeFileThreshold,
+    createSymlink: typeof value.createSymlink === 'boolean' ? value.createSymlink : DEFAULT_SETTINGS.createSymlink,
+    theme,
+  };
+}
+
 export function getSettings(): AppSettings {
   const saved = localStorage.getItem(SETTINGS_KEY);
-  if (!saved) return { ...DEFAULT_SETTINGS };
+  if (!saved) return normalizeSettings(DEFAULT_SETTINGS);
   try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+    return normalizeSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(saved) });
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    return normalizeSettings(DEFAULT_SETTINGS);
   }
 }
 
 export function saveSettings(settings: AppSettings): void {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(normalizeSettings(settings)));
 }

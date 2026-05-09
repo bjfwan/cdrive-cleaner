@@ -80,8 +80,14 @@ mod tests {
 
         assert!(result.success, "file migration should succeed");
         assert_eq!(result.link_type, LinkType::Hardlink);
-        assert!(source_file.exists(), "source path should become a hard link");
-        assert!(Path::new(&result.target_path).exists(), "target file should exist");
+        assert!(
+            source_file.exists(),
+            "source path should become a hard link"
+        );
+        assert!(
+            Path::new(&result.target_path).exists(),
+            "target file should exist"
+        );
         assert_eq!(fs::read(&source_file).unwrap(), original);
         assert_eq!(fs::read(&result.target_path).unwrap(), original);
     }
@@ -110,8 +116,22 @@ mod tests {
         assert!(result.success, "directory migration should succeed");
         assert_eq!(result.link_type, LinkType::Junction);
         assert!(source_dir.exists(), "source path should become a junction");
-        assert!(Path::new(&result.target_path).exists(), "target directory should exist");
-        assert_eq!(fs::read(source_dir.join("nested").join("data.txt")).unwrap(), original);
-        assert_eq!(fs::read(Path::new(&result.target_path).join("nested").join("data.txt")).unwrap(), original);
+        assert!(
+            Path::new(&result.target_path).exists(),
+            "target directory should exist"
+        );
+        assert_eq!(
+            fs::read(source_dir.join("nested").join("data.txt")).unwrap(),
+            original
+        );
+        assert_eq!(
+            fs::read(
+                Path::new(&result.target_path)
+                    .join("nested")
+                    .join("data.txt")
+            )
+            .unwrap(),
+            original
+        );
     }
 }

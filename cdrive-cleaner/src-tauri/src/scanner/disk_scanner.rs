@@ -2,24 +2,24 @@ use super::backend::{self, ScanBackendKind};
 use super::file_info::{DirectoryNode, ScanResult};
 use super::progress::ScanProgress;
 use super::scan_index::IndexedScanResult;
+use super::timing::StageTimer;
 use anyhow::Result;
+use chrono;
 use std::collections::HashMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use chrono;
 
-#[cfg(windows)]
-use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
 #[cfg(windows)]
 use windows::core::PCWSTR;
+#[cfg(windows)]
+use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
 
-use tauri::{AppHandle, Emitter, Runtime};
 use crate::winfs;
+use tauri::{AppHandle, Emitter, Runtime};
 
-type ScanProgressEmitter = Arc<dyn Fn(ScanProgress) + Send + Sync>;
+pub(crate) type ScanProgressEmitter = Arc<dyn Fn(ScanProgress) + Send + Sync>;
 
 pub struct DiskScanner {
     cancelled: Arc<AtomicBool>,
@@ -72,7 +72,9 @@ impl DiskScanner {
                 Some(&mut free_bytes_available),
                 Some(&mut total_bytes),
                 Some(&mut total_free_bytes),
-            ).is_ok() {
+            )
+            .is_ok()
+            {
                 let used_bytes = total_bytes - total_free_bytes;
                 Some((total_bytes, used_bytes, total_free_bytes))
             } else {
@@ -86,28 +88,40 @@ impl DiskScanner {
         None
     }
 
-    pub async fn scan_deep<P: AsRef<Path>, R: Runtime>(&self, path: P, app: AppHandle<R>, estimated_files: usize) -> Result<ScanResult> {
-        let path = path.as_ref().to_path_buf();
-        let cancelled = Arc::clone(&self.cancelled);
-        self.reset_cancel();
+    pub async fn scan_deep<P: AsRef<Path>, R: Runtime>(
+        &self,
+        path: P,
+        app: AppHandle<R>,
+        estimated_files: usize,
+    ) -> Result<ScanResult> {
         let progress_emitter: ScanProgressEmitter = Arc::new(move |progress: ScanProgress| {
             let _ = app.emit("deep-scan-progress", progress);
         });
-
-        tokio::task::spawn_blocking(move || {
-            Self::scan_deep_blocking_internal(&path, estimated_files, cancelled, Some(progress_emitter))
-        })
-        .await
-        .map_err(|e| anyhow::anyhow!("Task join error: {}", e))?
+        self.scan_deep_with_progress(path, Some(progress_emitter), estimated_files)
+            .await
     }
 
-    pub async fn scan_deep_silent<P: AsRef<Path>>(&self, path: P, estimated_files: usize) -> Result<ScanResult> {
+    pub async fn scan_deep_silent<P: AsRef<Path>>(
+        &self,
+        path: P,
+        estimated_files: usize,
+    ) -> Result<ScanResult> {
+        self.scan_deep_with_progress(path, None, estimated_files)
+            .await
+    }
+
+    pub(crate) async fn scan_deep_with_progress<P: AsRef<Path>>(
+        &self,
+        path: P,
+        progress_emitter: Option<ScanProgressEmitter>,
+        estimated_files: usize,
+    ) -> Result<ScanResult> {
         let path = path.as_ref().to_path_buf();
         let cancelled = Arc::clone(&self.cancelled);
         self.reset_cancel();
 
         tokio::task::spawn_blocking(move || {
-            Self::scan_deep_blocking_internal(&path, estimated_files, cancelled, None)
+            Self::scan_deep_blocking_internal(&path, estimated_files, cancelled, progress_emitter)
         })
         .await
         .map_err(|e| anyhow::anyhow!("Task join error: {}", e))?
@@ -119,35 +133,22 @@ impl DiskScanner {
         }
     }
 
-    fn resolve_link_target(path: &Path) -> Option<String> {
-        let resolved = if let Ok(target) = fs::read_link(path) {
-            if target.is_absolute() {
-                target
-            } else if let Some(parent) = path.parent() {
-                parent.join(&target)
-            } else {
-                target
-            }
-        } else {
-            let canonical = fs::canonicalize(path).ok()?;
-            let original = if path.is_absolute() {
-                path.to_path_buf()
-            } else {
-                std::env::current_dir().ok()?.join(path)
-            };
-
-            if canonical == original {
-                return None;
-            }
-
-            canonical
-        };
-
-        Some(resolved.to_string_lossy().to_string())
-    }
-
-    fn scan_deep_blocking_internal(path: &Path, estimated_files: usize, cancelled: Arc<AtomicBool>, progress_emitter: Option<ScanProgressEmitter>) -> Result<ScanResult> {
+    fn scan_deep_blocking_internal(
+        path: &Path,
+        estimated_files: usize,
+        cancelled: Arc<AtomicBool>,
+        progress_emitter: Option<ScanProgressEmitter>,
+    ) -> Result<ScanResult> {
+        let total_timer = StageTimer::start(
+            "deep-scan",
+            format!("scan_deep_blocking_internal path={}", path.display()),
+        );
+        let backend_timer = StageTimer::start(
+            "deep-scan",
+            format!("select_backend path={}", path.display()),
+        );
         let preferred_backend = backend::select_backend(path);
+        backend_timer.finish_with(format!("preferred_backend={}", preferred_backend.label()));
         println!(
             "[deep-scan] request path={} estimated_files={} preferred_backend={}",
             path.display(),
@@ -156,10 +157,37 @@ impl DiskScanner {
         );
 
         if preferred_backend == ScanBackendKind::MftUsn {
-            match super::mft_usn::scan_path(path, progress_emitter.clone(), estimated_files, Arc::clone(&cancelled)) {
-                Ok(Some(result)) => return Ok(result),
-                Ok(None) => println!("[mft-usn] 路径不满足条件，回退到原生递归扫描"),
-                Err(err) => println!("[mft-usn] 扫描失败({err})，回退到原生递归扫描"),
+            let mft_timer = StageTimer::start(
+                "deep-scan",
+                format!("attempt_mft_usn_backend path={}", path.display()),
+            );
+            match super::mft_usn::scan_path(
+                path,
+                progress_emitter.clone(),
+                estimated_files,
+                Arc::clone(&cancelled),
+            ) {
+                Ok(Some(result)) => {
+                    let detail = format!(
+                        "status=used backend={:?} files={} dirs={} size={} inaccessible={}",
+                        result.scan_backend,
+                        result.total_files,
+                        result.total_dirs,
+                        result.total_size,
+                        result.inaccessible_count
+                    );
+                    mft_timer.finish_with(&detail);
+                    total_timer.finish_with(&detail);
+                    return Ok(result);
+                }
+                Ok(None) => {
+                    mft_timer.finish_with("status=fallback reason=unsupported_or_unavailable");
+                    println!("[mft-usn] 路径不满足条件，回退到原生递归扫描");
+                }
+                Err(err) => {
+                    mft_timer.finish_with(format!("status=fallback reason={err}"));
+                    println!("[mft-usn] 扫描失败({err})，回退到原生递归扫描");
+                }
             }
         }
 
@@ -181,11 +209,18 @@ impl DiskScanner {
         let mut dir_file_stats: HashMap<PathBuf, (u64, usize)> = HashMap::new();
         let mut dir_nodes: HashMap<PathBuf, DirectoryNode> = HashMap::new();
 
-        Self::emit_progress(progress_emitter.as_ref(), ScanProgress {
-            scanned_files: 0, scanned_dirs: 0, total_size: 0,
-            current_path: root_path.clone(), elapsed_ms: 0,
-            files_per_second: 0.0, progress_percent: 0.0,
-        });
+        Self::emit_progress(
+            progress_emitter.as_ref(),
+            ScanProgress {
+                scanned_files: 0,
+                scanned_dirs: 0,
+                total_size: 0,
+                current_path: root_path.clone(),
+                elapsed_ms: 0,
+                files_per_second: 0.0,
+                progress_percent: 0.0,
+            },
+        );
 
         // 进度报告线程
         let tf = Arc::clone(&total_files);
@@ -205,29 +240,52 @@ impl DiskScanner {
 
             loop {
                 std::thread::sleep(std::time::Duration::from_millis(500));
-                if should_stop_c.load(Ordering::Relaxed) || cancelled_c.load(Ordering::Relaxed) { break; }
+                if should_stop_c.load(Ordering::Relaxed) || cancelled_c.load(Ordering::Relaxed) {
+                    break;
+                }
 
                 let cur = tf.load(Ordering::Relaxed);
                 let elapsed = start_c.elapsed().as_millis() as u64;
                 let now = Instant::now();
                 let dt = now.duration_since(last_time).as_secs_f64();
-                let fps = if dt > 0.0 { (cur - last_files) as f64 / dt } else { 0.0 };
+                let fps = if dt > 0.0 {
+                    (cur - last_files) as f64 / dt
+                } else {
+                    0.0
+                };
 
-                if cur > (est as f64 * 0.9) as usize { est = (cur as f64 * 1.2) as usize; }
-                let raw_pct = if est > 0 { (cur as f64 / est as f64 * 100.0).min(99.0) } else { 0.0 };
+                if cur > (est as f64 * 0.9) as usize {
+                    est = (cur as f64 * 1.2) as usize;
+                }
+                let raw_pct = if est > 0 {
+                    (cur as f64 / est as f64 * 100.0).min(99.0)
+                } else {
+                    0.0
+                };
                 let pct = raw_pct.max(last_pct);
                 last_pct = pct;
                 last_files = cur;
                 last_time = now;
 
-                Self::emit_progress(progress_emitter_c.as_ref(), ScanProgress {
-                    scanned_files: cur as u64, scanned_dirs: td.load(Ordering::Relaxed) as u64,
-                    total_size: ts.load(Ordering::Relaxed), current_path: "深度扫描中...".to_string(),
-                    elapsed_ms: elapsed, files_per_second: fps, progress_percent: pct,
-                });
+                Self::emit_progress(
+                    progress_emitter_c.as_ref(),
+                    ScanProgress {
+                        scanned_files: cur as u64,
+                        scanned_dirs: td.load(Ordering::Relaxed) as u64,
+                        total_size: ts.load(Ordering::Relaxed),
+                        current_path: "深度扫描中...".to_string(),
+                        elapsed_ms: elapsed,
+                        files_per_second: fps,
+                        progress_percent: pct,
+                    },
+                );
             }
         });
 
+        let enumerate_timer = StageTimer::start(
+            "deep-native",
+            format!("walk_native_directory_tree path={}", path.display()),
+        );
         let mut pending_dirs = vec![path.to_path_buf()];
         while let Some(current_dir) = pending_dirs.pop() {
             if cancelled.load(Ordering::Relaxed) {
@@ -250,20 +308,23 @@ impl DiskScanner {
                 if entry.is_symlink {
                     if entry.is_dir {
                         total_dirs.fetch_add(1, Ordering::Relaxed);
-                        dir_nodes.insert(entry.path.clone(), DirectoryNode {
-                            path: entry.path.to_string_lossy().to_string(),
-                            name: entry.name,
-                            size: 0,
-                            file_count: 0,
-                            dir_count: 1,
-                            children: vec![],
-                            has_children: false,
-                            is_symlink: true,
-                            link_target: Self::resolve_link_target(&entry.path),
-                            safety: None,
-                            modified_time: entry.modified_time,
-                            file_id: None,
-                        });
+                        dir_nodes.insert(
+                            entry.path.clone(),
+                            DirectoryNode {
+                                path: entry.path.to_string_lossy().to_string(),
+                                name: entry.name,
+                                size: 0,
+                                file_count: 0,
+                                dir_count: 1,
+                                children: vec![],
+                                has_children: false,
+                                is_symlink: true,
+                                link_target: winfs::resolve_link_target(&entry.path),
+                                safety: None,
+                                modified_time: entry.modified_time,
+                                file_id: None,
+                            },
+                        );
                     }
                     continue;
                 }
@@ -272,20 +333,23 @@ impl DiskScanner {
                     total_dirs.fetch_add(1, Ordering::Relaxed);
                     pending_dirs.push(entry.path.clone());
 
-                    dir_nodes.insert(entry.path.clone(), DirectoryNode {
-                        path: entry.path.to_string_lossy().to_string(),
-                        name: entry.name,
-                        size: 0,
-                        file_count: 0,
-                        dir_count: 1,
-                        children: vec![],
-                        has_children: false,
-                        is_symlink: false,
-                        link_target: None,
-                        safety: None,
-                        modified_time: entry.modified_time,
-                        file_id: entry.file_id,
-                    });
+                    dir_nodes.insert(
+                        entry.path.clone(),
+                        DirectoryNode {
+                            path: entry.path.to_string_lossy().to_string(),
+                            name: entry.name,
+                            size: 0,
+                            file_count: 0,
+                            dir_count: 1,
+                            children: vec![],
+                            has_children: false,
+                            is_symlink: false,
+                            link_target: None,
+                            safety: None,
+                            modified_time: entry.modified_time,
+                            file_id: entry.file_id,
+                        },
+                    );
                     continue;
                 }
 
@@ -294,7 +358,8 @@ impl DiskScanner {
                 total_size.fetch_add(file_size, Ordering::Relaxed);
 
                 if file_size >= large_file_threshold {
-                    let modified_at = entry.modified_time
+                    let modified_at = entry
+                        .modified_time
                         .and_then(|secs| chrono::DateTime::from_timestamp(secs as i64, 0))
                         .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
                         .unwrap_or_default();
@@ -303,7 +368,12 @@ impl DiskScanner {
                         path: entry.path.to_string_lossy().to_string(),
                         name: entry.name,
                         size: file_size,
-                        extension: entry.path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string(),
+                        extension: entry
+                            .path
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .unwrap_or("")
+                            .to_string(),
                         modified_at,
                         is_readonly: entry.is_readonly,
                         is_symlink: false,
@@ -318,6 +388,14 @@ impl DiskScanner {
                 }
             }
         }
+        enumerate_timer.finish_with(format!(
+            "files={} dirs={} size={} inaccessible={} large_files={}",
+            total_files.load(Ordering::Relaxed),
+            total_dirs.load(Ordering::Relaxed),
+            total_size.load(Ordering::Relaxed),
+            inaccessible_count.load(Ordering::Relaxed),
+            large_files.len()
+        ));
 
         should_stop.store(true, Ordering::Relaxed);
         let _ = progress_handle.join();
@@ -327,9 +405,14 @@ impl DiskScanner {
         }
 
         // 构建目录树
+        let aggregate_timer = StageTimer::start(
+            "deep-native",
+            format!("aggregate_directory_totals path={}", path.display()),
+        );
         let mut nodes_map = dir_nodes;
 
-        let (root_file_count, root_file_size) = dir_file_stats.get(path)
+        let (root_file_count, root_file_size) = dir_file_stats
+            .get(path)
             .map(|&(size, count)| (count, size))
             .unwrap_or((0, 0));
 
@@ -358,8 +441,19 @@ impl DiskScanner {
                 }
             }
         }
+        aggregate_timer.finish_with(format!(
+            "nodes={} tracked_dirs={} root_file_count={} root_file_size={}",
+            nodes_map.len(),
+            dir_file_stats.len(),
+            root_file_count,
+            root_file_size
+        ));
 
         // 构建树结构
+        let tree_timer = StageTimer::start(
+            "deep-native",
+            format!("build_directory_tree path={}", path.display()),
+        );
         for dir_path in &all_paths {
             if let Some(parent_path) = dir_path.parent() {
                 if parent_path != path {
@@ -387,13 +481,25 @@ impl DiskScanner {
                 dir_count: 0,
                 children: Vec::new(),
                 has_children: false,
-                is_symlink: false, link_target: None,
-                safety: None, modified_time: None,
+                is_symlink: false,
+                link_target: None,
+                safety: None,
+                modified_time: None,
                 file_id: None,
             });
         }
+        tree_timer.finish_with(format!(
+            "top_level_nodes={} total_paths={}",
+            directories.len(),
+            all_paths.len()
+        ));
 
+        let sort_timer = StageTimer::start(
+            "deep-native",
+            format!("sort_directory_tree path={}", path.display()),
+        );
         Self::sort_directory_tree(&mut directories);
+        sort_timer.finish_with(format!("top_level_nodes={}", directories.len()));
 
         // 不做全局校准——差异来自系统保护/无权限文件，不应"注水"到用户目录
         let scanned_size = total_size.load(Ordering::Relaxed);
@@ -404,39 +510,94 @@ impl DiskScanner {
         let large_files_vec = large_files;
 
         println!("========== 深度扫描完成 ==========");
-        println!("耗时: {:.2}s | 文件: {} | 目录: {} | 大小: {:.2} GB",
-            duration.as_secs_f64(), scanned_files,
+        println!(
+            "耗时: {:.2}s | 文件: {} | 目录: {} | 大小: {:.2} GB",
+            duration.as_secs_f64(),
+            scanned_files,
             scanned_dirs,
-            scanned_size as f64 / 1024.0 / 1024.0 / 1024.0);
+            scanned_size as f64 / 1024.0 / 1024.0 / 1024.0
+        );
 
-        if let Some((_, disk_used, _)) = Self::get_disk_usage(path) {
-            let missing = disk_used.saturating_sub(scanned_size);
-            let missing_pct = if disk_used > 0 {
-                missing as f64 / disk_used as f64 * 100.0
-            } else {
-                0.0
-            };
-            println!(
-                "磁盘已用: {:.2} GB | 扫描到: {:.2} GB | 漏算量: {:.2} GB ({:.1}%) (系统保留/无权限文件)",
-                disk_used as f64 / 1024.0 / 1024.0 / 1024.0,
-                scanned_size as f64 / 1024.0 / 1024.0 / 1024.0,
-                missing as f64 / 1024.0 / 1024.0 / 1024.0,
-                missing_pct
-            );
+        let disk_usage_timer = StageTimer::start(
+            "deep-native",
+            format!("query_disk_usage path={}", path.display()),
+        );
+        let disk_usage = Self::get_disk_usage(path);
+        match disk_usage {
+            Some((_, disk_used, _)) => {
+                disk_usage_timer.finish_with(format!("disk_used={disk_used}"));
+                let missing = disk_used.saturating_sub(scanned_size);
+                let missing_pct = if disk_used > 0 {
+                    missing as f64 / disk_used as f64 * 100.0
+                } else {
+                    0.0
+                };
+                println!(
+                    "磁盘已用: {:.2} GB | 扫描到: {:.2} GB | 漏算量: {:.2} GB ({:.1}%) (系统保留/无权限文件)",
+                    disk_used as f64 / 1024.0 / 1024.0 / 1024.0,
+                    scanned_size as f64 / 1024.0 / 1024.0 / 1024.0,
+                    missing as f64 / 1024.0 / 1024.0 / 1024.0,
+                    missing_pct
+                );
+            }
+            None => {
+                disk_usage_timer.finish_with("disk_used=unavailable");
+            }
         }
 
+        let checkpoint_timer = StageTimer::start(
+            "deep-native",
+            format!("capture_usn_checkpoint path={}", path.display()),
+        );
         let journal = winfs::query_usn_checkpoint(path);
+        match &journal {
+            Some(checkpoint) => {
+                checkpoint_timer.finish_with(format!(
+                    "available=true journal_id={} next_usn={}",
+                    checkpoint.journal_id, checkpoint.next_usn
+                ));
+            }
+            None => {
+                checkpoint_timer.finish_with("available=false");
+            }
+        }
+
         if let Some(checkpoint) = journal {
             println!(
                 "[deep-scan] captured USN checkpoint journal_id={} next_usn={}",
-                checkpoint.journal_id,
-                checkpoint.next_usn
+                checkpoint.journal_id, checkpoint.next_usn
             );
         } else {
             println!(
                 "[deep-scan] USN checkpoint unavailable for {}; future runs will reuse the fresh cache only when fast incremental data is available",
                 path.display()
             );
+        }
+
+        total_timer.finish_with(format!(
+            "backend={} files={} dirs={} size={} inaccessible={}",
+            ScanBackendKind::Native.label(),
+            scanned_files,
+            scanned_dirs,
+            scanned_size,
+            inaccessible_count.load(Ordering::Relaxed)
+        ));
+
+        if let Some(journal) = journal {
+            return Ok(ScanResult {
+                root_path,
+                total_size: scanned_size,
+                total_files: scanned_files,
+                total_dirs: scanned_dirs,
+                scan_duration_ms: duration.as_millis() as u64,
+                directories,
+                large_files: large_files_vec,
+                inaccessible_count: inaccessible_count.load(Ordering::Relaxed),
+                scan_backend: Some(ScanBackendKind::Native.label().to_string()),
+                root_file_id: winfs::get_path_file_id(path),
+                usn_journal_id: Some(journal.journal_id),
+                usn_next_usn: Some(journal.next_usn),
+            });
         }
 
         Ok(ScanResult {
@@ -450,8 +611,8 @@ impl DiskScanner {
             inaccessible_count: inaccessible_count.load(Ordering::Relaxed),
             scan_backend: Some(ScanBackendKind::Native.label().to_string()),
             root_file_id: winfs::get_path_file_id(path),
-            usn_journal_id: journal.map(|item| item.journal_id),
-            usn_next_usn: journal.map(|item| item.next_usn),
+            usn_journal_id: None,
+            usn_next_usn: None,
         })
     }
 

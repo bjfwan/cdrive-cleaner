@@ -1,3 +1,3 @@
 pub mod detector;
 
-pub use detector::{MigrationSafety, analyze};
+pub use detector::{analyze, MigrationSafety};

@@ -36,6 +36,7 @@ const loadingFiles = ref(false);
 const currentFiles = ref<FileInfo[]>([]);
 const selectedDirs = ref<Set<string>>(new Set());
 const selectedFiles = ref<Set<string>>(new Set());
+let fileLoadRequestId = 0;
 
 const selectedItems = computed(() => {
   const items: Array<DirectoryNode | FileInfo> = [];
@@ -130,23 +131,31 @@ function handleItemClick(dir: DirectoryNode) {
 }
 
 async function loadDirectoryFiles(path: string) {
+  const requestId = ++fileLoadRequestId;
   loadingFiles.value = true;
 
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    currentFiles.value = await invoke<FileInfo[]>('scan_directory_files', { path });
+    const files = await invoke<FileInfo[]>('scan_directory_files', { path });
+    if (requestId === fileLoadRequestId) {
+      currentFiles.value = files;
+    }
   } catch {
-    currentFiles.value = [];
-    showToast('加载文件失败', '无法读取当前目录的文件列表', 'error');
+    if (requestId === fileLoadRequestId) {
+      currentFiles.value = [];
+      showToast('加载文件失败', '无法读取当前目录的文件列表', 'error');
+    }
   } finally {
-    loadingFiles.value = false;
+    if (requestId === fileLoadRequestId) {
+      loadingFiles.value = false;
+    }
   }
 }
 
 watch(
   () => [props.currentPath, props.totalSize] as const,
   ([newPath]) => {
-    loadDirectoryFiles(newPath);
+    void loadDirectoryFiles(newPath);
     clearSelection();
   },
   { immediate: true },

@@ -37,6 +37,7 @@ const toastType = ref<ToastType>('success');
 const showSettings = ref(false);
 const showHistory = ref(false);
 const showWelcome = ref(false);
+const appSettings = ref<AppSettings>(getSettings());
 
 let deepScanResult: ScanResult | null = null;
 let deepScanCache = new Map<string, ScanResult>();
@@ -250,7 +251,6 @@ async function startDeepScan() {
       estimatedFiles,
     });
 
-    // Refresh disk usage so the "磁盘已用" 对比更接近实时值。
     await loadDisks();
     setRootSnapshot(rootSnapshot);
 
@@ -325,7 +325,6 @@ async function navigateToPath(path: string) {
     navigationStack.value.push(path);
   } catch {
     showToastNotification('目录快照失效', '请重新执行一次扫描', 'warning');
-  } finally {
   }
 }
 
@@ -402,6 +401,7 @@ function closeHistory() {
 }
 
 function onSettingsSaved(newSettings: AppSettings) {
+  appSettings.value = newSettings;
   if (newSettings.theme) {
     applyTheme(newSettings.theme);
   }
@@ -419,6 +419,7 @@ function applyTheme(theme: 'light' | 'dark' | 'auto') {
 
 function loadUserSettings() {
   const settings = getSettings();
+  appSettings.value = settings;
   if (settings.theme) {
     applyTheme(settings.theme);
   }
@@ -636,6 +637,7 @@ async function restartAsAdmin() {
             :deep-scanning="deepScanning"
             :available-disks="disks"
             :has-deep-scanned="hasDeepScanned"
+            :large-file-threshold="appSettings.largeFileThreshold"
             @update:view-mode="viewMode = $event"
             @navigate="navigateToPath"
             @go-back="goBack"

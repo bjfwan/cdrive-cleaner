@@ -4,12 +4,15 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::database::ScanCacheDb;
-use crate::scanner::{DiskScanner, file_info::{DirectoryNode, ScanResult}, incremental, mft_usn};
+use crate::scanner::{
+    file_info::{DirectoryNode, ScanResult},
+    incremental, mft_usn, DiskScanner,
+};
 use crate::winfs;
 
 #[derive(Debug, Clone, Serialize)]
@@ -103,23 +106,38 @@ impl Drop for BenchmarkWorkspace {
     }
 }
 
-pub fn run_deep_scan_benchmark(target_path: &Path, estimated_files: usize) -> Result<DeepScanBenchmarkReport> {
+pub fn run_deep_scan_benchmark(
+    target_path: &Path,
+    estimated_files: usize,
+) -> Result<DeepScanBenchmarkReport> {
     if !target_path.exists() || !target_path.is_dir() {
         return Err(anyhow!("benchmark target must be an existing directory"));
     }
 
     let target_key = target_path.to_string_lossy().to_string();
     let is_elevated = crate::commands::is_elevated();
-    let volume = winfs::query_volume_details(target_path)
-        .ok_or_else(|| anyhow!("failed to resolve volume information for {}", target_path.display()))?;
+    let volume = winfs::query_volume_details(target_path).ok_or_else(|| {
+        anyhow!(
+            "failed to resolve volume information for {}",
+            target_path.display()
+        )
+    })?;
     let mft_available = winfs::supports_mft_scan(target_path);
     let workspace = BenchmarkWorkspace::new()?;
-    let deep_cache = ScanCacheDb::new(workspace.root.join("deep_scan_cache.db").to_string_lossy().as_ref())?;
+    let deep_cache = ScanCacheDb::new(
+        workspace
+            .root
+            .join("deep_scan_cache.db")
+            .to_string_lossy()
+            .as_ref(),
+    )?;
     let deep_scanner = DiskScanner::new();
 
-    let runtime = tokio::runtime::Runtime::new().context("failed to create tokio runtime for deep benchmark")?;
+    let runtime = tokio::runtime::Runtime::new()
+        .context("failed to create tokio runtime for deep benchmark")?;
     let (deep_first, deep_second) = runtime.block_on(async {
-        let deep_first = run_deep_scan_pass(&deep_scanner, &deep_cache, target_path, estimated_files).await?;
+        let deep_first =
+            run_deep_scan_pass(&deep_scanner, &deep_cache, target_path, estimated_files).await?;
         let deep_second = run_deep_scan_pass(
             &deep_scanner,
             &deep_cache,
@@ -166,8 +184,12 @@ pub fn run_mft_end_to_end_validation(target_path: &Path) -> Result<MftValidation
 
     let start = Instant::now();
     let is_elevated = crate::commands::is_elevated();
-    let volume = winfs::query_volume_details(target_path)
-        .ok_or_else(|| anyhow!("failed to resolve volume information for {}", target_path.display()))?;
+    let volume = winfs::query_volume_details(target_path).ok_or_else(|| {
+        anyhow!(
+            "failed to resolve volume information for {}",
+            target_path.display()
+        )
+    })?;
     let mut notes = Vec::new();
 
     if !is_elevated {
@@ -233,16 +255,20 @@ pub fn run_mft_end_to_end_validation(target_path: &Path) -> Result<MftValidation
     write_file(&workspace.root.join("alpha").join("a.bin"), &[7u8; 128])?;
     write_file(&nested_dir.join("b.txt"), b"payload")?;
 
-    let scan_result = mft_usn::scan_path(
-        &workspace.root,
-        None,
-        64,
-        Arc::new(AtomicBool::new(false)),
-    )?
-    .ok_or_else(|| anyhow!("MFT backend was not selected for {}", workspace.root.display()))?;
+    let scan_result =
+        mft_usn::scan_path(&workspace.root, None, 64, Arc::new(AtomicBool::new(false)))?
+            .ok_or_else(|| {
+                anyhow!(
+                    "MFT backend was not selected for {}",
+                    workspace.root.display()
+                )
+            })?;
 
     let expected_size = "root-bytes".len() as u64 + 128 + "payload".len() as u64;
-    if scan_result.total_files != 3 || scan_result.total_dirs != 3 || scan_result.total_size != expected_size {
+    if scan_result.total_files != 3
+        || scan_result.total_dirs != 3
+        || scan_result.total_size != expected_size
+    {
         return Err(anyhow!(
             "unexpected scan stats: files={}, dirs={}, size={}",
             scan_result.total_files,
@@ -251,10 +277,14 @@ pub fn run_mft_end_to_end_validation(target_path: &Path) -> Result<MftValidation
         ));
     }
 
-    let (Some(root_file_id), Some(journal_id), Some(next_usn)) =
-        (scan_result.root_file_id, scan_result.usn_journal_id, scan_result.usn_next_usn)
-    else {
-        return Err(anyhow!("scan result did not include a usable USN checkpoint"));
+    let (Some(root_file_id), Some(journal_id), Some(next_usn)) = (
+        scan_result.root_file_id,
+        scan_result.usn_journal_id,
+        scan_result.usn_next_usn,
+    ) else {
+        return Err(anyhow!(
+            "scan result did not include a usable USN checkpoint"
+        ));
     };
 
     std::thread::sleep(Duration::from_millis(50));
@@ -264,7 +294,10 @@ pub fn run_mft_end_to_end_validation(target_path: &Path) -> Result<MftValidation
     frn_to_path.insert(root_file_id, workspace.root.to_string_lossy().to_string());
     build_file_id_map(&scan_result.directories, &mut frn_to_path);
 
-    let checkpoint = winfs::UsnJournalCheckpoint { journal_id, next_usn };
+    let checkpoint = winfs::UsnJournalCheckpoint {
+        journal_id,
+        next_usn,
+    };
     let nested_dir_str = nested_dir.to_string_lossy().to_string();
     let mut usn_detected = false;
 
@@ -286,7 +319,9 @@ pub fn run_mft_end_to_end_validation(target_path: &Path) -> Result<MftValidation
     }
 
     if !usn_detected {
-        return Err(anyhow!("USN journal did not report the modified validation directory"));
+        return Err(anyhow!(
+            "USN journal did not report the modified validation directory"
+        ));
     }
 
     notes.push("MFT 枚举成功，统计结果与验证目录一致".to_string());
@@ -328,9 +363,20 @@ fn build_file_id_map(nodes: &[DirectoryNode], map: &mut HashMap<u64, String>) {
     }
 }
 
-fn persist_scan_result_sync(cache_db: &ScanCacheDb, disk_path: &str, scan_type: &str, result: &ScanResult) -> Result<()> {
+fn persist_scan_result_sync(
+    cache_db: &ScanCacheDb,
+    disk_path: &str,
+    scan_type: &str,
+    result: &ScanResult,
+) -> Result<()> {
     let json = serde_json::to_string(result)?;
-    cache_db.save_scan_result(disk_path, scan_type, &json, result.total_files as i64, result.total_size as i64)?;
+    cache_db.save_scan_result(
+        disk_path,
+        scan_type,
+        &json,
+        result.total_files as i64,
+        result.total_size as i64,
+    )?;
     Ok(())
 }
 
@@ -343,7 +389,9 @@ fn should_rebuild_cached_deep_scan(path: &Path, result: &ScanResult) -> bool {
     let expects_usn = matches!(backend, "mft_usn" | "incremental_usn");
 
     (expects_usn && !cache_has_usable_usn_checkpoint(result))
-        || (winfs::supports_mft_scan(path) && !cache_has_usable_usn_checkpoint(result) && result.total_dirs > 50_000)
+        || (winfs::supports_mft_scan(path)
+            && !cache_has_usable_usn_checkpoint(result)
+            && result.total_dirs > 50_000)
 }
 
 fn build_scan_benchmark_run(
@@ -383,23 +431,29 @@ async fn run_deep_scan_pass(
             Ok(cached_result) if should_rebuild_cached_deep_scan(target_path, &cached_result) => (
                 "fresh_rebuild_stale_deep_cache",
                 false,
-                scanner.scan_deep_silent(target_path, estimated_files).await?,
+                scanner
+                    .scan_deep_silent(target_path, estimated_files)
+                    .await?,
             ),
             Ok(cached_result) => (
                 "incremental_cache",
                 true,
-                incremental::scan_incremental_silent(target_path, cached_result).await?,
+                incremental::scan_incremental_silent(target_path, cached_result, scanner).await?,
             ),
             Err(_) => (
                 "fresh_rebuild_corrupt_deep_cache",
                 false,
-                scanner.scan_deep_silent(target_path, estimated_files).await?,
+                scanner
+                    .scan_deep_silent(target_path, estimated_files)
+                    .await?,
             ),
         },
         None => (
             "fresh_scan",
             false,
-            scanner.scan_deep_silent(target_path, estimated_files).await?,
+            scanner
+                .scan_deep_silent(target_path, estimated_files)
+                .await?,
         ),
     };
 

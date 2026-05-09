@@ -1,7 +1,10 @@
+use crate::migration::LinkType;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use crate::migration::LinkType;
+
+#[cfg(windows)]
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -55,6 +58,7 @@ pub fn analyze(
         let handles = GateHandles::run_parallel(path, &link_type, target_disk, source_size);
         findings.extend(handles.collect());
     }
+    dedup_findings(&mut findings);
 
     let verdict = derive_verdict(&findings);
     let can_migrate = matches!(verdict, Verdict::Safe | Verdict::SafeAfterAction);
@@ -88,11 +92,38 @@ fn derive_verdict(findings: &[Finding]) -> Verdict {
 }
 
 fn extract_actions(findings: &[Finding]) -> Vec<String> {
-    findings
+    let mut actions: Vec<String> = findings
         .iter()
         .filter(|f| f.severity == Severity::Warning && f.gate == "file_locks")
         .filter_map(|f| f.detail.clone())
-        .collect()
+        .collect();
+    actions.sort();
+    actions.dedup();
+    actions
+}
+
+fn dedup_findings(findings: &mut Vec<Finding>) {
+    findings.sort_by(|a, b| {
+        a.gate
+            .cmp(&b.gate)
+            .then_with(|| severity_rank(&a.severity).cmp(&severity_rank(&b.severity)))
+            .then_with(|| a.message.cmp(&b.message))
+            .then_with(|| a.detail.cmp(&b.detail))
+    });
+    findings.dedup_by(|a, b| {
+        a.gate == b.gate
+            && a.severity == b.severity
+            && a.message == b.message
+            && a.detail == b.detail
+    });
+}
+
+fn severity_rank(severity: &Severity) -> u8 {
+    match severity {
+        Severity::Blocker => 0,
+        Severity::Warning => 1,
+        Severity::Info => 2,
+    }
 }
 
 struct GateHandles {
@@ -105,7 +136,12 @@ struct GateHandles {
 }
 
 impl GateHandles {
-    fn run_parallel(path: &Path, link_type: &LinkType, target_disk: Option<&str>, source_size: u64) -> Self {
+    fn run_parallel(
+        path: &Path,
+        link_type: &LinkType,
+        target_disk: Option<&str>,
+        source_size: u64,
+    ) -> Self {
         let p1 = path.to_path_buf();
         let p2 = path.to_path_buf();
         let p3 = path.to_path_buf();
@@ -119,7 +155,9 @@ impl GateHandles {
             boot_drivers: std::thread::spawn(move || gate_boot_drivers(&p2)),
             hardlinks: std::thread::spawn(move || gate_hardlinks(&p3)),
             reparse_points: std::thread::spawn(move || gate_reparse_points(&p4)),
-            target_volume: std::thread::spawn(move || gate_target_volume(td.as_deref(), source_size)),
+            target_volume: std::thread::spawn(move || {
+                gate_target_volume(td.as_deref(), source_size)
+            }),
             registry_bindings: std::thread::spawn(move || gate_registry_bindings(&p5, &lt)),
         }
     }
@@ -142,6 +180,42 @@ impl GateHandles {
     }
 }
 
+#[cfg(windows)]
+#[derive(Debug, Clone)]
+struct RegistryServiceBinding {
+    name: String,
+    field: String,
+    value: String,
+    normalized_upper: String,
+    start: u32,
+    service_type: u32,
+}
+
+#[cfg(windows)]
+#[derive(Debug, Clone)]
+struct RegistryPathBinding {
+    display: String,
+    field: String,
+    normalized_upper: String,
+}
+
+#[cfg(windows)]
+#[derive(Debug, Clone)]
+struct RegistryBlobBinding {
+    display: String,
+    value_upper: String,
+}
+
+#[cfg(windows)]
+#[derive(Debug, Default)]
+struct RegistryIndex {
+    services: Vec<RegistryServiceBinding>,
+    com: Vec<RegistryPathBinding>,
+    app_paths: Vec<RegistryPathBinding>,
+    tasks: Vec<RegistryBlobBinding>,
+    uninstall: Vec<RegistryPathBinding>,
+}
+
 const CRITICAL_PATHS: &[(&str, &str)] = &[
     ("C:\\WINDOWS\\SYSTEM32", "Windows 系统核心目录"),
     ("C:\\WINDOWS\\SYSWOW64", "Windows 32 位兼容目录"),
@@ -158,19 +232,37 @@ const CRITICAL_PATHS: &[(&str, &str)] = &[
     ("C:\\WINDOWS\\IMMERSIVECONTROLPANEL", "系统设置面板"),
     ("C:\\WINDOWS\\SYSTEMAPPS", "系统内置应用"),
     ("C:\\PROGRAM FILES\\WINDOWSAPPS", "Windows 应用商店"),
-    ("C:\\PROGRAMDATA\\MICROSOFT\\WINDOWS\\START MENU", "开始菜单"),
+    (
+        "C:\\PROGRAMDATA\\MICROSOFT\\WINDOWS\\START MENU",
+        "开始菜单",
+    ),
     ("C:\\PROGRAMDATA\\MICROSOFT\\CRYPTO", "系统加密存储"),
-    ("C:\\PROGRAMDATA\\MICROSOFT\\WINDOWS DEFENDER", "Windows Defender"),
+    (
+        "C:\\PROGRAMDATA\\MICROSOFT\\WINDOWS DEFENDER",
+        "Windows Defender",
+    ),
     ("C:\\SYSTEM VOLUME INFORMATION", "系统卷信息"),
     ("C:\\$RECYCLE.BIN", "回收站"),
     ("C:\\RECOVERY", "系统恢复分区"),
     ("C:\\BOOT", "引导加载器"),
-    ("\\APPDATA\\LOCAL\\MICROSOFT\\WINDOWS\\", "Windows 用户系统数据"),
-    ("\\APPDATA\\ROAMING\\MICROSOFT\\WINDOWS\\", "Windows 用户配置"),
+    (
+        "\\APPDATA\\LOCAL\\MICROSOFT\\WINDOWS\\",
+        "Windows 用户系统数据",
+    ),
+    (
+        "\\APPDATA\\ROAMING\\MICROSOFT\\WINDOWS\\",
+        "Windows 用户配置",
+    ),
     ("\\APPDATA\\LOCAL\\PACKAGES\\", "UWP 应用数据"),
-    ("\\APPDATA\\ROAMING\\MICROSOFT\\PROTECT\\", "Windows 凭据保护"),
+    (
+        "\\APPDATA\\ROAMING\\MICROSOFT\\PROTECT\\",
+        "Windows 凭据保护",
+    ),
     ("\\APPDATA\\LOCAL\\MICROSOFT\\CREDENTIALS\\", "系统凭据"),
-    ("\\APPDATA\\LOCAL\\CONNECTEDDEVICESPLATFORM\\", "设备平台数据"),
+    (
+        "\\APPDATA\\LOCAL\\CONNECTEDDEVICESPLATFORM\\",
+        "设备平台数据",
+    ),
 ];
 
 fn gate_system_critical(path_upper: &str, findings: &mut Vec<Finding>) {
@@ -178,7 +270,9 @@ fn gate_system_critical(path_upper: &str, findings: &mut Vec<Finding>) {
         && !path_upper.starts_with("C:\\WINDOWS\\INSTALLER")
         && !path_upper.starts_with("C:\\WINDOWS\\TEMP")
     {
-        let matched = CRITICAL_PATHS.iter().find(|(p, _)| path_upper.starts_with(p));
+        let matched = CRITICAL_PATHS
+            .iter()
+            .find(|(p, _)| path_upper.starts_with(p));
         let reason = matched.map(|(_, r)| *r).unwrap_or("Windows 系统目录");
         findings.push(Finding {
             gate: "system_critical".into(),
@@ -204,18 +298,16 @@ fn gate_system_critical(path_upper: &str, findings: &mut Vec<Finding>) {
 
 #[cfg(windows)]
 fn gate_file_locks(path: &Path) -> Vec<Finding> {
+    use windows::core::{PCWSTR, PWSTR};
     use windows::Win32::System::RestartManager::{
         RmEndSession, RmGetList, RmRegisterResources, RmStartSession,
     };
-    use windows::core::{PCWSTR, PWSTR};
 
     let mut findings = Vec::new();
     let mut session: u32 = 0;
     let mut session_key = [0u16; 64];
 
-    let start_result = unsafe {
-        RmStartSession(&mut session, 0, PWSTR(session_key.as_mut_ptr()))
-    };
+    let start_result = unsafe { RmStartSession(&mut session, 0, PWSTR(session_key.as_mut_ptr())) };
     if start_result.is_err() {
         return findings;
     }
@@ -228,13 +320,16 @@ fn gate_file_locks(path: &Path) -> Vec<Finding> {
 
     let wide_paths: Vec<Vec<u16>> = files
         .iter()
-        .map(|f| f.to_string_lossy().encode_utf16().chain(std::iter::once(0)).collect())
+        .map(|f| {
+            f.to_string_lossy()
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .collect()
+        })
         .collect();
     let ptrs: Vec<PCWSTR> = wide_paths.iter().map(|w| PCWSTR(w.as_ptr())).collect();
 
-    let reg_result = unsafe {
-        RmRegisterResources(session, Some(&ptrs), None, None)
-    };
+    let reg_result = unsafe { RmRegisterResources(session, Some(&ptrs), None, None) };
     if reg_result.is_err() {
         let _ = unsafe { RmEndSession(session) };
         return findings;
@@ -244,9 +339,7 @@ fn gate_file_locks(path: &Path) -> Vec<Finding> {
     let mut count: u32 = 0;
     let mut reboot_reasons: u32 = 0;
 
-    let _ = unsafe {
-        RmGetList(session, &mut needed, &mut count, None, &mut reboot_reasons)
-    };
+    let _ = unsafe { RmGetList(session, &mut needed, &mut count, None, &mut reboot_reasons) };
 
     if needed > 0 {
         let mut buf = vec![
@@ -286,7 +379,9 @@ fn gate_file_locks(path: &Path) -> Vec<Finding> {
         }
     }
 
-    unsafe { let _ = RmEndSession(session); }
+    unsafe {
+        let _ = RmEndSession(session);
+    }
     findings
 }
 
@@ -296,102 +391,105 @@ fn gate_file_locks(_path: &Path) -> Vec<Finding> {
 }
 
 fn collect_files_for_lock_check(path: &Path) -> Vec<PathBuf> {
-    let mut files = Vec::new();
     let max_files = 64;
+    let max_dirs = 512;
 
     if path.is_file() {
         return vec![path.to_path_buf()];
     }
 
-    let entries = match std::fs::read_dir(path) {
-        Ok(e) => e,
-        Err(_) => return files,
-    };
+    let mut priority = Vec::new();
+    let mut fallback = Vec::new();
+    let mut pending = vec![path.to_path_buf()];
+    let mut scanned_dirs = 0usize;
 
-    for entry in entries.flatten() {
-        if files.len() >= max_files {
+    while let Some(dir) = pending.pop() {
+        if scanned_dirs >= max_dirs || priority.len() >= max_files {
             break;
         }
-        let p = entry.path();
-        if p.is_file() {
-            let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-            if matches!(ext.as_str(), "exe" | "dll" | "sys" | "db" | "lock" | "log" | "dat" | "mdb" | "ldb") {
-                files.push(p);
+        scanned_dirs += 1;
+
+        let Ok(entries) = crate::winfs::enumerate_directory(&dir, false) else {
+            continue;
+        };
+
+        for entry in entries {
+            if entry.is_symlink {
+                continue;
+            }
+            if entry.is_dir {
+                if pending.len() < max_dirs {
+                    pending.push(entry.path);
+                }
+                continue;
+            }
+
+            let ext = entry
+                .path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            if matches!(
+                ext.as_str(),
+                "exe"
+                    | "dll"
+                    | "sys"
+                    | "drv"
+                    | "ocx"
+                    | "db"
+                    | "sqlite"
+                    | "lock"
+                    | "log"
+                    | "dat"
+                    | "mdb"
+                    | "ldb"
+            ) {
+                priority.push(entry.path);
+                if priority.len() >= max_files {
+                    break;
+                }
+            } else if fallback.len() < max_files {
+                fallback.push(entry.path);
             }
         }
     }
 
-    if files.is_empty() {
-        for entry in std::fs::read_dir(path).into_iter().flatten().flatten() {
-            if files.len() >= max_files {
-                break;
-            }
-            let p = entry.path();
-            if p.is_file() {
-                files.push(p);
-            }
-        }
-    }
-
-    files
+    priority.extend(
+        fallback
+            .into_iter()
+            .take(max_files.saturating_sub(priority.len())),
+    );
+    priority
 }
 
 #[cfg(windows)]
 fn gate_boot_drivers(path: &Path) -> Vec<Finding> {
-    use winreg::enums::*;
-    use winreg::RegKey;
-
     let mut findings = Vec::new();
     let path_upper = path.to_string_lossy().to_uppercase();
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-
-    let services_key = match hklm.open_subkey("SYSTEM\\CurrentControlSet\\Services") {
-        Ok(k) => k,
-        Err(_) => return findings,
-    };
-
-    for name in services_key.enum_keys().filter_map(Result::ok) {
-        let subkey = match services_key.open_subkey(&name) {
-            Ok(k) => k,
-            Err(_) => continue,
-        };
-
-        let start: u32 = match subkey.get_value("Start") {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-
-        if start > 1 {
+    for entry in &registry_index().services {
+        if entry.start > 1 || entry.field != "ImagePath" {
             continue;
         }
 
-        let svc_type: u32 = subkey.get_value("Type").unwrap_or(0);
-        let is_kernel = svc_type == 1 || svc_type == 2;
+        let is_kernel = entry.service_type == 1 || entry.service_type == 2;
         if !is_kernel {
             continue;
         }
 
-        let image_path: String = match subkey.get_value("ImagePath") {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-
-        let resolved = resolve_driver_path(&image_path);
-        if path_is_under(&resolved, &path_upper) {
-            let severity = if start == 0 {
+        if normalized_path_is_under(&entry.normalized_upper, &path_upper) {
+            let severity = if entry.start == 0 {
                 Severity::Blocker
             } else {
                 Severity::Warning
             };
-            let label = if start == 0 { "Boot" } else { "System" };
+            let label = if entry.start == 0 { "Boot" } else { "System" };
 
             findings.push(Finding {
                 gate: "boot_driver".into(),
                 severity,
-                message: format!(
-                    "{label} 级内核驱动 {name} 位于此目录",
-                ),
-                detail: Some(format!("驱动路径: {image_path}")),
+                message: format!("{label} 级内核驱动 {} 位于此目录", entry.name),
+                detail: Some(format!("驱动路径: {}", entry.value)),
             });
         }
     }
@@ -404,21 +502,19 @@ fn gate_boot_drivers(_path: &Path) -> Vec<Finding> {
     Vec::new()
 }
 
-fn resolve_driver_path(image_path: &str) -> String {
-    normalize_reg_path(image_path)
-}
-
 fn normalize_reg_path(raw: &str) -> String {
     let s = raw.trim().trim_matches('"');
 
     let s = s.strip_prefix("\\??\\").unwrap_or(s);
-    let s = s.strip_prefix("\\SystemRoot\\")
+    let s = s
+        .strip_prefix("\\SystemRoot\\")
         .map(|rest| format!("C:\\Windows\\{rest}"))
         .unwrap_or_else(|| s.to_string());
 
     let s = s.replace('/', "\\");
 
-    let s = s.replace("%SystemRoot%", "C:\\Windows")
+    let s = s
+        .replace("%SystemRoot%", "C:\\Windows")
         .replace("%SYSTEMROOT%", "C:\\Windows")
         .replace("%systemroot%", "C:\\Windows")
         .replace("%ProgramFiles%", "C:\\Program Files")
@@ -429,8 +525,14 @@ fn normalize_reg_path(raw: &str) -> String {
         .replace("%PROGRAMW6432%", "C:\\Program Files")
         .replace("%CommonProgramFiles%", "C:\\Program Files\\Common Files")
         .replace("%COMMONPROGRAMFILES%", "C:\\Program Files\\Common Files")
-        .replace("%CommonProgramFiles(x86)%", "C:\\Program Files (x86)\\Common Files")
-        .replace("%COMMONPROGRAMFILES(X86)%", "C:\\Program Files (x86)\\Common Files")
+        .replace(
+            "%CommonProgramFiles(x86)%",
+            "C:\\Program Files (x86)\\Common Files",
+        )
+        .replace(
+            "%COMMONPROGRAMFILES(X86)%",
+            "C:\\Program Files (x86)\\Common Files",
+        )
         .replace("%ProgramData%", "C:\\ProgramData")
         .replace("%PROGRAMDATA%", "C:\\ProgramData")
         .replace("%ALLUSERSPROFILE%", "C:\\ProgramData")
@@ -448,8 +550,7 @@ fn normalize_reg_path(raw: &str) -> String {
     s
 }
 
-fn path_is_under(candidate: &str, dir_upper: &str) -> bool {
-    let normalized = normalize_reg_path(candidate).to_uppercase();
+fn normalized_path_is_under(normalized: &str, dir_upper: &str) -> bool {
     if normalized.len() < dir_upper.len() {
         return false;
     }
@@ -463,8 +564,7 @@ fn path_is_under(candidate: &str, dir_upper: &str) -> bool {
     next_byte == b'\\' || next_byte == b'/'
 }
 
-fn blob_contains_path(blob: &str, dir_upper: &str) -> bool {
-    let haystack = blob.to_uppercase();
+fn blob_contains_path_upper(haystack: &str, dir_upper: &str) -> bool {
     let mut search_from = 0;
     while let Some(pos) = haystack[search_from..].find(dir_upper) {
         let abs_pos = search_from + pos;
@@ -472,15 +572,24 @@ fn blob_contains_path(blob: &str, dir_upper: &str) -> bool {
 
         let left_ok = abs_pos == 0 || {
             let prev = haystack.as_bytes()[abs_pos - 1];
-            prev == b'\0' || prev == b'"' || prev == b' ' || prev == b'\t'
-                || prev == b'\n' || prev == b'\r'
+            prev == b'\0'
+                || prev == b'"'
+                || prev == b' '
+                || prev == b'\t'
+                || prev == b'\n'
+                || prev == b'\r'
         };
 
         let right_ok = end_pos >= haystack.len() || {
             let next = haystack.as_bytes()[end_pos];
-            next == b'\\' || next == b'/' || next == b'\0'
-                || next == b'"' || next == b' ' || next == b'\t'
-                || next == b'\n' || next == b'\r'
+            next == b'\\'
+                || next == b'/'
+                || next == b'\0'
+                || next == b'"'
+                || next == b' '
+                || next == b'\t'
+                || next == b'\n'
+                || next == b'\r'
         };
 
         if left_ok && right_ok {
@@ -494,15 +603,14 @@ fn blob_contains_path(blob: &str, dir_upper: &str) -> bool {
 
 #[cfg(windows)]
 fn gate_hardlinks(path: &Path) -> Vec<Finding> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::core::PCWSTR;
     use windows::Win32::Foundation::HANDLE;
     use windows::Win32::Storage::FileSystem::{
         CreateFileW, GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
-        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_DELETE,
-        FILE_SHARE_MODE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
-        FILE_CREATION_DISPOSITION,
+        FILE_CREATION_DISPOSITION, FILE_FLAGS_AND_ATTRIBUTES, FILE_FLAG_BACKUP_SEMANTICS,
+        FILE_SHARE_DELETE, FILE_SHARE_MODE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
     };
-    use windows::core::PCWSTR;
-    use std::os::windows::ffi::OsStrExt;
 
     let mut findings = Vec::new();
     let mut hardlink_files = Vec::new();
@@ -522,9 +630,14 @@ fn gate_hardlinks(path: &Path) -> Vec<Finding> {
             continue;
         }
 
-        let ext = entry.path().extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-        let should_check = matches!(ext.as_str(), "exe" | "dll" | "sys" | "drv" | "ocx")
-            || checked < 50;
+        let ext = entry
+            .path()
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        let should_check =
+            matches!(ext.as_str(), "exe" | "dll" | "sys" | "drv" | "ocx") || checked < 50;
 
         if !should_check {
             continue;
@@ -532,7 +645,8 @@ fn gate_hardlinks(path: &Path) -> Vec<Finding> {
 
         checked += 1;
         let file_path = entry.path();
-        let wide: Vec<u16> = file_path.as_os_str()
+        let wide: Vec<u16> = file_path
+            .as_os_str()
             .encode_wide()
             .chain(std::iter::once(0))
             .collect();
@@ -556,7 +670,9 @@ fn gate_hardlinks(path: &Path) -> Vec<Finding> {
 
         let mut info = BY_HANDLE_FILE_INFORMATION::default();
         let ok = unsafe { GetFileInformationByHandle(handle, &mut info) };
-        unsafe { let _ = windows::Win32::Foundation::CloseHandle(handle); }
+        unsafe {
+            let _ = windows::Win32::Foundation::CloseHandle(handle);
+        }
 
         if ok.is_ok() && info.nNumberOfLinks > 1 {
             hardlink_files.push(file_path.to_string_lossy().to_string());
@@ -655,8 +771,8 @@ fn gate_target_volume(target_disk: Option<&str>, source_size: u64) -> Vec<Findin
             }
         }
 
-        use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
         use windows::core::PCWSTR;
+        use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
 
         let wide: Vec<u16> = target.encode_utf16().chain(std::iter::once(0)).collect();
         let mut free_bytes = 0u64;
@@ -665,11 +781,7 @@ fn gate_target_volume(target_disk: Option<&str>, source_size: u64) -> Vec<Findin
         };
 
         if ok.is_ok() {
-            let required = if source_size > 0 {
-                source_size + 100 * 1024 * 1024
-            } else {
-                100 * 1024 * 1024
-            };
+            let required = required_target_space(source_size);
 
             if free_bytes < required {
                 findings.push(Finding {
@@ -689,43 +801,31 @@ fn gate_target_volume(target_disk: Option<&str>, source_size: u64) -> Vec<Findin
     findings
 }
 
+fn required_target_space(source_size: u64) -> u64 {
+    if source_size == 0 {
+        return 0;
+    }
+    if source_size < 64 * 1024 * 1024 {
+        return source_size;
+    }
+    let reserve = (source_size / 100).clamp(64 * 1024 * 1024, 512 * 1024 * 1024);
+    source_size.saturating_add(reserve)
+}
+
 #[cfg(windows)]
 fn gate_registry_bindings(path: &Path, link_type: &LinkType) -> Vec<Finding> {
     if !matches!(link_type, LinkType::None) {
         return Vec::new();
     }
 
-    use winreg::enums::*;
-    use winreg::RegKey;
-
     let mut findings = Vec::new();
     let path_upper = path.to_string_lossy().to_uppercase();
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let index = registry_index();
 
     let mut bound_services = Vec::new();
-    if let Ok(services_key) = hklm.open_subkey("SYSTEM\\CurrentControlSet\\Services") {
-        for name in services_key.enum_keys().filter_map(Result::ok) {
-            if let Ok(subkey) = services_key.open_subkey(&name) {
-                let start: u32 = subkey.get_value("Start").unwrap_or(4);
-                if start > 3 {
-                    continue;
-                }
-
-                if let Ok(image_path) = subkey.get_value::<String, _>("ImagePath") {
-                    if path_is_under(&image_path, &path_upper) {
-                        bound_services.push(format!("{name} (ImagePath)"));
-                    }
-                }
-
-                if let Ok(service_dll) = subkey
-                    .open_subkey("Parameters")
-                    .and_then(|p| p.get_value::<String, _>("ServiceDll"))
-                {
-                    if path_is_under(&service_dll, &path_upper) {
-                        bound_services.push(format!("{name} (ServiceDll)"));
-                    }
-                }
-            }
+    for entry in &index.services {
+        if entry.start <= 3 && normalized_path_is_under(&entry.normalized_upper, &path_upper) {
+            bound_services.push(format!("{} ({})", entry.name, entry.field));
         }
     }
 
@@ -737,36 +837,20 @@ fn gate_registry_bindings(path: &Path, link_type: &LinkType) -> Vec<Finding> {
                 "无链接模式下，{} 个 Windows 服务的路径绑定将断裂",
                 bound_services.len()
             ),
-            detail: Some(bound_services.into_iter().take(5).collect::<Vec<_>>().join(", ")),
+            detail: Some(
+                bound_services
+                    .into_iter()
+                    .take(5)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
         });
     }
 
     let mut bound_com = Vec::new();
-    let clsid_paths = [
-        "SOFTWARE\\Classes\\CLSID",
-        "SOFTWARE\\WOW6432Node\\Classes\\CLSID",
-    ];
-    for clsid_root in &clsid_paths {
-        let clsid_key = match hklm.open_subkey(clsid_root) {
-            Ok(k) => k,
-            Err(_) => continue,
-        };
-        for guid in clsid_key.enum_keys().filter_map(Result::ok) {
-            let subkey = match clsid_key.open_subkey(&guid) {
-                Ok(k) => k,
-                Err(_) => continue,
-            };
-
-            for server_key_name in ["InprocServer32", "LocalServer32"] {
-                if let Ok(server_key) = subkey.open_subkey(server_key_name) {
-                    if let Ok(dll_path) = server_key.get_value::<String, _>("") {
-                        if path_is_under(&dll_path, &path_upper) {
-                            let display: String = subkey.get_value("").unwrap_or(guid.clone());
-                            bound_com.push(format!("{display} ({server_key_name})"));
-                        }
-                    }
-                }
-            }
+    for entry in &index.com {
+        if normalized_path_is_under(&entry.normalized_upper, &path_upper) {
+            bound_com.push(format!("{} ({})", entry.display, entry.field));
         }
     }
 
@@ -783,15 +867,9 @@ fn gate_registry_bindings(path: &Path, link_type: &LinkType) -> Vec<Finding> {
     }
 
     let mut bound_app_paths = Vec::new();
-    if let Ok(app_paths_key) = hklm.open_subkey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths") {
-        for name in app_paths_key.enum_keys().filter_map(Result::ok) {
-            if let Ok(subkey) = app_paths_key.open_subkey(&name) {
-                if let Ok(exe_path) = subkey.get_value::<String, _>("") {
-                    if path_is_under(&exe_path, &path_upper) {
-                        bound_app_paths.push(name);
-                    }
-                }
-            }
+    for entry in &index.app_paths {
+        if normalized_path_is_under(&entry.normalized_upper, &path_upper) {
+            bound_app_paths.push(entry.display.clone());
         }
     }
 
@@ -803,23 +881,20 @@ fn gate_registry_bindings(path: &Path, link_type: &LinkType) -> Vec<Finding> {
                 "无链接模式下，{} 个 App Paths 注册项将断裂",
                 bound_app_paths.len()
             ),
-            detail: Some(bound_app_paths.into_iter().take(5).collect::<Vec<_>>().join(", ")),
+            detail: Some(
+                bound_app_paths
+                    .into_iter()
+                    .take(5)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
         });
     }
 
     let mut bound_tasks = Vec::new();
-    let task_path = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Tasks";
-    if let Ok(tasks_key) = hklm.open_subkey(task_path) {
-        for name in tasks_key.enum_keys().filter_map(Result::ok) {
-            if let Ok(subkey) = tasks_key.open_subkey(&name) {
-                if let Ok(raw) = subkey.get_raw_value("Actions") {
-                    let blob_text = decode_reg_binary_as_paths(&raw.bytes);
-                    if blob_contains_path(&blob_text, &path_upper) {
-                        let display: String = subkey.get_value("Path").unwrap_or(name);
-                        bound_tasks.push(display);
-                    }
-                }
-            }
+    for entry in &index.tasks {
+        if blob_contains_path_upper(&entry.value_upper, &path_upper) {
+            bound_tasks.push(entry.display.clone());
         }
     }
 
@@ -831,29 +906,20 @@ fn gate_registry_bindings(path: &Path, link_type: &LinkType) -> Vec<Finding> {
                 "无链接模式下，{} 个计划任务的路径绑定将断裂",
                 bound_tasks.len()
             ),
-            detail: Some(bound_tasks.into_iter().take(5).collect::<Vec<_>>().join(", ")),
+            detail: Some(
+                bound_tasks
+                    .into_iter()
+                    .take(5)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
         });
     }
 
-    let uninstall_paths = [
-        "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
-        "SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
-    ];
     let mut bound_apps = Vec::new();
-    for reg_path in &uninstall_paths {
-        if let Ok(key) = hklm.open_subkey(reg_path) {
-            for subkey_name in key.enum_keys().filter_map(Result::ok) {
-                if let Ok(subkey) = key.open_subkey(&subkey_name) {
-                    if let Ok(loc) = subkey.get_value::<String, _>("InstallLocation") {
-                        if !loc.is_empty() && path_is_under(&loc, &path_upper) {
-                            let display: String = subkey
-                                .get_value("DisplayName")
-                                .unwrap_or(subkey_name);
-                            bound_apps.push(display);
-                        }
-                    }
-                }
-            }
+    for entry in &index.uninstall {
+        if normalized_path_is_under(&entry.normalized_upper, &path_upper) {
+            bound_apps.push(entry.display.clone());
         }
     }
 
@@ -865,7 +931,13 @@ fn gate_registry_bindings(path: &Path, link_type: &LinkType) -> Vec<Finding> {
                 "无链接模式下，{} 个已安装应用的注册表路径将断裂",
                 bound_apps.len()
             ),
-            detail: Some(bound_apps.into_iter().take(5).collect::<Vec<_>>().join(", ")),
+            detail: Some(
+                bound_apps
+                    .into_iter()
+                    .take(5)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
         });
     }
 
@@ -883,6 +955,167 @@ fn decode_reg_binary_as_paths(bytes: &[u8]) -> String {
         }
     }
     String::from_utf8_lossy(bytes).to_string()
+}
+
+#[cfg(windows)]
+fn registry_index() -> &'static RegistryIndex {
+    static INDEX: OnceLock<RegistryIndex> = OnceLock::new();
+    INDEX.get_or_init(build_registry_index)
+}
+
+#[cfg(windows)]
+fn build_registry_index() -> RegistryIndex {
+    use winreg::enums::*;
+    use winreg::RegKey;
+
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let mut index = RegistryIndex::default();
+
+    if let Ok(services_key) = hklm.open_subkey("SYSTEM\\CurrentControlSet\\Services") {
+        for name in services_key.enum_keys().filter_map(Result::ok) {
+            let Ok(subkey) = services_key.open_subkey(&name) else {
+                continue;
+            };
+            let start: u32 = subkey.get_value("Start").unwrap_or(4);
+            let service_type: u32 = subkey.get_value("Type").unwrap_or(0);
+
+            if let Ok(image_path) = subkey.get_value::<String, _>("ImagePath") {
+                push_service_binding(
+                    &mut index.services,
+                    &name,
+                    "ImagePath",
+                    image_path,
+                    start,
+                    service_type,
+                );
+            }
+
+            if let Ok(service_dll) = subkey
+                .open_subkey("Parameters")
+                .and_then(|p| p.get_value::<String, _>("ServiceDll"))
+            {
+                push_service_binding(
+                    &mut index.services,
+                    &name,
+                    "ServiceDll",
+                    service_dll,
+                    start,
+                    service_type,
+                );
+            }
+        }
+    }
+
+    for clsid_root in [
+        "SOFTWARE\\Classes\\CLSID",
+        "SOFTWARE\\WOW6432Node\\Classes\\CLSID",
+    ] {
+        let Ok(clsid_key) = hklm.open_subkey(clsid_root) else {
+            continue;
+        };
+        for guid in clsid_key.enum_keys().filter_map(Result::ok) {
+            let Ok(subkey) = clsid_key.open_subkey(&guid) else {
+                continue;
+            };
+            for server_key_name in ["InprocServer32", "LocalServer32"] {
+                let Ok(server_key) = subkey.open_subkey(server_key_name) else {
+                    continue;
+                };
+                let Ok(path) = server_key.get_value::<String, _>("") else {
+                    continue;
+                };
+                let display: String = subkey.get_value("").unwrap_or(guid.clone());
+                push_path_binding(&mut index.com, display, server_key_name, path);
+            }
+        }
+    }
+
+    if let Ok(app_paths_key) =
+        hklm.open_subkey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths")
+    {
+        for name in app_paths_key.enum_keys().filter_map(Result::ok) {
+            let Ok(subkey) = app_paths_key.open_subkey(&name) else {
+                continue;
+            };
+            if let Ok(exe_path) = subkey.get_value::<String, _>("") {
+                push_path_binding(&mut index.app_paths, name, "AppPath", exe_path);
+            }
+        }
+    }
+
+    if let Ok(tasks_key) = hklm
+        .open_subkey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Tasks")
+    {
+        for name in tasks_key.enum_keys().filter_map(Result::ok) {
+            let Ok(subkey) = tasks_key.open_subkey(&name) else {
+                continue;
+            };
+            if let Ok(raw) = subkey.get_raw_value("Actions") {
+                let display: String = subkey.get_value("Path").unwrap_or(name);
+                index.tasks.push(RegistryBlobBinding {
+                    display,
+                    value_upper: decode_reg_binary_as_paths(&raw.bytes).to_uppercase(),
+                });
+            }
+        }
+    }
+
+    for reg_path in [
+        "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+        "SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+    ] {
+        let Ok(key) = hklm.open_subkey(reg_path) else {
+            continue;
+        };
+        for subkey_name in key.enum_keys().filter_map(Result::ok) {
+            let Ok(subkey) = key.open_subkey(&subkey_name) else {
+                continue;
+            };
+            let Ok(loc) = subkey.get_value::<String, _>("InstallLocation") else {
+                continue;
+            };
+            if loc.is_empty() {
+                continue;
+            }
+            let display: String = subkey.get_value("DisplayName").unwrap_or(subkey_name);
+            push_path_binding(&mut index.uninstall, display, "InstallLocation", loc);
+        }
+    }
+
+    index
+}
+
+#[cfg(windows)]
+fn push_service_binding(
+    bindings: &mut Vec<RegistryServiceBinding>,
+    name: &str,
+    field: &str,
+    value: String,
+    start: u32,
+    service_type: u32,
+) {
+    bindings.push(RegistryServiceBinding {
+        name: name.to_string(),
+        field: field.to_string(),
+        normalized_upper: normalize_reg_path(&value).to_uppercase(),
+        value,
+        start,
+        service_type,
+    });
+}
+
+#[cfg(windows)]
+fn push_path_binding(
+    bindings: &mut Vec<RegistryPathBinding>,
+    display: String,
+    field: &str,
+    value: String,
+) {
+    bindings.push(RegistryPathBinding {
+        display,
+        field: field.to_string(),
+        normalized_upper: normalize_reg_path(&value).to_uppercase(),
+    });
 }
 
 #[cfg(not(windows))]
@@ -928,4 +1161,3 @@ fn identify_app_type(path: &Path, path_upper: &str) -> String {
     }
     "未知类型".into()
 }
-

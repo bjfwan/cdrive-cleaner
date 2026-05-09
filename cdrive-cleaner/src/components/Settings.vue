@@ -64,6 +64,7 @@ watch(activeTab, (tab) => {
 });
 
 async function checkElevation() {
+  isCheckingElevation.value = true;
   try {
     isElevated.value = await invoke<boolean>('is_elevated');
   } catch {
@@ -79,6 +80,7 @@ function loadSettings() {
 
 function saveSettings() {
   persistSettings(settings.value);
+  settings.value = getSettings();
   emit('save', settings.value);
   emit('close');
 }
@@ -86,13 +88,13 @@ function saveSettings() {
 function handleAdminToggle(event: Event) {
   const target = event.target as HTMLInputElement;
   const wantsElevated = target.checked;
-  
+
   if (wantsElevated && !isElevated.value) {
     showRestartConfirm.value = true;
   } else if (!wantsElevated && isElevated.value) {
     showDisableAdminConfirm.value = true;
   }
-  
+
   target.checked = isElevated.value;
 }
 
@@ -154,13 +156,22 @@ async function deleteCacheEntry(entry: CacheEntry) {
   }
 }
 
+async function deleteSelectedCacheEntry() {
+  if (!deletingCacheEntry.value) {
+    showDeleteCacheConfirm.value = false;
+    return;
+  }
+
+  await deleteCacheEntry(deletingCacheEntry.value);
+}
+
 function confirmDeleteCache(entry: CacheEntry) {
   deletingCacheEntry.value = entry;
   showDeleteCacheConfirm.value = true;
 }
 
 function getScanTypeLabel(scanType: string): string {
-  return '深度扫描';
+  return scanType === 'deep' ? '深度扫描' : scanType;
 }
 </script>
 
@@ -183,14 +194,13 @@ function getScanTypeLabel(scanType: string): string {
         </button>
         <button 
           :class="['tab-btn', { active: activeTab === 'cache' }]"
-          @click="activeTab = 'cache'; loadCacheInfo()"
+          @click="activeTab = 'cache'"
         >
           缓存管理
         </button>
       </div>
 
       <div class="panel-body">
-        <!-- 常规设置 -->
         <div v-show="activeTab === 'general'" class="tab-content">
         <div class="setting-section">
           <div class="section-header">
@@ -347,7 +357,6 @@ function getScanTypeLabel(scanType: string): string {
         </div>
         </div>
 
-        <!-- 缓存管理 -->
         <div v-show="activeTab === 'cache'" class="tab-content">
         <div class="setting-section">
           <div class="section-header">
@@ -473,7 +482,7 @@ function getScanTypeLabel(scanType: string): string {
       confirm-text="确定删除"
       cancel-text="取消"
       type="warning"
-      @confirm="deleteCacheEntry(deletingCacheEntry!)"
+      @confirm="deleteSelectedCacheEntry"
       @cancel="showDeleteCacheConfirm = false; deletingCacheEntry = null"
     />
   </div>
@@ -490,11 +499,11 @@ function getScanTypeLabel(scanType: string): string {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: settingsOverlayIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: auto;
 }
 
-@keyframes fadeIn {
+@keyframes settingsOverlayIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
@@ -534,6 +543,7 @@ function getScanTypeLabel(scanType: string): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex: 0 0 auto;
   padding: 2rem 2rem 1.5rem;
   border-bottom: 1px solid var(--color-border-light);
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0.6) 0%, rgba(255, 252, 245, 0.3) 100%);
@@ -542,6 +552,7 @@ function getScanTypeLabel(scanType: string): string {
 .tabs-container {
   display: flex;
   gap: 0.5rem;
+  flex: 0 0 auto;
   padding: 0 2rem;
   background: linear-gradient(to bottom, rgba(255, 252, 245, 0.3) 0%, transparent 100%);
   border-bottom: 1px solid var(--color-border-light);
@@ -558,7 +569,7 @@ function getScanTypeLabel(scanType: string): string {
   border-bottom: 2px solid transparent;
   cursor: pointer;
   transition: all var(--transition-base);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   position: relative;
 }
 
@@ -585,10 +596,11 @@ function getScanTypeLabel(scanType: string): string {
 }
 
 .tab-content {
-  animation: fadeIn 0.3s ease-in-out;
+  min-height: 0;
+  animation: settingsTabIn 0.3s ease-in-out;
 }
 
-@keyframes fadeIn {
+@keyframes settingsTabIn {
   from {
     opacity: 0;
     transform: translateY(8px);
@@ -604,7 +616,7 @@ function getScanTypeLabel(scanType: string): string {
   font-size: 1.75rem;
   font-weight: 600;
   color: var(--color-text-primary);
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   margin: 0;
 }
 
@@ -630,7 +642,8 @@ function getScanTypeLabel(scanType: string): string {
 }
 
 .panel-body {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 2rem;
 }
@@ -661,7 +674,7 @@ function getScanTypeLabel(scanType: string): string {
   font-weight: 600;
   color: var(--color-text-primary);
   margin-bottom: 0.375rem;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .section-header p {
@@ -702,7 +715,7 @@ function getScanTypeLabel(scanType: string): string {
   font-weight: 600;
   color: var(--color-text-primary);
   cursor: pointer;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .setting-description {
@@ -789,6 +802,7 @@ function getScanTypeLabel(scanType: string): string {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex: 0 0 auto;
   gap: 0.75rem;
   padding: 1.5rem 2rem;
   border-top: 1px solid var(--color-border-light);
@@ -803,7 +817,7 @@ function getScanTypeLabel(scanType: string): string {
   border-radius: 12px;
   cursor: pointer;
   transition: all var(--transition-base);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .btn-secondary {
@@ -993,7 +1007,7 @@ function getScanTypeLabel(scanType: string): string {
   font-weight: 600;
   color: var(--color-text-primary);
   margin-bottom: 0.625rem;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .info-list {
@@ -1306,7 +1320,7 @@ function getScanTypeLabel(scanType: string): string {
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all var(--transition-base);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .clear-all-cache-btn:hover {

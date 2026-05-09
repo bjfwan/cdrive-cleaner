@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct NativeDirEntry {
@@ -34,6 +34,52 @@ impl UsnChangeSet {
     }
 }
 
+pub fn resolve_link_target(path: &Path) -> Option<String> {
+    let resolved = if let Ok(target) = std::fs::read_link(path) {
+        if target.is_absolute() {
+            target
+        } else if let Some(parent) = path.parent() {
+            parent.join(&target)
+        } else {
+            target
+        }
+    } else {
+        let canonical = std::fs::canonicalize(path).ok()?;
+        let original = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            std::env::current_dir().ok()?.join(path)
+        };
+
+        if canonical == original {
+            return None;
+        }
+
+        canonical
+    };
+
+    Some(resolved.to_string_lossy().to_string())
+}
+
+pub fn paths_refer_to_same_file(a: &Path, b: &Path) -> Option<bool> {
+    #[cfg(windows)]
+    {
+        let volume_a = query_volume_details(a)?.device_path;
+        let volume_b = query_volume_details(b)?.device_path;
+        if !volume_a.eq_ignore_ascii_case(&volume_b) {
+            return Some(false);
+        }
+        Some(get_path_file_id(a)? == get_path_file_id(b)?)
+    }
+
+    #[cfg(not(windows))]
+    {
+        let canonical_a = std::fs::canonicalize(a).ok()?;
+        let canonical_b = std::fs::canonicalize(b).ok()?;
+        Some(canonical_a == canonical_b)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct VolumeDetails {
     pub volume_root: PathBuf,
@@ -61,10 +107,10 @@ pub struct FileIdMetadata {
 #[cfg(not(windows))]
 use std::collections::{HashMap, HashSet};
 #[cfg(not(windows))]
-use std::path::Path;
-
-#[cfg(not(windows))]
-pub fn enumerate_directory(path: &Path, include_dir_file_ids: bool) -> std::io::Result<Vec<NativeDirEntry>> {
+pub fn enumerate_directory(
+    path: &Path,
+    include_dir_file_ids: bool,
+) -> std::io::Result<Vec<NativeDirEntry>> {
     let mut entries = Vec::new();
     for entry in std::fs::read_dir(path)? {
         let entry = entry?;
@@ -72,7 +118,9 @@ pub fn enumerate_directory(path: &Path, include_dir_file_ids: bool) -> std::io::
         let metadata = std::fs::symlink_metadata(&entry_path)?;
         let is_symlink = metadata.file_type().is_symlink();
         let is_dir = metadata.is_dir();
-        let modified_time = metadata.modified().ok()
+        let modified_time = metadata
+            .modified()
+            .ok()
             .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|duration| duration.as_secs());
 
@@ -84,9 +132,7 @@ pub fn enumerate_directory(path: &Path, include_dir_file_ids: bool) -> std::io::
             is_dir,
             is_symlink,
             is_readonly: metadata.permissions().readonly(),
-            file_id: include_dir_file_ids && is_dir && !is_symlink
-                .then_some(0)
-                .filter(|_| false),
+            file_id: include_dir_file_ids && is_dir && !is_symlink.then_some(0).filter(|_| false),
         });
     }
     Ok(entries)
@@ -149,35 +195,42 @@ pub fn enable_best_effort_scan_privileges() -> Vec<String> {
 
 #[cfg(windows)]
 mod windows_impl {
-    use super::{FileIdMetadata, MftEntry, NativeDirEntry, UsnChangeSet, UsnJournalCheckpoint, VolumeDetails};
+    use super::{
+        FileIdMetadata, MftEntry, NativeDirEntry, UsnChangeSet, UsnJournalCheckpoint, VolumeDetails,
+    };
     use std::collections::{HashMap, HashSet};
     use std::ffi::c_void;
     use std::iter::once;
     use std::mem::size_of;
     use std::path::{Path, PathBuf};
-    use windows::Win32::Foundation::{CloseHandle, FILETIME, HANDLE, LUID, ERROR_HANDLE_EOF, GENERIC_READ, GENERIC_WRITE};
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::{
+        CloseHandle, ERROR_HANDLE_EOF, FILETIME, GENERIC_READ, HANDLE, LUID,
+    };
     use windows::Win32::Security::{
-        AdjustTokenPrivileges, LookupPrivilegeValueW, LUID_AND_ATTRIBUTES,
-        SE_PRIVILEGE_ENABLED, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
+        AdjustTokenPrivileges, LookupPrivilegeValueW, LUID_AND_ATTRIBUTES, SE_PRIVILEGE_ENABLED,
+        TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
     };
     use windows::Win32::Storage::FileSystem::{
-        BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_ATTRIBUTE_DIRECTORY,
-        FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_REPARSE_POINT, FILE_BASIC_INFO,
-        FILE_CREATION_DISPOSITION, FILE_FLAGS_AND_ATTRIBUTES, FILE_ID_DESCRIPTOR,
-        FILE_ID_DESCRIPTOR_0, FILE_SHARE_DELETE, FILE_SHARE_MODE, FILE_SHARE_READ,
-        FILE_SHARE_WRITE, FILE_STANDARD_INFO, FIND_FIRST_EX_LARGE_FETCH, FindClose,
-        FindExInfoBasic, FindExSearchNameMatch, FindFirstFileExW, FindNextFileW,
-        GetFileInformationByHandle, GetFileInformationByHandleEx, GetVolumeInformationW,
-        OpenFileById, OPEN_EXISTING, WIN32_FIND_DATAW, FileBasicInfo, FileIdType,
-        FileStandardInfo, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+        CreateFileW, FileBasicInfo, FileIdType, FileStandardInfo, FindClose, FindExInfoBasic,
+        FindExSearchNameMatch, FindFirstFileExW, FindNextFileW, GetFileInformationByHandle,
+        GetFileInformationByHandleEx, GetVolumeInformationW, OpenFileById,
+        BY_HANDLE_FILE_INFORMATION, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_READONLY,
+        FILE_ATTRIBUTE_REPARSE_POINT, FILE_BASIC_INFO, FILE_CREATION_DISPOSITION,
+        FILE_FLAGS_AND_ATTRIBUTES, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+        FILE_ID_DESCRIPTOR, FILE_ID_DESCRIPTOR_0, FILE_SHARE_DELETE, FILE_SHARE_MODE,
+        FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_STANDARD_INFO, FIND_FIRST_EX_LARGE_FETCH,
+        OPEN_EXISTING, WIN32_FIND_DATAW,
     };
-    use windows::Win32::System::IO::DeviceIoControl;
     use windows::Win32::System::Ioctl::{
-        FSCTL_ENUM_USN_DATA, FSCTL_QUERY_USN_JOURNAL, FSCTL_READ_USN_JOURNAL,
-        MFT_ENUM_DATA_V0, READ_USN_JOURNAL_DATA_V0, USN_JOURNAL_DATA_V0, USN_RECORD_V2,
+        FSCTL_ENUM_USN_DATA, FSCTL_QUERY_USN_JOURNAL, FSCTL_READ_USN_JOURNAL, MFT_ENUM_DATA_V0,
+        READ_USN_JOURNAL_DATA_V0, USN_JOURNAL_DATA_V0, USN_RECORD_V2,
     };
     use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
-    use windows::core::PCWSTR;
+    use windows::Win32::System::IO::DeviceIoControl;
+
+    const MFT_ENUM_BUFFER_SIZE: usize = 8 * 1024 * 1024;
+    const USN_READ_BUFFER_SIZE: usize = 1024 * 1024;
 
     struct FindHandle(HANDLE);
 
@@ -235,7 +288,8 @@ mod windows_impl {
         let mut luid = LUID::default();
 
         unsafe {
-            LookupPrivilegeValueW(None, PCWSTR(wide_name.as_ptr()), &mut luid).map_err(to_io_error)?;
+            LookupPrivilegeValueW(None, PCWSTR(wide_name.as_ptr()), &mut luid)
+                .map_err(to_io_error)?;
         }
 
         let mut privileges = TOKEN_PRIVILEGES {
@@ -247,13 +301,17 @@ mod windows_impl {
         };
 
         unsafe {
-            AdjustTokenPrivileges(token, false, Some(&mut privileges), 0, None, None).map_err(to_io_error)?;
+            AdjustTokenPrivileges(token, false, Some(&mut privileges), 0, None, None)
+                .map_err(to_io_error)?;
         }
 
         Ok(())
     }
 
-    pub fn enumerate_directory(path: &Path, include_dir_file_ids: bool) -> std::io::Result<Vec<NativeDirEntry>> {
+    pub fn enumerate_directory(
+        path: &Path,
+        include_dir_file_ids: bool,
+    ) -> std::io::Result<Vec<NativeDirEntry>> {
         let search_pattern = path.join("*");
         let search_wide = to_wide(&search_pattern);
         let mut find_data = WIN32_FIND_DATAW::default();
@@ -314,7 +372,9 @@ mod windows_impl {
                 FILE_SHARE_MODE(FILE_SHARE_READ.0 | FILE_SHARE_WRITE.0 | FILE_SHARE_DELETE.0),
                 None,
                 FILE_CREATION_DISPOSITION(OPEN_EXISTING.0),
-                FILE_FLAGS_AND_ATTRIBUTES(FILE_FLAG_BACKUP_SEMANTICS.0 | FILE_FLAG_OPEN_REPARSE_POINT.0),
+                FILE_FLAGS_AND_ATTRIBUTES(
+                    FILE_FLAG_BACKUP_SEMANTICS.0 | FILE_FLAG_OPEN_REPARSE_POINT.0,
+                ),
                 HANDLE::default(),
             )
         }
@@ -372,7 +432,7 @@ mod windows_impl {
             LowUsn: 0,
             HighUsn: i64::MAX,
         };
-        let mut buffer = vec![0u8; 1024 * 1024];
+        let mut buffer = vec![0u8; MFT_ENUM_BUFFER_SIZE];
         let mut entries = Vec::new();
 
         loop {
@@ -447,7 +507,9 @@ mod windows_impl {
         let file_id_desc = FILE_ID_DESCRIPTOR {
             dwSize: size_of::<FILE_ID_DESCRIPTOR>() as u32,
             Type: FileIdType,
-            Anonymous: FILE_ID_DESCRIPTOR_0 { FileId: file_id as i64 },
+            Anonymous: FILE_ID_DESCRIPTOR_0 {
+                FileId: file_id as i64,
+            },
         };
         let flags = if open_as_directory {
             FILE_FLAG_BACKUP_SEMANTICS.0 | FILE_FLAG_OPEN_REPARSE_POINT.0
@@ -523,8 +585,7 @@ mod windows_impl {
                 Some(&mut bytes_returned),
                 None,
             )
-        }
-        {
+        } {
             eprintln!(
                 "[winfs] FSCTL_QUERY_USN_JOURNAL failed for {}: {}",
                 path.display(),
@@ -545,6 +606,7 @@ mod windows_impl {
         root_file_id: Option<u64>,
         frn_to_path: &HashMap<u64, String>,
     ) -> std::io::Result<Option<UsnChangeSet>> {
+        let started = std::time::Instant::now();
         let volume = match open_volume_handle(root_path) {
             Ok(handle) => handle,
             Err(err) => {
@@ -582,6 +644,15 @@ mod windows_impl {
         }
 
         if current.UsnJournalID != checkpoint.journal_id || current.NextUsn < checkpoint.next_usn {
+            println!(
+                "[scan-timing][winfs-usn] collect_usn_changed_dirs path={} took {:.2}ms | status=checkpoint_invalid current_journal_id={} checkpoint_journal_id={} current_next_usn={} checkpoint_next_usn={}",
+                root_path.display(),
+                started.elapsed().as_secs_f64() * 1000.0,
+                current.UsnJournalID,
+                checkpoint.journal_id,
+                current.NextUsn,
+                checkpoint.next_usn
+            );
             return Ok(None);
         }
 
@@ -598,9 +669,12 @@ mod windows_impl {
         let mut root_files_changed = false;
         let mut recursive_dirs = HashSet::new();
         let mut direct_file_dirs = HashSet::new();
-        let mut buffer = vec![0u8; 256 * 1024];
+        let mut buffer = vec![0u8; USN_READ_BUFFER_SIZE];
+        let mut read_calls = 0usize;
+        let mut records_seen = 0usize;
 
         while input.StartUsn < current.NextUsn {
+            read_calls += 1;
             let mut output_bytes = 0u32;
             if unsafe {
                 DeviceIoControl(
@@ -640,12 +714,16 @@ mod windows_impl {
                 let record_len = record.RecordLength as usize;
                 let is_dir = record.FileAttributes & FILE_ATTRIBUTE_DIRECTORY.0 != 0;
                 let file_name = read_record_name(record, &buffer[offset..offset + record_len]);
+                records_seen += 1;
 
                 let parent_path = frn_to_path.get(&record.ParentFileReferenceNumber).cloned();
                 let existing_path = frn_to_path.get(&record.FileReferenceNumber).cloned();
-                let candidate_path = parent_path
-                    .as_ref()
-                    .map(|parent| Path::new(parent).join(&file_name).to_string_lossy().to_string());
+                let candidate_path = parent_path.as_ref().map(|parent| {
+                    Path::new(parent)
+                        .join(&file_name)
+                        .to_string_lossy()
+                        .to_string()
+                });
 
                 if !is_dir {
                     if let Some(parent) = parent_path.as_ref() {
@@ -670,6 +748,19 @@ mod windows_impl {
             }
         }
 
+        println!(
+            "[scan-timing][winfs-usn] collect_usn_changed_dirs path={} took {:.2}ms | read_calls={} records_seen={} recursive_dirs={} direct_file_dirs={} root_files_changed={} start_usn={} end_usn={}",
+            root_path.display(),
+            started.elapsed().as_secs_f64() * 1000.0,
+            read_calls,
+            records_seen,
+            recursive_dirs.len(),
+            direct_file_dirs.len(),
+            root_files_changed,
+            checkpoint.next_usn,
+            current.NextUsn
+        );
+
         Ok(Some(UsnChangeSet {
             recursive_dirs,
             direct_file_dirs,
@@ -692,12 +783,15 @@ mod windows_impl {
     }
 
     pub(crate) fn open_volume_handle(path: &Path) -> std::io::Result<HANDLE> {
-        open_volume_handle_with_access(path, GENERIC_READ.0 | GENERIC_WRITE.0)
+        open_volume_handle_with_access(path, GENERIC_READ.0)
     }
 
     fn open_volume_handle_with_access(path: &Path, desired_access: u32) -> std::io::Result<HANDLE> {
         let volume_path = volume_device_path(path).ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::InvalidInput, "path is not on a local volume")
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "path is not on a local volume",
+            )
         })?;
         let wide = to_wide(Path::new(&volume_path));
         unsafe {
@@ -715,7 +809,7 @@ mod windows_impl {
     }
 
     fn open_volume_handle_for_mft(path: &Path) -> std::io::Result<HANDLE> {
-        open_volume_handle_with_access(path, GENERIC_READ.0 | GENERIC_WRITE.0)
+        open_volume_handle_with_access(path, GENERIC_READ.0)
     }
 
     fn volume_device_path(path: &Path) -> Option<String> {
@@ -779,8 +873,9 @@ mod windows_impl {
 
 #[cfg(windows)]
 pub use windows_impl::{
-    collect_usn_changed_dirs, enable_best_effort_scan_privileges, enumerate_directory, enumerate_mft, get_path_file_id,
-    query_file_metadata_by_id, query_usn_checkpoint, query_volume_details, supports_mft_scan,
+    collect_usn_changed_dirs, enable_best_effort_scan_privileges, enumerate_directory,
+    enumerate_mft, get_path_file_id, query_file_metadata_by_id, query_usn_checkpoint,
+    query_volume_details, supports_mft_scan,
 };
 #[cfg(windows)]
 pub(crate) use windows_impl::{open_volume_handle, query_file_metadata_by_id_on_volume};

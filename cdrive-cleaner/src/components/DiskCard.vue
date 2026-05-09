@@ -203,7 +203,7 @@ const usageDescription = computed(() => {
 .drive-letter {
   font-size: 1.2rem;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
 }
 
 .drive-label {

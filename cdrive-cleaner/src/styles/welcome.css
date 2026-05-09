@@ -58,23 +58,11 @@
 }
 
 .logo-section::before {
-  content: '';
-  position: absolute;
-  top: -20%;
-  left: -8%;
-  width: 18rem;
-  height: 18rem;
-  background: radial-gradient(circle, rgba(252, 226, 188, 0.7), transparent 70%);
+  content: none;
 }
 
 .logo-section::after {
-  content: '';
-  position: absolute;
-  right: -12%;
-  bottom: -30%;
-  width: 16rem;
-  height: 16rem;
-  background: radial-gradient(circle, rgba(15, 118, 110, 0.12), transparent 68%);
+  content: none;
 }
 
 .app-logo {
@@ -102,7 +90,7 @@
 }
 
 .app-title {
-  font-size: clamp(2.1rem, 4vw, 3rem);
+  font-size: 2.65rem;
   line-height: 0.92;
   margin: 1.2rem 0 0.65rem;
   animation: fadeInUp 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.18s backwards;
@@ -219,30 +207,12 @@
 .actions-section {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 1rem;
   padding: 1.4rem 2.8rem 1.8rem;
   border-top: 1px solid rgba(46, 33, 18, 0.08);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(247, 241, 232, 0.72));
   animation: fadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.52s backwards;
-}
-
-.checkbox-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  cursor: pointer;
-}
-
-.checkbox {
-  width: 1rem;
-  height: 1rem;
-  accent-color: var(--color-highlight);
-}
-
-.checkbox-text {
-  font-size: 0.88rem;
-  color: var(--color-text-secondary);
 }
 
 .button-group {

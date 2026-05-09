@@ -17,6 +17,7 @@ interface Props {
   deepScanning: boolean;
   availableDisks: DiskInfo[];
   hasDeepScanned: boolean;
+  largeFileThreshold: number;
 }
 
 const props = defineProps<Props>();
@@ -210,6 +211,7 @@ function closeMigrateDialog() {
         :files="sortedLargeFiles"
         :deep-scanning="deepScanning"
         :has-deep-scanned="hasDeepScanned"
+        :large-file-threshold="largeFileThreshold"
         @migrate-file="showMigrateFileDialog"
       />
     </div>
@@ -413,7 +415,7 @@ function closeMigrateDialog() {
   display: block;
   font-size: 1.25rem;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
 }
 
 .metric-note {

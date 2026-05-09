@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref } from 'vue';
 import appIcon from '../assets/app-icon.svg';
 import { IconScan, IconMigrate, IconLink, IconHistory } from './icons';
 
@@ -7,12 +6,8 @@ const emit = defineEmits<{
   'close': [];
 }>();
 
-const dontShowAgain = ref(false);
-
 function handleStart() {
-  if (dontShowAgain.value) {
-    localStorage.setItem('cdrive-cleaner-welcome-shown', 'true');
-  }
+  localStorage.setItem('cdrive-cleaner-welcome-shown', 'true');
   emit('close');
 }
 
@@ -25,17 +20,14 @@ function handleSkip() {
 <template>
   <div class="welcome-overlay">
     <div class="welcome-container">
-      <!-- Logo 区域 -->
       <div class="logo-section">
         <img :src="appIcon" alt="C盘清理工具" class="app-logo" width="140" height="140" />
         <h1 class="app-title">C 盘清理工具</h1>
         <p class="app-subtitle">快速释放空间，智能迁移文件</p>
       </div>
 
-      <!-- 分隔线 -->
       <div class="divider"></div>
 
-      <!-- 功能介绍 -->
       <div class="features-section">
         <h2 class="section-title">核心功能</h2>
         <div class="features-grid">
@@ -81,13 +73,7 @@ function handleSkip() {
         </div>
       </div>
 
-      <!-- 底部操作 -->
       <div class="actions-section">
-        <label class="checkbox-label">
-          <input type="checkbox" v-model="dontShowAgain" class="checkbox" />
-          <span class="checkbox-text">不再显示此页面</span>
-        </label>
-        
         <div class="button-group">
           <button class="btn btn-secondary" @click="handleSkip">
             跳过

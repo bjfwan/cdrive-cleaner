@@ -1,9 +1,9 @@
 use super::link_creator::{LinkCreator, LinkType};
 use anyhow::{anyhow, Result};
 use rayon::prelude::*;
-use std::fs;
 #[cfg(target_os = "windows")]
 use std::ffi::c_void;
+use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
@@ -40,18 +40,30 @@ pub struct FileMigrator {
     link_creator: LinkCreator,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct CopySummary {
     copied_bytes: u64,
     copied_files: usize,
     buffered_fallback_count: usize,
+    source_manifest: SourceManifest,
 }
 
 #[derive(Debug, Clone)]
 struct CopyTask {
     source: PathBuf,
     target: PathBuf,
-    expected_size: u64,
+    expected_signature: FileSignature,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FileSignature {
+    size: u64,
+    modified_ns: Option<u128>,
+}
+
+#[derive(Debug, Default, Clone)]
+struct SourceManifest {
+    entries: Vec<(PathBuf, FileSignature)>,
 }
 
 #[derive(Debug, Default)]
@@ -110,7 +122,8 @@ impl CopyProgressTracker {
     }
 
     fn snapshot(&self) -> (u64, usize, String) {
-        let current_file = self.current_file
+        let current_file = self
+            .current_file
             .lock()
             .map(|path| path.clone())
             .unwrap_or_default();
@@ -125,7 +138,9 @@ impl CopyProgressTracker {
 
 impl FileMigrator {
     pub fn new() -> Self {
-        Self { link_creator: LinkCreator::new() }
+        Self {
+            link_creator: LinkCreator::new(),
+        }
     }
 
     pub async fn migrate<P: AsRef<Path>>(
@@ -158,10 +173,14 @@ impl FileMigrator {
 
         let source_metadata = fs::symlink_metadata(source)?;
         if Self::is_link_entry(&source_metadata) {
-            return Ok(make_err("Source path is already a link placeholder".to_string()));
+            return Ok(make_err(
+                "Source path is already a link placeholder".to_string(),
+            ));
         }
 
-        let file_name = source.file_name().ok_or_else(|| anyhow!("Invalid source path"))?;
+        let file_name = source
+            .file_name()
+            .ok_or_else(|| anyhow!("Invalid source path"))?;
         let target_path = target_disk.join(file_name);
         let is_directory = source_metadata.is_dir();
         println!(
@@ -172,21 +191,32 @@ impl FileMigrator {
             link_type,
             is_directory
         );
+        let staging_path = self.create_staging_path(&target_path);
+        let mut prepared_directory_plan = None;
         let source_stats = match known_stats {
             Some(stats) => stats,
+            None if is_directory => match self.build_directory_copy_plan(source, &staging_path) {
+                Ok(plan) => {
+                    let stats = Self::stats_from_plan(&plan);
+                    prepared_directory_plan = Some(plan);
+                    stats
+                }
+                Err(err) => return Ok(make_err(format!("Prepare failed: {}", err))),
+            },
             None => Self::calculate_stats(source)?,
         };
         let (file_size, total_files) = source_stats;
         let available_space = self.get_available_space(target_disk)?;
         println!(
             "[migration-core] source_stats bytes={} files={} target_free_bytes={}",
-            file_size,
-            total_files,
-            available_space
+            file_size, total_files, available_space
         );
 
         if target_path.exists() {
-            eprintln!("[migration-core] abort target already exists: {}", target_path.display());
+            eprintln!(
+                "[migration-core] abort target already exists: {}",
+                target_path.display()
+            );
             return Ok(MigrationResult {
                 target_path: target_path.to_string_lossy().to_string(),
                 file_size,
@@ -194,11 +224,12 @@ impl FileMigrator {
             });
         }
 
-        if available_space < file_size {
+        let required_space = Self::required_target_space(file_size);
+        if available_space < required_space {
             eprintln!(
                 "[migration-core] abort target disk full target={} required={} available={}",
                 target_disk.display(),
-                file_size,
+                required_space,
                 available_space
             );
             return Ok(MigrationResult {
@@ -220,7 +251,10 @@ impl FileMigrator {
             warnings: vec![],
         };
 
-        // 带进度报告的复制
+        let cleanup_staged_target = |path: &Path| {
+            let _ = self.cleanup_target(path);
+        };
+
         self.emit_progress(
             &progress,
             "copying",
@@ -230,16 +264,28 @@ impl FileMigrator {
             total_files,
             source.to_string_lossy().as_ref(),
         );
-        let copy_summary = match self.copy_with_progress(source, &target_path, file_size, total_files, &progress) {
+        let copy_summary = match self.copy_with_progress(
+            source,
+            &staging_path,
+            file_size,
+            total_files,
+            &progress,
+            prepared_directory_plan,
+        ) {
             Ok(summary) => summary,
             Err(e) => {
-                eprintln!("[migration-core] copy failed source={} target={} error={e}", source.display(), target_path.display());
+                let _ = self.cleanup_target(&staging_path);
+                eprintln!(
+                    "[migration-core] copy failed source={} staging={} error={e}",
+                    source.display(),
+                    staging_path.display()
+                );
                 return Ok(make_err_with_target(format!("Copy failed: {}", e)));
             }
         };
         println!(
-            "[migration-core] copy complete target={} copied_bytes={} copied_files={} elapsed_ms={}",
-            target_path.display(),
+            "[migration-core] copy complete staging={} copied_bytes={} copied_files={} elapsed_ms={}",
+            staging_path.display(),
             copy_summary.copied_bytes,
             copy_summary.copied_files,
             start.elapsed().as_millis()
@@ -255,10 +301,10 @@ impl FileMigrator {
             target_path.to_string_lossy().as_ref(),
         );
         if copy_summary.copied_bytes != file_size || copy_summary.copied_files != total_files {
-            let _ = self.cleanup_target(&target_path);
+            let _ = self.cleanup_target(&staging_path);
             eprintln!(
-                "[migration-core] verification failed target={} expected_bytes={} actual_bytes={} expected_files={} actual_files={}",
-                target_path.display(),
+                "[migration-core] verification failed staging={} expected_bytes={} actual_bytes={} expected_files={} actual_files={}",
+                staging_path.display(),
                 file_size,
                 copy_summary.copied_bytes,
                 total_files,
@@ -266,7 +312,56 @@ impl FileMigrator {
             );
             return Ok(make_err_with_target("Verification failed".to_string()));
         }
-        println!("[migration-core] verification passed target={}", target_path.display());
+        println!(
+            "[migration-core] verification passed staging={}",
+            staging_path.display()
+        );
+
+        if target_path.exists() {
+            let _ = self.cleanup_target(&staging_path);
+            return Ok(make_err_with_target(
+                "Target path already exists".to_string(),
+            ));
+        }
+
+        if let Err(e) = fs::rename(&staging_path, &target_path) {
+            let _ = self.cleanup_target(&staging_path);
+            eprintln!(
+                "[migration-core] commit failed staging={} target={} error={e}",
+                staging_path.display(),
+                target_path.display()
+            );
+            return Ok(make_err_with_target(format!("Commit failed: {}", e)));
+        }
+        println!(
+            "[migration-core] commit complete staging={} target={}",
+            staging_path.display(),
+            target_path.display()
+        );
+
+        if let Err(e) = Self::verify_committed_target(&target_path, is_directory, file_size) {
+            let _ = self.cleanup_target(&target_path);
+            eprintln!(
+                "[migration-core] committed target verification failed target={} error={e}",
+                target_path.display()
+            );
+            return Ok(make_err_with_target(format!(
+                "Target verification failed: {}",
+                e
+            )));
+        }
+
+        if let Err(e) = Self::verify_source_manifest(&copy_summary.source_manifest) {
+            cleanup_staged_target(&target_path);
+            eprintln!(
+                "[migration-core] source changed after copy source={} error={e}",
+                source.display()
+            );
+            return Ok(make_err_with_target(format!(
+                "Source changed during migration: {}",
+                e
+            )));
+        }
 
         let mut copy_warnings = Vec::new();
         if copy_summary.buffered_fallback_count > 0 {
@@ -279,7 +374,11 @@ impl FileMigrator {
         let backup_path = self.create_backup_path(source);
         if let Err(e) = fs::rename(source, &backup_path) {
             let _ = self.cleanup_target(&target_path);
-            eprintln!("[migration-core] backup failed source={} backup={} error={e}", source.display(), backup_path.display());
+            eprintln!(
+                "[migration-core] backup failed source={} backup={} error={e}",
+                source.display(),
+                backup_path.display()
+            );
             return Ok(make_err_with_target(format!("Backup failed: {}", e)));
         }
         println!(
@@ -287,6 +386,23 @@ impl FileMigrator {
             source.display(),
             backup_path.display()
         );
+
+        if let Err(e) = Self::verify_rebased_source_manifest(
+            &copy_summary.source_manifest,
+            source,
+            &backup_path,
+        ) {
+            let _ = fs::rename(&backup_path, source);
+            let _ = self.cleanup_target(&target_path);
+            eprintln!(
+                "[migration-core] backup verification failed backup={} error={e}",
+                backup_path.display()
+            );
+            return Ok(make_err_with_target(format!(
+                "Source changed during migration: {}",
+                e
+            )));
+        }
 
         if link_type == LinkType::None {
             self.emit_progress(
@@ -327,7 +443,12 @@ impl FileMigrator {
             total_files,
             source.to_string_lossy().as_ref(),
         );
-        let actual_link_type = match self.link_creator.create_link(source, &target_path, link_type.clone(), is_directory) {
+        let actual_link_type = match self.link_creator.create_link(
+            source,
+            &target_path,
+            link_type.clone(),
+            is_directory,
+        ) {
             Ok(lt) => lt,
             Err(e) => {
                 let _ = fs::rename(&backup_path, source);
@@ -363,7 +484,10 @@ impl FileMigrator {
                 ..make_err_with_target("Link verification failed".to_string())
             });
         }
-        println!("[migration-core] link verification passed source={}", source.display());
+        println!(
+            "[migration-core] link verification passed source={}",
+            source.display()
+        );
 
         self.emit_progress(
             &progress,
@@ -401,7 +525,10 @@ impl FileMigrator {
         }
         let mut total_size = 0u64;
         let mut total_count = 0usize;
-        for entry in jwalk::WalkDir::new(path).skip_hidden(false).follow_links(false) {
+        for entry in jwalk::WalkDir::new(path)
+            .skip_hidden(false)
+            .follow_links(false)
+        {
             if let Ok(entry) = entry {
                 if let Ok(m) = entry.metadata() {
                     if m.is_file() {
@@ -418,23 +545,30 @@ impl FileMigrator {
         #[cfg(target_os = "windows")]
         {
             use std::os::windows::ffi::OsStrExt;
-            use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
             use windows::core::PCWSTR;
+            use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
 
-            let path_wide: Vec<u16> = path.as_ref().as_os_str()
-                .encode_wide().chain(std::iter::once(0)).collect();
+            let path_wide: Vec<u16> = path
+                .as_ref()
+                .as_os_str()
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect();
             let mut free_bytes = 0u64;
             unsafe {
                 GetDiskFreeSpaceExW(
                     PCWSTR(path_wide.as_ptr()),
-                    None, None,
+                    None,
+                    None,
                     Some(&mut free_bytes as *mut u64),
                 )?;
             }
             Ok(free_bytes)
         }
         #[cfg(not(target_os = "windows"))]
-        { Ok(u64::MAX) }
+        {
+            Ok(u64::MAX)
+        }
     }
 
     #[cfg(target_os = "windows")]
@@ -450,27 +584,111 @@ impl FileMigrator {
         metadata.file_type().is_symlink()
     }
 
-    fn verify_copied_file(&self, expected_size: u64, target: &Path) -> Result<()> {
+    fn verify_copied_file(
+        &self,
+        source: &Path,
+        expected_signature: FileSignature,
+        target: &Path,
+    ) -> Result<()> {
+        let current_source = Self::source_entry_signature_from_path(source)?;
+        if current_source != expected_signature {
+            return Err(anyhow!(
+                "Source changed during migration: {}",
+                source.display()
+            ));
+        }
+
         let target_metadata = fs::metadata(target)?;
         if !target_metadata.is_file() {
             return Err(anyhow!("Target file missing after copy"));
         }
-        if target_metadata.len() != expected_size {
+        if target_metadata.len() != expected_signature.size {
             return Err(anyhow!(
                 "Target file size mismatch: expected {} bytes, got {} bytes",
-                expected_size,
+                expected_signature.size,
                 target_metadata.len()
             ));
         }
         Ok(())
     }
 
-    fn source_entry_size(path: &Path, metadata: &fs::Metadata) -> Result<u64> {
+    fn source_entry_signature(path: &Path, metadata: &fs::Metadata) -> Result<FileSignature> {
         if Self::is_link_entry(metadata) {
-            Ok(fs::metadata(path)?.len())
+            Self::signature_from_metadata(&fs::metadata(path)?)
         } else {
-            Ok(metadata.len())
+            Self::signature_from_metadata(metadata)
         }
+    }
+
+    fn source_entry_signature_from_path(path: &Path) -> Result<FileSignature> {
+        let metadata = fs::symlink_metadata(path)?;
+        Self::source_entry_signature(path, &metadata)
+    }
+
+    fn verify_source_manifest(manifest: &SourceManifest) -> Result<()> {
+        for (path, expected) in &manifest.entries {
+            let actual = Self::source_entry_signature_from_path(path)?;
+            if actual != *expected {
+                return Err(anyhow!("{}", path.display()));
+            }
+        }
+        Ok(())
+    }
+
+    fn verify_rebased_source_manifest(
+        manifest: &SourceManifest,
+        original_root: &Path,
+        rebased_root: &Path,
+    ) -> Result<()> {
+        for (path, expected) in &manifest.entries {
+            let rebased = if path == original_root {
+                rebased_root.to_path_buf()
+            } else {
+                path.strip_prefix(original_root)
+                    .map(|relative| rebased_root.join(relative))
+                    .unwrap_or_else(|_| rebased_root.to_path_buf())
+            };
+            let actual = Self::source_entry_signature_from_path(&rebased)?;
+            if actual != *expected {
+                return Err(anyhow!("{}", rebased.display()));
+            }
+        }
+        Ok(())
+    }
+
+    fn verify_committed_target(path: &Path, is_directory: bool, expected_size: u64) -> Result<()> {
+        let metadata = fs::metadata(path)?;
+        if is_directory {
+            if !metadata.is_dir() {
+                return Err(anyhow!("Target is not a directory"));
+            }
+            return Ok(());
+        }
+
+        if !metadata.is_file() {
+            return Err(anyhow!("Target is not a file"));
+        }
+        if metadata.len() != expected_size {
+            return Err(anyhow!(
+                "Target size mismatch: expected {} bytes, got {} bytes",
+                expected_size,
+                metadata.len()
+            ));
+        }
+        Ok(())
+    }
+
+    fn signature_from_metadata(metadata: &fs::Metadata) -> Result<FileSignature> {
+        let modified_ns = metadata
+            .modified()
+            .ok()
+            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|duration| duration.as_nanos());
+
+        Ok(FileSignature {
+            size: metadata.len(),
+            modified_ns,
+        })
     }
 
     fn copy_buffer_size(file_size: u64) -> usize {
@@ -481,6 +699,15 @@ impl FileMigrator {
         } else {
             DEFAULT_COPY_BUFFER_SIZE
         }
+    }
+
+    fn required_target_space(file_size: u64) -> u64 {
+        if file_size < 64 * 1024 * 1024 {
+            return file_size;
+        }
+
+        let reserve = (file_size / 100).clamp(64 * 1024 * 1024, 512 * 1024 * 1024);
+        file_size.saturating_add(reserve)
     }
 
     #[cfg(target_os = "windows")]
@@ -533,11 +760,11 @@ impl FileMigrator {
                     continue;
                 }
 
-                let expected_size = Self::source_entry_size(src.as_path(), &metadata)?;
+                let expected_signature = Self::source_entry_signature(src.as_path(), &metadata)?;
                 plan.files.push(CopyTask {
                     source: src,
                     target: dst,
-                    expected_size,
+                    expected_signature,
                 });
             }
         }
@@ -561,6 +788,29 @@ impl FileMigrator {
         Ok(())
     }
 
+    fn stats_from_plan(plan: &DirectoryCopyPlan) -> (u64, usize) {
+        let total_size = plan.files.iter().fold(0u64, |sum, task| {
+            sum.saturating_add(task.expected_signature.size)
+        });
+        (total_size, plan.files.len())
+    }
+
+    fn source_manifest_from_plan(plan: &DirectoryCopyPlan) -> Result<SourceManifest> {
+        let mut entries = Vec::with_capacity(plan.dir_pairs.len() + plan.files.len());
+        for (source, _) in &plan.dir_pairs {
+            entries.push((
+                source.clone(),
+                Self::source_entry_signature_from_path(source)?,
+            ));
+        }
+        entries.extend(
+            plan.files
+                .iter()
+                .map(|task| (task.source.clone(), task.expected_signature)),
+        );
+        Ok(SourceManifest { entries })
+    }
+
     fn start_progress_reporter(
         progress: &Option<MigrationProgressCallback>,
         tracker: &Arc<CopyProgressTracker>,
@@ -570,24 +820,22 @@ impl FileMigrator {
         let progress = progress.clone()?;
         let tracker = Arc::clone(tracker);
 
-        Some(std::thread::spawn(move || {
-            loop {
-                std::thread::sleep(PROGRESS_EMIT_INTERVAL);
+        Some(std::thread::spawn(move || loop {
+            std::thread::sleep(PROGRESS_EMIT_INTERVAL);
 
-                let (copied_bytes, copied_files, current_file) = tracker.snapshot();
-                Self::emit_progress_impl(
-                    Some(&progress),
-                    "copying",
-                    copied_bytes,
-                    total_size,
-                    copied_files,
-                    total_files,
-                    &current_file,
-                );
+            let (copied_bytes, copied_files, current_file) = tracker.snapshot();
+            Self::emit_progress_impl(
+                Some(&progress),
+                "copying",
+                copied_bytes,
+                total_size,
+                copied_files,
+                total_files,
+                &current_file,
+            );
 
-                if tracker.should_stop.load(Ordering::Relaxed) {
-                    break;
-                }
+            if tracker.should_stop.load(Ordering::Relaxed) {
+                break;
             }
         }))
     }
@@ -600,6 +848,7 @@ impl FileMigrator {
         total_size: u64,
         total_files: usize,
         fallback_path: &Path,
+        source_manifest: SourceManifest,
     ) -> CopySummary {
         tracker.should_stop.store(true, Ordering::Relaxed);
         if let Some(handle) = reporter {
@@ -627,6 +876,7 @@ impl FileMigrator {
             copied_bytes,
             copied_files,
             buffered_fallback_count: tracker.buffered_fallback_count.load(Ordering::Relaxed),
+            source_manifest,
         }
     }
 
@@ -644,7 +894,7 @@ impl FileMigrator {
         &self,
         source: &Path,
         target: &Path,
-        expected_size: u64,
+        expected_signature: FileSignature,
         progress: Option<&CopyProgressTracker>,
     ) -> Result<u64> {
         #[cfg(target_os = "windows")]
@@ -666,7 +916,7 @@ impl FileMigrator {
             .create_new(true)
             .open(target)?;
 
-        let mut buffer = vec![0u8; Self::copy_buffer_size(expected_size)];
+        let mut buffer = vec![0u8; Self::copy_buffer_size(expected_signature.size)];
         let mut copied = 0u64;
 
         loop {
@@ -684,6 +934,7 @@ impl FileMigrator {
         }
 
         output.flush()?;
+        output.sync_all()?;
 
         if let Ok(source_metadata) = fs::metadata(source) {
             let _ = fs::set_permissions(target, source_metadata.permissions());
@@ -698,20 +949,28 @@ impl FileMigrator {
         &self,
         source: &Path,
         target: &Path,
-        expected_size: u64,
+        expected_signature: FileSignature,
         progress: Option<&CopyProgressTracker>,
     ) -> Result<u64> {
         use std::os::windows::ffi::OsStrExt;
 
-        let source_wide: Vec<u16> = source.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
-        let target_wide: Vec<u16> = target.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        let source_wide: Vec<u16> = source
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let target_wide: Vec<u16> = target
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
         let mut progress_context = progress.map(|tracker| CopyFile2ProgressContext {
             tracker: tracker as *const CopyProgressTracker,
             source: source.to_path_buf(),
             last_reported: AtomicU64::new(0),
         });
         let copy_flags = COPY_FILE_FAIL_IF_EXISTS
-            | if Self::should_use_copyfile_no_buffering(expected_size) {
+            | if Self::should_use_copyfile_no_buffering(expected_signature.size) {
                 COPY_FILE_NO_BUFFERING
             } else {
                 0
@@ -790,10 +1049,15 @@ impl FileMigrator {
         &self,
         source: &Path,
         target: &Path,
-        expected_size: u64,
+        expected_signature: FileSignature,
         progress: Option<&CopyProgressTracker>,
     ) -> Result<u64> {
-        let copied = match self.copy_file_via_copyfile2(source, target, expected_size, progress) {
+        let copied = match self.copy_file_via_copyfile2(
+            source,
+            target,
+            expected_signature,
+            progress,
+        ) {
             Ok(copied) => copied,
             Err(copyfile2_err) => {
                 let _ = fs::remove_file(target);
@@ -804,11 +1068,11 @@ impl FileMigrator {
                 if let Some(p) = progress {
                     p.buffered_fallback_count.fetch_add(1, Ordering::Relaxed);
                 }
-                self.copy_file_buffered(source, target, expected_size, progress)?
+                self.copy_file_buffered(source, target, expected_signature, progress)?
             }
         };
 
-        self.verify_copied_file(expected_size, target)?;
+        self.verify_copied_file(source, expected_signature, target)?;
 
         if let Some(progress) = progress {
             progress.finish_file(source);
@@ -822,11 +1086,11 @@ impl FileMigrator {
         &self,
         source: &Path,
         target: &Path,
-        expected_size: u64,
+        expected_signature: FileSignature,
         progress: Option<&CopyProgressTracker>,
     ) -> Result<u64> {
         let copied = fs::copy(source, target)?;
-        self.verify_copied_file(expected_size, target)?;
+        self.verify_copied_file(source, expected_signature, target)?;
 
         if let Some(progress) = progress {
             progress.complete_file(source, copied);
@@ -845,10 +1109,16 @@ impl FileMigrator {
     ) -> Result<CopySummary> {
         let tracker = Arc::new(CopyProgressTracker::default());
         let reporter = Self::start_progress_reporter(progress, &tracker, total_size, total_files);
+        let source_manifest = Self::source_manifest_from_plan(plan)?;
 
         let copy_result = (|| -> Result<()> {
             for task in &plan.files {
-                self.copy_file_optimized(&task.source, &task.target, task.expected_size, Some(tracker.as_ref()))?;
+                self.copy_file_optimized(
+                    &task.source,
+                    &task.target,
+                    task.expected_signature,
+                    Some(tracker.as_ref()),
+                )?;
             }
             Ok(())
         })();
@@ -858,7 +1128,15 @@ impl FileMigrator {
             return Err(err);
         }
 
-        Ok(self.finish_copy_progress(progress, tracker, reporter, total_size, total_files, fallback_path))
+        Ok(self.finish_copy_progress(
+            progress,
+            tracker,
+            reporter,
+            total_size,
+            total_files,
+            fallback_path,
+            source_manifest,
+        ))
     }
 
     fn copy_directory_parallel(
@@ -871,9 +1149,15 @@ impl FileMigrator {
     ) -> Result<CopySummary> {
         let tracker = Arc::new(CopyProgressTracker::default());
         let reporter = Self::start_progress_reporter(progress, &tracker, total_size, total_files);
+        let source_manifest = Self::source_manifest_from_plan(plan)?;
 
         let copy_result = plan.files.par_iter().try_for_each(|task| -> Result<()> {
-            self.copy_file_optimized(&task.source, &task.target, task.expected_size, Some(tracker.as_ref()))?;
+            self.copy_file_optimized(
+                &task.source,
+                &task.target,
+                task.expected_signature,
+                Some(tracker.as_ref()),
+            )?;
             Ok(())
         });
 
@@ -882,10 +1166,17 @@ impl FileMigrator {
             return Err(err);
         }
 
-        Ok(self.finish_copy_progress(progress, tracker, reporter, total_size, total_files, fallback_path))
+        Ok(self.finish_copy_progress(
+            progress,
+            tracker,
+            reporter,
+            total_size,
+            total_files,
+            fallback_path,
+            source_manifest,
+        ))
     }
 
-    /// 带进度报告的复制
     fn copy_with_progress(
         &self,
         source: &Path,
@@ -893,20 +1184,39 @@ impl FileMigrator {
         total_size: u64,
         total_files: usize,
         progress: &Option<MigrationProgressCallback>,
+        prepared_directory_plan: Option<DirectoryCopyPlan>,
     ) -> Result<CopySummary> {
         if source.is_file() {
+            let source_metadata = fs::symlink_metadata(source)?;
+            let source_signature = Self::source_entry_signature(source, &source_metadata)?;
             let tracker = Arc::new(CopyProgressTracker::default());
             let tracked_files = total_files.max(1);
-            let reporter = Self::start_progress_reporter(progress, &tracker, total_size, tracked_files);
+            let reporter =
+                Self::start_progress_reporter(progress, &tracker, total_size, tracked_files);
 
-            if let Err(err) = self.copy_file_optimized(source, target, total_size, Some(tracker.as_ref())) {
+            if let Err(err) =
+                self.copy_file_optimized(source, target, source_signature, Some(tracker.as_ref()))
+            {
                 Self::stop_progress_reporter(&tracker, reporter);
                 return Err(err);
             }
-            return Ok(self.finish_copy_progress(progress, tracker, reporter, total_size, tracked_files, source));
+            return Ok(self.finish_copy_progress(
+                progress,
+                tracker,
+                reporter,
+                total_size,
+                tracked_files,
+                source,
+                SourceManifest {
+                    entries: vec![(source.to_path_buf(), source_signature)],
+                },
+            ));
         }
 
-        let plan = self.build_directory_copy_plan(source, target)?;
+        let plan = match prepared_directory_plan {
+            Some(plan) => plan,
+            None => self.build_directory_copy_plan(source, target)?,
+        };
         self.prepare_directory_copy_plan(&plan)?;
 
         let result = if Self::should_parallelize_directory_copy(total_size, total_files) {
@@ -939,6 +1249,37 @@ impl FileMigrator {
         unreachable!()
     }
 
+    fn create_staging_path(&self, target_path: &Path) -> PathBuf {
+        let parent = target_path.parent().unwrap_or_else(|| Path::new("."));
+        let file_name = target_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy();
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or(0);
+
+        for attempt in 0.. {
+            let suffix = if attempt == 0 {
+                format!(".cdrive-staging.{}.{}", std::process::id(), nonce)
+            } else {
+                format!(
+                    ".cdrive-staging.{}.{}.{}",
+                    std::process::id(),
+                    nonce,
+                    attempt
+                )
+            };
+            let candidate = parent.join(format!("{file_name}{suffix}"));
+            if !candidate.exists() {
+                return candidate;
+            }
+        }
+
+        unreachable!()
+    }
+
     fn finalize_directory_metadata(plan: &DirectoryCopyPlan) {
         for (src, dst) in plan.dir_pairs.iter().rev() {
             Self::copy_timestamps(src, dst);
@@ -948,18 +1289,25 @@ impl FileMigrator {
     #[cfg(target_os = "windows")]
     fn copy_timestamps(source: &Path, target: &Path) {
         use std::os::windows::ffi::OsStrExt;
-        use windows::Win32::Foundation::{HANDLE, CloseHandle};
-        use windows::Win32::Storage::FileSystem::{
-            CreateFileW, GetFileTime, SetFileTime,
-            FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAGS_AND_ATTRIBUTES,
-            FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_SHARE_MODE,
-            FILE_CREATION_DISPOSITION, OPEN_EXISTING, FILE_GENERIC_WRITE,
-        };
-        use windows::Win32::Foundation::FILETIME;
         use windows::core::PCWSTR;
+        use windows::Win32::Foundation::FILETIME;
+        use windows::Win32::Foundation::{CloseHandle, HANDLE};
+        use windows::Win32::Storage::FileSystem::{
+            CreateFileW, GetFileTime, SetFileTime, FILE_CREATION_DISPOSITION,
+            FILE_FLAGS_AND_ATTRIBUTES, FILE_FLAG_BACKUP_SEMANTICS, FILE_GENERIC_WRITE,
+            FILE_SHARE_MODE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+        };
 
-        let src_wide: Vec<u16> = source.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
-        let dst_wide: Vec<u16> = target.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        let src_wide: Vec<u16> = source
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let dst_wide: Vec<u16> = target
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
 
         let src_handle = unsafe {
             CreateFileW(
@@ -1144,19 +1492,27 @@ impl FileMigrator {
         };
 
         if !target.exists() {
-            eprintln!("[migration-core] rollback abort missing target={}", target.display());
+            eprintln!(
+                "[migration-core] rollback abort missing target={}",
+                target.display()
+            );
             return Ok(make_err("Target not found".to_string()));
         }
 
         if source.exists() {
             if let Err(e) = self.remove_path(source) {
-                eprintln!("[migration-core] rollback failed removing source link {}: {e}", source.display());
+                eprintln!(
+                    "[migration-core] rollback failed removing source link {}: {e}",
+                    source.display()
+                );
                 return Ok(make_err(format!("Failed to remove link: {}", e)));
             }
         }
 
         let (target_size, target_files) = Self::calculate_stats(target)?;
-        if let Err(e) = self.copy_with_progress(target, source, target_size, target_files, &None) {
+        if let Err(e) =
+            self.copy_with_progress(target, source, target_size, target_files, &None, None)
+        {
             eprintln!(
                 "[migration-core] rollback failed restoring source={} from target={} error={e}",
                 source.display(),
@@ -1166,7 +1522,10 @@ impl FileMigrator {
         }
 
         if let Err(e) = self.cleanup_target(target) {
-            eprintln!("[migration-core] rollback failed cleaning target={} error={e}", target.display());
+            eprintln!(
+                "[migration-core] rollback failed cleaning target={} error={e}",
+                target.display()
+            );
             return Ok(make_err(format!("Failed to cleanup target: {}", e)));
         }
 
@@ -1258,7 +1617,9 @@ mod tests {
 
         let migrated_target = target_disk.join("dataset");
         assert!(migrated_target.exists());
-        assert!(migrator.link_creator.verify_link(&source_dir, &migrated_target)?);
+        assert!(migrator
+            .link_creator
+            .verify_link(&source_dir, &migrated_target)?);
 
         let rollback = migrator.rollback(&source_dir, &migrated_target).await?;
         assert!(rollback.success, "rollback failed: {:?}", rollback.error);
@@ -1307,8 +1668,34 @@ mod tests {
 
         let progress_events = progress_events.lock().unwrap();
         assert!(!progress_events.is_empty());
-        assert!(progress_events.iter().any(|event| event.status == "copying"));
-        assert!(progress_events.iter().any(|event| event.status == "cleaning_up"));
+        assert!(progress_events
+            .iter()
+            .any(|event| event.status == "copying"));
+        assert!(progress_events
+            .iter()
+            .any(|event| event.status == "cleaning_up"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn migrate_file_fails_when_source_changes_before_commit() -> Result<()> {
+        let workspace = TestWorkspace::new("migration-changing-source")?;
+        let source_disk = workspace.path().join("source");
+        let target_disk = workspace.path().join("target");
+        let source_file = source_disk.join("changing.bin");
+
+        fs::create_dir_all(&source_disk)?;
+        fs::create_dir_all(&target_disk)?;
+        write_test_file(&source_file, &[1u8; 1024])?;
+
+        let source_signature = FileMigrator::source_entry_signature_from_path(&source_file)?;
+        let manifest = SourceManifest {
+            entries: vec![(source_file.clone(), source_signature)],
+        };
+        write_test_file(&source_file, &[2u8; 2048])?;
+
+        assert!(FileMigrator::verify_source_manifest(&manifest).is_err());
 
         Ok(())
     }

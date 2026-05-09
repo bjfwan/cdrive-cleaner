@@ -1,6 +1,6 @@
 use anyhow::Result;
-use rusqlite::{Connection, params};
-use serde::{Serialize, Deserialize};
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -22,7 +22,8 @@ pub struct ScanCacheDb {
 impl ScanCacheDb {
     pub fn new(db_path: &str) -> Result<Self> {
         let conn = Connection::open(db_path)?;
-        conn.execute_batch("
+        conn.execute_batch(
+            "
             PRAGMA journal_mode=WAL;
             PRAGMA synchronous=NORMAL;
             PRAGMA cache_size=-8000;
@@ -37,15 +38,25 @@ impl ScanCacheDb {
                 UNIQUE(disk_path, scan_type)
             );
             CREATE INDEX IF NOT EXISTS idx_disk_path ON scan_cache(disk_path);
-        ")?;
-        Ok(Self { conn: Arc::new(Mutex::new(conn)) })
+        ",
+        )?;
+        Ok(Self {
+            conn: Arc::new(Mutex::new(conn)),
+        })
     }
 
     fn lock_conn(&self) -> MutexGuard<'_, Connection> {
         self.conn.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    pub fn save_scan_result(&self, disk_path: &str, scan_type: &str, result_json: &str, file_count: i64, total_size: i64) -> Result<i64> {
+    pub fn save_scan_result(
+        &self,
+        disk_path: &str,
+        scan_type: &str,
+        result_json: &str,
+        file_count: i64,
+        total_size: i64,
+    ) -> Result<i64> {
         let conn = self.lock_conn();
         conn.execute(
             "INSERT INTO scan_cache (disk_path, scan_type, result_json, file_count, total_size, created_at)
@@ -60,7 +71,11 @@ impl ScanCacheDb {
         Ok(conn.last_insert_rowid())
     }
 
-    pub fn get_scan_result(&self, disk_path: &str, scan_type: &str) -> Result<Option<CachedScanResult>> {
+    pub fn get_scan_result(
+        &self,
+        disk_path: &str,
+        scan_type: &str,
+    ) -> Result<Option<CachedScanResult>> {
         let conn = self.lock_conn();
         let mut stmt = conn.prepare(
             "SELECT id, disk_path, scan_type, result_json, created_at, file_count, total_size FROM scan_cache WHERE disk_path = ?1 AND scan_type = ?2"
@@ -68,9 +83,13 @@ impl ScanCacheDb {
         let mut rows = stmt.query(params![disk_path, scan_type])?;
         match rows.next()? {
             Some(row) => Ok(Some(CachedScanResult {
-                id: row.get(0)?, disk_path: row.get(1)?, scan_type: row.get(2)?,
-                result_json: row.get(3)?, created_at: row.get(4)?,
-                file_count: row.get(5)?, total_size: row.get(6)?,
+                id: row.get(0)?,
+                disk_path: row.get(1)?,
+                scan_type: row.get(2)?,
+                result_json: row.get(3)?,
+                created_at: row.get(4)?,
+                file_count: row.get(5)?,
+                total_size: row.get(6)?,
             })),
             None => Ok(None),
         }
@@ -102,9 +121,18 @@ impl ScanCacheDb {
              WHERE scan_type = 'deep'
              ORDER BY created_at DESC"
         )?;
-        let rows = stmt.query_map([], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?))
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
     }
 

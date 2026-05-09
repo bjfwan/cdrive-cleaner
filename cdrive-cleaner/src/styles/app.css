@@ -10,29 +10,7 @@
 
 .app::before,
 .app::after {
-  content: '';
-  position: absolute;
-  border-radius: 999px;
-  filter: blur(40px);
-  opacity: 0.8;
-  z-index: -1;
-  pointer-events: none;
-}
-
-.app::before {
-  top: -12rem;
-  left: -10rem;
-  width: 28rem;
-  height: 28rem;
-  background: radial-gradient(circle, rgba(252, 226, 188, 0.85) 0%, rgba(252, 226, 188, 0) 68%);
-}
-
-.app::after {
-  right: -14rem;
-  bottom: -16rem;
-  width: 32rem;
-  height: 32rem;
-  background: radial-gradient(circle, rgba(183, 213, 239, 0.7) 0%, rgba(183, 213, 239, 0) 70%);
+  content: none;
 }
 
 .sidebar {
@@ -365,7 +343,7 @@
   font-size: 1.25rem;
   font-weight: 800;
   color: var(--color-text-primary);
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
 }
 
 .summary-note {
@@ -541,7 +519,7 @@
 .scan-capability-copy strong {
   font-size: 0.95rem;
   color: var(--color-text-primary);
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .scan-capability-copy p {
@@ -676,7 +654,7 @@
 .btn-label {
   font-size: 1rem;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .btn-hint {
@@ -1062,7 +1040,7 @@
 
 .dashboard-hero-copy h2 {
   max-width: 9ch;
-  font-size: clamp(2.05rem, 4vw, 3.15rem);
+  font-size: 2.8rem;
   line-height: 0.96;
   margin-bottom: 0.55rem;
 }
@@ -1259,7 +1237,7 @@
 
 .scan-waiting h2 {
   max-width: 14ch;
-  font-size: clamp(1.9rem, 3.4vw, 2.5rem);
+  font-size: 2.35rem;
   line-height: 1;
   margin-bottom: 0.6rem;
 }

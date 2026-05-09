@@ -1,14 +1,14 @@
-mod scanner;
-pub mod migration;
-mod database;
 mod commands;
+mod database;
 pub mod diagnostics;
+pub mod migration;
 pub mod safety;
+mod scanner;
 mod utils;
 mod winfs;
 
+use database::{MigrationDb, ScanCacheDb};
 use scanner::DiskScanner;
-use database::{ScanCacheDb, MigrationDb};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

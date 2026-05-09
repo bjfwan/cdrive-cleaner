@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed } from 'vue';
 import { IconFile, IconDocument, IconMigrate } from './icons';
 import type { FileInfo } from '../types';
 import { formatBytes, formatDate } from '../utils/format';
-import { getSettings } from '../utils/settings';
 
 interface Props {
   files: FileInfo[];
   deepScanning?: boolean;
   hasDeepScanned: boolean;
+  largeFileThreshold: number;
 }
 
 const props = defineProps<Props>();
@@ -17,14 +17,8 @@ defineEmits<{
   'migrate-file': [file: FileInfo];
 }>();
 
-const largeFileThreshold = ref(100);
-
-onMounted(() => {
-  largeFileThreshold.value = getSettings().largeFileThreshold;
-});
-
 const filteredFiles = computed(() => {
-  const thresholdBytes = largeFileThreshold.value * 1024 * 1024;
+  const thresholdBytes = props.largeFileThreshold * 1024 * 1024;
   return props.files.filter((file) => file.size >= thresholdBytes);
 });
 </script>
