@@ -349,7 +349,6 @@ onUnmounted(() => {
     linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(240, 247, 244, 0.97));
   border: 1px solid rgba(15, 118, 110, 0.12);
   box-shadow: 0 18px 34px rgba(26, 20, 14, 0.08);
-  backdrop-filter: blur(18px);
 }
 
 .progress-top {

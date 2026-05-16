@@ -117,9 +117,8 @@ onUnmounted(() => {
   gap: 0.95rem;
   padding: 1rem 1.15rem 1rem 1rem;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.84);
+  background: rgba(255, 255, 255, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.58);
-  backdrop-filter: blur(24px) saturate(130%);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }

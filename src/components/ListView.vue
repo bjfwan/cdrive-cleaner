@@ -470,7 +470,6 @@ function getVerdictClass(verdict?: string): string {
   padding: 0.95rem 1rem;
   background: rgba(244, 239, 232, 0.94);
   border-bottom: 1px solid var(--color-border-light);
-  backdrop-filter: blur(18px);
 }
 
 .th {
