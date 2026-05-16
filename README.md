@@ -72,4 +72,4 @@ npm run tauri build    # 出安装包
 
 ## 许可
 
-暂未设置许可证。如需复用请先开 issue 沟通。
+[MIT License](LICENSE) © 2026 bjfwan
