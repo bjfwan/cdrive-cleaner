@@ -191,4 +191,19 @@ impl IndexedScanResult {
     fn is_root_files_node(root_path: &str, node: &DirectoryNode) -> bool {
         path_matches(&node.path, root_path) && node.name == "根目录文件"
     }
+
+    /// Smart-scan 用：返回根路径。
+    pub fn root_path(&self) -> &str {
+        &self.root_path
+    }
+
+    /// Smart-scan 用：遍历索引内所有目录节点（已剥离 children，只含元数据）。
+    pub fn iter_nodes(&self) -> impl Iterator<Item = &DirectoryNode> {
+        self.nodes.values()
+    }
+
+    /// Smart-scan 用：遍历所有大文件。
+    pub fn large_files_iter(&self) -> impl Iterator<Item = &FileInfo> {
+        self.large_files.iter()
+    }
 }

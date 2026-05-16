@@ -315,6 +315,32 @@ pub fn get_directory_snapshot(
 }
 
 #[tauri::command]
+pub fn analyze_smart_groups(
+    root_path: String,
+    scanner: tauri::State<'_, DiskScanner>,
+) -> Result<crate::scanner::smart_scan::SmartScanReport, String> {
+    scanner
+        .with_indexed(&root_path, |indexed| {
+            crate::scanner::smart_scan::build_report(indexed)
+        })
+        .ok_or_else(|| "尚未扫描，请先执行深度扫描".to_string())
+}
+
+#[tauri::command]
+pub fn reveal_in_explorer(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        Command::new("explorer.exe")
+            .arg(format!("/select,{}", path))
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    let _ = path;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn cancel_scan(scanner: tauri::State<'_, DiskScanner>) -> Result<(), String> {
     scanner.cancel();
     Ok(())

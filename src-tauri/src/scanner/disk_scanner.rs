@@ -56,6 +56,15 @@ impl DiskScanner {
             .and_then(|indexed| indexed.snapshot_for_path(path))
     }
 
+    pub fn with_indexed<F, T>(&self, root_path: &str, f: F) -> Option<T>
+    where
+        F: FnOnce(&IndexedScanResult) -> T,
+    {
+        let sessions = self.sessions.lock().ok()?;
+        let indexed = sessions.get(root_path)?;
+        Some(f(indexed))
+    }
+
     #[cfg(windows)]
     fn get_disk_usage(path: &Path) -> Option<(u64, u64, u64)> {
         let path_str = path.to_string_lossy().to_string();

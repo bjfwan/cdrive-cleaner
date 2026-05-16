@@ -47,6 +47,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::scan_disk_deep,
             commands::get_directory_snapshot,
+            commands::analyze_smart_groups,
+            commands::reveal_in_explorer,
             commands::cancel_scan,
             commands::scan_directory_files,
             commands::migrate_file,

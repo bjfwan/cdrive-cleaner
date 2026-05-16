@@ -132,6 +132,7 @@ fn path_starts_with(candidate: &Path, prefix: &Path) -> bool {
     candidate_components.starts_with(&prefix_components)
 }
 
+#[allow(dead_code)]
 fn path_starts_with_str(candidate: &str, prefix: &Path) -> bool {
     path_starts_with(Path::new(candidate), prefix)
 }
@@ -1243,7 +1244,11 @@ async fn scan_incremental_internal(
             path,
         )
     } else {
-        merge_scan_results(
+        let merge_inner_timer = StageTimer::start(
+            "incremental",
+            format!("stage3_merge_inner path={}", path.display()),
+        );
+        let result = merge_scan_results(
             cached_directories,
             rescanned_dirs
                 .iter()
@@ -1251,7 +1256,9 @@ async fn scan_incremental_internal(
                 .collect(),
             deleted_paths,
             path,
-        )
+        );
+        merge_inner_timer.finish_with(format!("nodes={}", result.len()));
+        result
     };
     upsert_root_files_node(
         &mut updated_tree,
@@ -1265,11 +1272,30 @@ async fn scan_incremental_internal(
         merge_start.elapsed().as_secs_f64() * 1000.0
     );
 
-    // 重新计算总数
+    let totals_timer = StageTimer::start(
+        "incremental",
+        format!("stage3_compute_totals path={}", path.display()),
+    );
     let (tree_size, tree_files) = sum_tree(&updated_tree);
     let (new_total_size, new_total_files) = (tree_size, tree_files);
     let new_total_dirs = count_directories(&updated_tree, &root_path_str);
+    totals_timer.finish_with(format!(
+        "files={} dirs={} size={}",
+        new_total_files, new_total_dirs, new_total_size
+    ));
+
+    let health_timer = StageTimer::start(
+        "incremental",
+        format!("stage3_health_check path={}", path.display()),
+    );
     let merge_health = inspect_tree_merge_health(&updated_tree, path);
+    health_timer.finish_with(format!(
+        "unique_dirs={} dup={} orphan={} inconsistent={}",
+        merge_health.unique_dir_nodes,
+        merge_health.duplicate_paths,
+        merge_health.orphan_root_count,
+        merge_health.inconsistent_node_count
+    ));
     tracing::info!(
         "[阶段3] 合并后树校验 roots={} unique_dirs={} duplicate_paths={} orphan_roots={} inconsistent_nodes={}",
         updated_tree.len(),
@@ -1620,6 +1646,15 @@ pub fn merge_scan_results(
     deleted_paths: Vec<String>,
     root_path: &Path,
 ) -> Vec<DirectoryNode> {
+    merge_scan_results_flat(old_tree, changed_dirs, deleted_paths, root_path)
+}
+
+fn merge_scan_results_flat(
+    old_tree: Vec<DirectoryNode>,
+    changed_dirs: Vec<DirectoryNode>,
+    deleted_paths: Vec<String>,
+    root_path: &Path,
+) -> Vec<DirectoryNode> {
     let deleted_paths: Vec<PathBuf> = deleted_paths.into_iter().map(PathBuf::from).collect();
     let mut flat = HashMap::new();
     flatten_tree(old_tree, &mut flat);
@@ -1656,6 +1691,8 @@ pub fn merge_scan_results(
         }
     }
 
+    let mut subtree_prefixes: Vec<PathBuf> = Vec::with_capacity(deleted_paths.len() + changed_dirs.len());
+
     for deleted_path in &deleted_paths {
         let deleted_key = normalized_path_key(deleted_path);
         if let Some(old_node) = flat.get(&deleted_key).cloned() {
@@ -1668,9 +1705,10 @@ pub fn merge_scan_results(
                 -(old_node.dir_count as isize),
             );
         }
-        flat.retain(|_, node| !path_starts_with_str(&node.path, deleted_path));
+        subtree_prefixes.push(deleted_path.clone());
     }
 
+    let mut to_flatten: Vec<DirectoryNode> = Vec::with_capacity(changed_dirs.len());
     for changed_dir in changed_dirs {
         let changed_path = PathBuf::from(&changed_dir.path);
         let previous = flat
@@ -1697,8 +1735,38 @@ pub fn merge_scan_results(
             file_delta,
             dir_delta,
         );
-        flat.retain(|_, node| !path_starts_with_str(&node.path, &changed_path));
-        flatten_tree(vec![changed_dir], &mut flat);
+        subtree_prefixes.push(changed_path);
+        to_flatten.push(changed_dir);
+    }
+
+    if !subtree_prefixes.is_empty() {
+        let normalized_prefixes: Vec<String> = subtree_prefixes
+            .iter()
+            .map(|p| {
+                let mut s = normalized_path_key(p);
+                if !s.ends_with('\\') {
+                    s.push('\\');
+                }
+                s
+            })
+            .collect();
+        let exact_keys: std::collections::HashSet<String> = subtree_prefixes
+            .iter()
+            .map(|p| normalized_path_key(p))
+            .collect();
+
+        flat.retain(|key, _node| {
+            if exact_keys.contains(key) {
+                return false;
+            }
+            !normalized_prefixes
+                .iter()
+                .any(|prefix| key.starts_with(prefix.as_str()))
+        });
+    }
+
+    if !to_flatten.is_empty() {
+        flatten_tree(to_flatten, &mut flat);
     }
 
     rebuild_tree(flat, root_path)
