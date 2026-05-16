@@ -711,6 +711,7 @@ async function startBatchMigration() {
   max-height: 90vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   font-family: var(--font-sans);
 }

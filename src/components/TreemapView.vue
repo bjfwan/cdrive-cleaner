@@ -77,7 +77,6 @@ const treemapOption = computed(() => {
         top: 0,
         bottom: 0,
         squareRatio: 0.82,
-        leafDepth: 1,
         visibleMin: 120,
         data: treemapData.value,
         roam: false,
@@ -85,10 +84,12 @@ const treemapOption = computed(() => {
         breadcrumb: { show: false },
         label: {
           show: true,
-          formatter: (params: { name: string; width: number; height: number }) => {
-            const area = params.width * params.height;
-            if (area < 1800) return '';
-            if (area < 4000) return params.name.slice(0, 10);
+          formatter: (params: { name: string; width?: number; height?: number }) => {
+            const w = params.width ?? 0;
+            const h = params.height ?? 0;
+            const area = w * h;
+            // 块太小不渲染文字，避免视觉噪声
+            if (area < 1800 || w < 36 || h < 22) return '';
             return params.name;
           },
           fontSize: 12,
@@ -96,6 +97,7 @@ const treemapOption = computed(() => {
           fontWeight: 700,
           fontFamily: 'Manrope, Microsoft YaHei UI, sans-serif',
           overflow: 'truncate',
+          ellipsis: '…',
           padding: [4, 8],
           backgroundColor: 'rgba(23, 23, 23, 0.18)',
           borderRadius: 10,
@@ -227,6 +229,7 @@ function handleItemClick(dir: DirectoryNode) {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
   border-radius: var(--radius-lg);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(247, 241, 232, 0.88));
   border: 1px solid var(--color-border-light);

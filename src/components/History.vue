@@ -195,8 +195,9 @@ const loadHistory = async () => {
     ])
     records.value = historyData
     stats.value = statsData
-  } catch {
-    showToast('加载历史记录失败', '无法读取迁移历史数据', 'error')
+  } catch (err) {
+    console.error('[History] loadHistory failed:', err)
+    showToast('加载历史记录失败', String(err), 'error')
   } finally {
     loading.value = false
   }
@@ -256,9 +257,9 @@ onMounted(() => {
   align-items: start;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1.6rem 1.8rem 1.2rem;
+  /* 右侧多 3.4rem 给外层 modal-close ✕ 按钮让位（2.7rem 宽 + 间距） */
+  padding: 1.6rem 5.2rem 1.2rem 1.8rem;
   background: rgba(251, 247, 241, 0.92);
-  backdrop-filter: blur(18px);
   border-bottom: 1px solid var(--color-border-light);
 }
 

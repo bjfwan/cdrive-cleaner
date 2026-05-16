@@ -128,8 +128,9 @@ impl MigrationDb {
             Ok(MigrationStats {
                 total_count: row.get(0)?,
                 total_size: row.get::<_, Option<i64>>(1)?.unwrap_or(0) as u64,
-                active_count: row.get(2)?,
-                rolled_back_count: row.get(3)?,
+                // 空表时 SUM(CASE ...) 返回 NULL，必须用 Option 接
+                active_count: row.get::<_, Option<i64>>(2)?.unwrap_or(0),
+                rolled_back_count: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
             })
         })
         .map_err(Into::into)

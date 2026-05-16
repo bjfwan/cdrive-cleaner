@@ -509,7 +509,6 @@ function closeMigrateDialog() {
   border: 1px solid rgba(217, 119, 6, 0.14);
   color: #8f5a12;
   box-shadow: var(--shadow-sm);
-  backdrop-filter: blur(18px);
   font-size: 0.84rem;
 }
 
