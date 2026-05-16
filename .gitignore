@@ -1,12 +1,11 @@
-# Tauri
-src-tauri/target/
-src-tauri/WixTools/
-
-# Node
-node_modules/
+# Build output
 dist/
 dist-ssr/
-*.local
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Dependencies
+node_modules/
 
 # Logs
 *.log
@@ -16,24 +15,25 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Editor
+# Editor / IDE
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# Local tooling / agent workspace
+# Local agent / AI workspace
 .kiro/
 
-# Database
+# Local databases
 *.db
 *.db-shm
 *.db-wal
 
 # OS
+.DS_Store
 Thumbs.db
+*.local

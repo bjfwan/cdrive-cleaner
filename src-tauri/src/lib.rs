@@ -1,9 +1,9 @@
 mod commands;
-mod database;
+pub mod database;
 pub mod diagnostics;
 pub mod migration;
 pub mod safety;
-mod scanner;
+pub mod scanner;
 mod utils;
 mod winfs;
 
