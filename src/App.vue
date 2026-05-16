@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, provide, ref, shallowRef, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import appIcon from './assets/app-icon.svg';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import DeepScanProgress from './components/DeepScanProgress.vue';
-import DiskCard from './components/DiskCard.vue';
 import { IconDeepScan, IconHistory, IconSettings } from './components/icons';
-import ScanResults from './components/ScanResults.vue';
 import Toast from './components/Toast.vue';
+import Cart from './components/Cart.vue';
+import Workspace from './components/Workspace.vue';
 import { TOAST_KEY } from './composables/useToast';
+import { useCart } from './composables/useCart';
 import type { AppSettings, DiskInfo, ScanCapabilities, ScanResult, ToastType } from './types';
 import { formatBytes } from './utils/format';
 import { getSettings } from './utils/settings';
@@ -16,6 +17,8 @@ import { getSettings } from './utils/settings';
 const Settings = defineAsyncComponent(() => import('./components/Settings.vue'));
 const History = defineAsyncComponent(() => import('./components/History.vue'));
 const Welcome = defineAsyncComponent(() => import('./components/Welcome.vue'));
+const MigrateDialog = defineAsyncComponent(() => import('./components/MigrateDialog.vue'));
+const CommandPalette = defineAsyncComponent(() => import('./components/CommandPalette.vue'));
 
 const disks = ref<DiskInfo[]>([]);
 const selectedDisk = ref<string>('');
@@ -23,7 +26,6 @@ const deepScanning = ref(false);
 const scanResult = shallowRef<ScanResult | null>(null);
 const scanCapabilities = shallowRef<ScanCapabilities | null>(null);
 const error = ref<string>('');
-const viewMode = ref<'treemap' | 'list' | 'large-files'>('treemap');
 const navigationStack = ref<string[]>([]);
 const hasDeepScanned = ref(false);
 const loadingScanCapabilities = ref(false);
@@ -37,17 +39,24 @@ const toastType = ref<ToastType>('success');
 const showSettings = ref(false);
 const showHistory = ref(false);
 const showWelcome = ref(false);
+const showCommandPalette = ref(false);
+const showMigrateDialog = ref(false);
+const migrateTargetItem = ref<{ path: string; name: string; size: number; file_count: number } | null>(null);
+const cartBusy = ref(false);
+const cartProgress = ref<{ current: number; total: number; currentItem: string }>({ current: 0, total: 0, currentItem: '' });
+const cartResults = ref<Array<{ path: string; ok: true } | { path: string; ok: false; name: string; error: string }>>([]);
 const appSettings = ref<AppSettings>(getSettings());
+
+const cart = useCart();
 
 let deepScanResult: ScanResult | null = null;
 let deepScanCache = new Map<string, ScanResult>();
+const driveSessions = new Map<string, { root: ScanResult; navStack: string[] }>();
 
 const selectedDiskInfo = computed(() =>
   disks.value.find((disk) => `${disk.drive_letter}\\` === selectedDisk.value),
 );
 
-const totalStorage = computed(() => disks.value.reduce((sum, disk) => sum + disk.total_space, 0));
-const totalFreeSpace = computed(() => disks.value.reduce((sum, disk) => sum + disk.free_space, 0));
 const activeAnalysisPath = computed(
   () => navigationStack.value[navigationStack.value.length - 1] || selectedDisk.value,
 );
@@ -93,43 +102,64 @@ const scanCapabilityShortLabel = computed(() => {
   return '目录枚举';
 });
 
-const selectedDiskMeterStyle = computed(() => {
-  const usage = selectedDiskInfo.value?.usage_percent ?? 0;
-  const usageDegrees = Math.min(Math.max(usage, 0), 100) * 3.6;
-  return {
-    background: `
-      radial-gradient(circle at center, rgba(255, 255, 255, 0.88) 0 55%, transparent 56%),
-      conic-gradient(
-        from -90deg,
-        rgba(15, 118, 110, 0.88) 0deg,
-        rgba(15, 118, 110, 0.88) ${usageDegrees}deg,
-        rgba(15, 118, 110, 0.16) ${usageDegrees}deg,
-        rgba(15, 118, 110, 0.08) 360deg
-      )
-    `,
-  };
-});
-
 provide(TOAST_KEY, showToastNotification);
 
 onMounted(async () => {
   await loadDisks();
   loadUserSettings();
   checkFirstLaunch();
+  window.addEventListener('keydown', onGlobalKey);
 });
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onGlobalKey);
+});
+
+function onGlobalKey(e: KeyboardEvent) {
+  const ctrlOrMeta = e.ctrlKey || e.metaKey;
+  if (ctrlOrMeta && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    showCommandPalette.value = !showCommandPalette.value;
+  }
+}
 
 watch(
   selectedDisk,
-  (path, prev) => {
+  async (path, prev) => {
     void refreshScanCapabilities(path);
 
-    if (path && path !== prev) {
-      // Avoid mixing scan results / caches across volumes.
-      scanResult.value = null;
-      navigationStack.value = [];
-      error.value = '';
-      resetDeepState();
+    if (!path || path === prev) {
+      return;
     }
+
+    if (prev && scanResult.value) {
+      driveSessions.set(prev, {
+        root: deepScanResult ?? scanResult.value,
+        navStack: [...navigationStack.value],
+      });
+    }
+
+    error.value = '';
+
+    const session = driveSessions.get(path);
+    if (session) {
+      deepScanResult = session.root;
+      deepScanCache = new Map([[path, session.root]]);
+      navigationStack.value = session.navStack.length > 0 ? [...session.navStack] : [path];
+      hasDeepScanned.value = true;
+      const currentPath = navigationStack.value[navigationStack.value.length - 1];
+      try {
+        scanResult.value = currentPath === path ? session.root : await loadDeepSnapshot(currentPath);
+      } catch {
+        scanResult.value = session.root;
+        navigationStack.value = [path];
+      }
+      return;
+    }
+
+    scanResult.value = null;
+    navigationStack.value = [];
+    resetDeepState();
   },
 );
 
@@ -176,6 +206,18 @@ function setRootSnapshot(result: ScanResult) {
   deepScanResult = result;
   deepScanCache = new Map([[selectedDisk.value, result]]);
   hasDeepScanned.value = true;
+  driveSessions.set(selectedDisk.value, {
+    root: result,
+    navStack: navigationStack.value.length > 0 ? [...navigationStack.value] : [selectedDisk.value],
+  });
+}
+
+function syncDriveSession() {
+  if (!hasDeepScanned.value || !selectedDisk.value || !deepScanResult) return;
+  driveSessions.set(selectedDisk.value, {
+    root: deepScanResult,
+    navStack: navigationStack.value.length > 0 ? [...navigationStack.value] : [selectedDisk.value],
+  });
 }
 
 function formatScanBackendLabel(backend?: string | null) {
@@ -323,6 +365,7 @@ async function navigateToPath(path: string) {
 
     scanResult.value = await loadDeepSnapshot(path);
     navigationStack.value.push(path);
+    syncDriveSession();
   } catch {
     showToastNotification('目录快照失效', '请重新执行一次扫描', 'warning');
   }
@@ -379,6 +422,7 @@ async function goBack() {
     }
 
     scanResult.value = await loadDeepSnapshot(previousPath);
+    syncDriveSession();
   } catch {
     error.value = '无法返回上一层目录';
   }
@@ -432,6 +476,102 @@ async function restartAsAdmin() {
     showToastNotification('管理员重启失败', '请手动以管理员身份运行应用', 'error');
   } finally {
     showAdminRestartConfirm.value = false;
+  }
+}
+
+async function runCart(targetDisk: string) {
+  if (cart.count.value === 0) return;
+  cartBusy.value = true;
+  cartProgress.value = { current: 0, total: cart.count.value, currentItem: '' };
+  cartResults.value = [];
+  const succeeded: string[] = [];
+  const failed: Array<{ path: string; name: string; error: string }> = [];
+  const total = cart.count.value;
+
+  try {
+    const itemsSnapshot = [...cart.items.value];
+    for (let i = 0; i < itemsSnapshot.length; i++) {
+      const item = itemsSnapshot[i];
+      cartProgress.value = { current: i, total, currentItem: item.name };
+      try {
+        const safety = await invoke<{ can_migrate: boolean; findings: Array<{ severity: string; message: string }> }>(
+          'analyze_migration_safety',
+          {
+            path: item.path,
+            size: item.size,
+            linkType: appSettings.value.createSymlink ? null : 'none',
+            targetDisk,
+          },
+        );
+        if (!safety.can_migrate) {
+          const reason = safety.findings.filter((f) => f.severity === 'blocker').map((f) => f.message).join('；') || '安全检测未通过';
+          failed.push({ path: item.path, name: item.name, error: humanizeError(reason) });
+          continue;
+        }
+
+        const result = await invoke<{ success: boolean; error?: string | null }>('migrate_file', {
+          source: item.path,
+          targetDisk,
+          linkType: appSettings.value.createSymlink ? null : 'none',
+          knownSize: item.size,
+          knownFiles: item.file_count,
+        });
+        if (!result.success) {
+          failed.push({ path: item.path, name: item.name, error: humanizeError(result.error || '迁移失败') });
+          continue;
+        }
+        succeeded.push(item.path);
+        cart.remove(item.path);
+      } catch (err) {
+        failed.push({ path: item.path, name: item.name, error: humanizeError(String(err)) });
+      }
+    }
+  } finally {
+    cartBusy.value = false;
+    cartProgress.value = { current: total, total, currentItem: '' };
+    cartResults.value = [
+      ...succeeded.map((p) => ({ path: p, ok: true as const })),
+      ...failed.map((f) => ({ path: f.path, ok: false as const, name: f.name, error: f.error })),
+    ];
+  }
+
+  if (succeeded.length > 0) {
+    await refreshAfterMigration(succeeded);
+  }
+}
+
+function humanizeError(raw: string): string {
+  const lower = raw.toLowerCase();
+  if (lower.includes('拒绝访问') || lower.includes('access') || lower.includes('error 5') || lower.includes('error 32')) {
+    return '文件被进程占用。请关闭对应应用（如 Trae、Chrome、VSCode、Docker 等）后重试。';
+  }
+  if (lower.includes('disk full') || lower.includes('not enough space') || lower.includes('空间')) {
+    return '目标磁盘空间不足。';
+  }
+  if (lower.includes('not found') || lower.includes('找不到')) {
+    return '源路径已不存在，可能在扫描后被删除。';
+  }
+  if (lower.includes('permission') || lower.includes('权限')) {
+    return '权限不足，请以管理员身份运行。';
+  }
+  return raw.replace(/^[A-Za-z]+:?\s*/, '');
+}
+
+function openMigrateSingle(item: { path: string; name: string; size: number; file_count: number }) {
+  migrateTargetItem.value = item;
+  showMigrateDialog.value = true;
+}
+
+function closeMigrateDialog() {
+  showMigrateDialog.value = false;
+  migrateTargetItem.value = null;
+}
+
+async function revealInExplorer(path: string) {
+  try {
+    await invoke('reveal_in_explorer', { path });
+  } catch (err) {
+    console.warn('reveal failed', err);
   }
 }
 </script>
@@ -491,31 +631,32 @@ async function restartAsAdmin() {
             </h2>
             <p>
               {{ selectedDiskInfo
-                ? `${selectedDiskInfo.file_system} · ${formatBytes(selectedDiskInfo.total_space)} 总容量`
+                ? `${selectedDiskInfo.file_system} · ${formatBytes(selectedDiskInfo.total_space)} 总容量 · 已用 ${selectedDiskInfo.usage_percent.toFixed(0)}%`
                 : '从左侧选择一个磁盘开始分析'
               }}
             </p>
           </div>
 
           <div class="workspace-chips">
-            <div class="workspace-chip">
-              <span>可用</span>
-              <strong>{{ selectedDiskInfo ? formatBytes(selectedDiskInfo.free_space) : formatBytes(totalFreeSpace) }}</strong>
-            </div>
-
-            <div class="workspace-chip">
-              <span>已用</span>
-              <strong>{{ selectedDiskInfo ? `${selectedDiskInfo.usage_percent.toFixed(0)}%` : '--' }}</strong>
-            </div>
-
-            <div class="workspace-chip" :data-tone="scanCapabilityTone">
+            <div class="workspace-chip" :data-tone="scanCapabilityTone" :title="scanCapabilityLabel">
               <span>后端</span>
               <strong>{{ scanCapabilityShortLabel }}</strong>
             </div>
+            <button
+              v-if="scanCapabilities?.admin_recommended"
+              class="workspace-chip workspace-chip--btn"
+              @click="showAdminRestartConfirm = true"
+            >
+              <span>权限</span>
+              <strong>开启管理员</strong>
+            </button>
           </div>
         </div>
 
         <div class="workspace-actions">
+          <button class="topbar-tool" @click="showCommandPalette = true" title="命令面板（Ctrl+K）">
+            <span class="kbd">⌘ K</span>
+          </button>
           <button class="topbar-tool" @click="openHistory" title="迁移历史">
             <IconHistory :size="18" />
           </button>
@@ -529,7 +670,7 @@ async function restartAsAdmin() {
             :disabled="deepScanning || !selectedDisk"
           >
             <IconDeepScan :size="18" />
-            <span>{{ deepScanning ? '扫描中' : '开始扫描' }}</span>
+            <span>{{ deepScanning ? '扫描中' : hasDeepScanned ? '重新扫描' : '开始扫描' }}</span>
           </button>
         </div>
       </header>
@@ -538,111 +679,18 @@ async function restartAsAdmin() {
         <div class="main-scroll">
           <DeepScanProgress v-show="deepScanning" :scanning="deepScanning" class="main-deep-progress" />
 
-          <div v-if="!scanResult && !deepScanning" class="empty">
-            <div class="dashboard">
-              <section class="dashboard-panel dashboard-panel--hero">
-                <div class="dashboard-hero-copy">
-                  <span class="dashboard-kicker">{{ selectedDiskInfo ? '当前焦点' : '准备开始' }}</span>
-                  <h2>{{ selectedDiskInfo ? `${selectedDiskInfo.drive_letter} 空间概览` : '选择磁盘开始扫描' }}</h2>
-                  <p>{{ selectedDiskInfo ? '先看概览，再开始扫描。' : '左侧选盘，右侧开始分析。' }}</p>
-                </div>
-
-                <div v-if="selectedDiskInfo" class="dashboard-meter" :style="selectedDiskMeterStyle">
-                  <strong>{{ selectedDiskInfo.usage_percent.toFixed(0) }}%</strong>
-                  <span>已用</span>
-                </div>
-              </section>
-
-              <aside
-                v-if="selectedDisk"
-                class="dashboard-panel dashboard-panel--capability"
-                :data-tone="scanCapabilityTone"
-              >
-                <span class="dashboard-label">{{ scanCapabilityLabel }}</span>
-                <strong>{{ scanCapabilityShortLabel }}</strong>
-                <p>
-                  {{
-                    loadingScanCapabilities
-                      ? '正在检测可用后端'
-                      : scanCapabilities?.mft_available
-                        ? '适合直接做深度扫描'
-                        : scanCapabilities?.admin_recommended
-                          ? '管理员模式可启用 MFT + USN'
-                          : '将使用目录枚举'
-                  }}
-                </p>
-
-                <button
-                  v-if="scanCapabilities?.admin_recommended"
-                  class="dashboard-inline-btn"
-                  @click="showAdminRestartConfirm = true"
-                >
-                  开启管理员模式
-                </button>
-              </aside>
-
-              <section class="dashboard-metrics">
-                <div class="dashboard-stat">
-                  <span>当前焦点</span>
-                  <strong>{{ selectedDiskInfo?.drive_letter || '--' }}</strong>
-                  <small>{{ selectedDiskInfo ? `${selectedDiskInfo.label} · ${selectedDiskInfo.file_system}` : '等待选择磁盘' }}</small>
-                </div>
-
-                <div class="dashboard-stat">
-                  <span>可用空间</span>
-                  <strong>{{ selectedDiskInfo ? formatBytes(selectedDiskInfo.free_space) : formatBytes(totalFreeSpace) }}</strong>
-                  <small>{{ selectedDiskInfo ? '当前磁盘剩余' : '全部磁盘合计' }}</small>
-                </div>
-
-                <div class="dashboard-stat">
-                  <span>总容量</span>
-                  <strong>{{ selectedDiskInfo ? formatBytes(selectedDiskInfo.total_space) : formatBytes(totalStorage) }}</strong>
-                  <small>{{ selectedDiskInfo ? '当前磁盘容量' : `${disks.length} 个磁盘` }}</small>
-                </div>
-
-                <div class="dashboard-stat">
-                  <span>扫描建议</span>
-                  <strong>{{ hasDeepScanned ? '可继续下钻' : '直接开始扫描' }}</strong>
-                  <small>{{ hasDeepScanned ? '结果已支持下钻' : '扫描后可按目录层级浏览与迁移' }}</small>
-                </div>
-              </section>
-
-              <section class="dashboard-panel dashboard-panel--disks">
-                <div class="dashboard-section-head">
-                  <div>
-                    <h3>磁盘概览</h3>
-                    <p>完整卡片放到主工作区，方便比较。</p>
-                  </div>
-                </div>
-
-                <div class="dashboard-disk-grid">
-                  <DiskCard
-                    v-for="disk in disks"
-                    :key="disk.drive_letter"
-                    :disk="disk"
-                    :active="selectedDisk === disk.drive_letter + '\\'"
-                    @select="selectedDisk = disk.drive_letter + '\\'"
-                  />
-                </div>
-              </section>
-            </div>
-          </div>
-
-          <ScanResults
-            v-if="scanResult"
-            :result="scanResult"
-            :view-mode="viewMode"
-            :can-go-back="navigationStack.length > 1"
-            :current-path="activeAnalysisPath"
-            :deep-scanning="deepScanning"
+          <Workspace
+            :scan-result="scanResult"
+            :selected-disk="selectedDisk"
+            :selected-disk-info="selectedDiskInfo ?? null"
             :available-disks="disks"
             :has-deep-scanned="hasDeepScanned"
+            :deep-scanning="deepScanning"
             :large-file-threshold="appSettings.largeFileThreshold"
-            @update:view-mode="viewMode = $event"
+            @start-scan="startDeepScan"
             @navigate="navigateToPath"
-            @go-back="goBack"
-            @start-deep-scan="startDeepScan"
-            @migrated="refreshAfterMigration"
+            @migrate-single="openMigrateSingle"
+            @reveal="revealInExplorer"
           />
 
           <div v-if="error" class="error">{{ error }}</div>
@@ -673,6 +721,33 @@ async function restartAsAdmin() {
     </div>
 
     <Welcome v-if="showWelcome" @close="closeWelcome" />
+
+    <Cart
+      :available-disks="disks"
+      :current-drive="selectedDisk"
+      :busy="cartBusy"
+      :progress="cartProgress"
+      :results="cartResults"
+      @run="runCart"
+      @reset-results="cartResults = []"
+    />
+
+    <CommandPalette
+      :show="showCommandPalette"
+      :scan-result="scanResult"
+      @close="showCommandPalette = false"
+      @jump="navigateToPath"
+    />
+
+    <MigrateDialog
+      :show="showMigrateDialog"
+      :selected-dir="migrateTargetItem ? { path: migrateTargetItem.path, name: migrateTargetItem.name, size: migrateTargetItem.size, file_count: migrateTargetItem.file_count, dir_count: 0, children: [], has_children: false, is_symlink: false } : null"
+      :selected-file="null"
+      :selected-items="[]"
+      :available-disks="disks.filter((d) => `${d.drive_letter}\\` !== selectedDisk)"
+      @close="closeMigrateDialog"
+      @migrated="(p) => { closeMigrateDialog(); refreshAfterMigration(p); }"
+    />
 
     <ConfirmDialog
       :show="showAdminRestartConfirm"

@@ -131,3 +131,37 @@ export interface CacheInfo {
 }
 
 export type ToastType = 'success' | 'info' | 'warning' | 'error';
+
+export type SmartCategory = 'app_cache' | 'dev_tools' | 'temp_files' | 'large_files';
+export type SmartAction = 'migrate' | 'delete' | 'review';
+export type SmartRisk = 'safe' | 'caution' | 'blocked' | 'unknown';
+
+export interface SmartItem {
+  path: string;
+  name: string;
+  size: number;
+  file_count: number;
+  category: SmartCategory;
+  recommendation: SmartAction;
+  risk: SmartRisk;
+  rule: string;
+  default_selected: boolean;
+}
+
+export interface SmartGroup {
+  category: SmartCategory;
+  recommendation: SmartAction;
+  total_size: number;
+  item_count: number;
+  selected_size: number;
+  items: SmartItem[];
+}
+
+export interface SmartScanReport {
+  root_path: string;
+  generated_at_ms: number;
+  potential_savings: number;
+  default_savings: number;
+  groups: SmartGroup[];
+  analysis_duration_ms: number;
+}
