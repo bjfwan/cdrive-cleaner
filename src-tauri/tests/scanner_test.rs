@@ -93,25 +93,23 @@ mod tests {
         assert_eq!(result.total_size, 0);
     }
 
-    /// 取消标志：扫描中途调用 cancel 应让结果中止。
+    /// cancel 语义说明（基于源码 disk_scanner.rs L121 `self.reset_cancel()`）：
+    /// 每次 `scan_deep*` 进入时会自动复位取消旗，因此"先 cancel 再 scan"对新扫描
+    /// 没有副作用。这是预期行为，不是 bug。
     ///
-    /// 这个测试目前**先 cancel 再扫**，期望扫描器自身识别预设的取消旗。如果你的设计
-    /// 是"cancel 仅对正在进行的扫描生效，每次新扫描都会重置取消状态"，这条断言会
-    /// 失败 —— 这是合理的，把测试标 `#[ignore]` 即可，等行为定下来再放开。
+    /// 此测试验证：cancel 之后立即开始的扫描可以正常完成（取消旗被重置）。
     #[tokio::test]
-    #[ignore = "依赖于 cancel 在新扫描开始前是否生效，行为待确认"]
-    async fn cancelled_scan_returns_error() {
-        let ws = Workspace::new("cancel");
-        write_file(&ws.root.join("x"), b"y");
+    async fn cancel_does_not_affect_subsequent_scan() {
+        let ws = Workspace::new("cancel-reset");
+        write_file(&ws.root.join("x"), b"hello");
 
         let scanner = DiskScanner::new();
         scanner.cancel();
-        let outcome = scanner.scan_deep_silent(&ws.root, 10).await;
-        // 已取消的扫描应失败；如果你的后端选择优雅返回空结果，下面这行可放宽
-        assert!(
-            outcome.is_err(),
-            "已取消的扫描应返回错误，但得到 {:?}",
-            outcome.as_ref().map(|r| (r.total_files, r.total_size))
-        );
+        let result = scanner
+            .scan_deep_silent(&ws.root, 10)
+            .await
+            .expect("scan_deep 进入时会复位 cancel 旗，扫描应正常完成");
+        assert_eq!(result.total_files, 1);
+        assert_eq!(result.total_size, 5);
     }
 }

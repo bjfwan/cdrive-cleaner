@@ -7,6 +7,9 @@ pub mod scanner;
 mod utils;
 mod winfs;
 
+#[cfg(any(test, feature = "bench"))]
+pub mod bench;
+
 use database::{MigrationDb, ScanCacheDb};
 use scanner::DiskScanner;
 
