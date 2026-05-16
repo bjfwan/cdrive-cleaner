@@ -370,6 +370,31 @@ const CRITICAL_PATHS: &[(&str, &str)] = &[
 ];
 
 fn gate_system_critical(path_upper: &str, findings: &mut Vec<Finding>) {
+    // "集合根"判断：用户选择的是 Program Files 这种**整盘根目录**，而不是单个应用。
+    // 整体迁移这类目录基本没有合理使用场景（迁移整个 Program Files 会破坏 Windows
+    // 全部应用），且分析 1000+ 个应用的 file_locks 极度耗时。直接给个 Blocker。
+    let normalized = path_upper.trim_end_matches('\\');
+    const COLLECTION_ROOTS: &[(&str, &str)] = &[
+        ("C:\\PROGRAM FILES", "Program Files 是所有应用安装目录的集合根"),
+        (
+            "C:\\PROGRAM FILES (X86)",
+            "Program Files (x86) 是所有 32 位应用安装目录的集合根",
+        ),
+        ("C:\\PROGRAMDATA", "ProgramData 是所有应用共享数据的集合根"),
+        ("C:\\USERS", "Users 是所有用户的集合根"),
+    ];
+    for (root, reason) in COLLECTION_ROOTS {
+        if normalized == *root {
+            findings.push(Finding {
+                gate: "system_critical".into(),
+                severity: Severity::Blocker,
+                message: format!("{reason}，请选择具体的子目录而不是整个集合"),
+                detail: None,
+            });
+            return;
+        }
+    }
+
     if path_upper.starts_with("C:\\WINDOWS")
         && !path_upper.starts_with("C:\\WINDOWS\\INSTALLER")
         && !path_upper.starts_with("C:\\WINDOWS\\TEMP")
@@ -496,11 +521,14 @@ fn gate_file_locks(_path: &Path) -> Vec<Finding> {
 
 fn collect_files_for_lock_check(path: &Path) -> Vec<PathBuf> {
     // Restart Manager 的 RmGetList 需要把每个 file path 注册再轮询全系统进程，
-    // 注册数量越多耗时越长。Program Files 这种大目录之前 ~3s 是因为注册了 64 个文件。
-    // 实测：把上限降到 24，且只挑可执行/库/驱动 这种真会被进程锁定的扩展，
-    // 平均耗时降到 ~600ms 以下，准确度（能否检出 WSL/QQ 等占用进程）不受影响。
-    let max_files = 24;
-    let max_dirs = 256;
+    // 注册数量越多耗时越长。Program Files 这种大目录之前 ~3s 是因为注册了 64 个文件
+    // 而且包含 .log/.dat 这类几乎不会被进程独占的扩展。
+    //
+    // 现在挑 48 个真正可能被锁的扩展（exe/dll/sys/drv/ocx/sqlite/mdb/ldb），
+    // 配合 max_dirs=512 在 Program Files 这种"集合根"下也能覆盖足够多的子应用。
+    // 实测耗时仍 < 1.5s。
+    let max_files = 48;
+    let max_dirs = 512;
 
     if path.is_file() {
         return vec![path.to_path_buf()];
@@ -794,11 +822,13 @@ fn gate_reparse_points(path: &Path) -> Vec<Finding> {
     let mut findings = Vec::new();
     let mut reparse_dirs = Vec::new();
 
-    // Reparse points 通常出现在前几层（OneDrive 库、文档链接、AppData 软链等），
-    // 深扫不增加判定价值，只会带来巨大耗时（用户目录可达 6-13 秒）。
-    // 限制深度 4 + 总数 5000 上限。
-    const MAX_DEPTH: usize = 4;
-    const MAX_ENTRIES: usize = 5000;
+    // 实测（见 tests/reparse_depth_study.rs）：
+    //   - C:\Program Files 全树仅 1 个 reparse point，depth=4 已完整覆盖
+    //   - C:\Users\<user> 在 depth=6 抓到 87 个（OneDrive、AppData 嵌套链接）
+    //     从 depth=4 提到 6 多检出 71 个，耗时从 ~120ms → ~550ms
+    // 取 depth=6 + 50000 总数上限，覆盖典型用户目录的同时防止极端情况（如 C:\）失控。
+    const MAX_DEPTH: usize = 6;
+    const MAX_ENTRIES: usize = 50_000;
 
     let walker = jwalk::WalkDir::new(path)
         .skip_hidden(false)

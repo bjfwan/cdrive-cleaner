@@ -63,4 +63,25 @@ mod tests {
             s.analysis_duration_ms
         );
     }
+
+    /// "集合根"（C:\Program Files、C:\Users 这种）应该立即被拒，
+    /// 因为整迁集合根没有合理用途且分析极慢。
+    #[test]
+    fn collection_roots_are_blocked_immediately() {
+        for path in [r"C:\Program Files", r"C:\Program Files (x86)", r"C:\Users"] {
+            let s = analyze_path(path);
+            assert!(
+                !s.can_migrate,
+                "{} 是集合根，应禁止迁移；得到 verdict={}",
+                path,
+                verdict_str(&s)
+            );
+            assert!(
+                s.analysis_duration_ms < 100,
+                "{} 应通过 system_critical 立即拦截，但耗时 {} ms",
+                path,
+                s.analysis_duration_ms
+            );
+        }
+    }
 }

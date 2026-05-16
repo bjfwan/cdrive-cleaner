@@ -79,4 +79,17 @@ fn profile_program_files_breakdown() {
     // 用户目录
     let user = std::env::var("USERPROFILE").unwrap_or_else(|_| r"C:\Users\admin".to_string());
     run_n("user_profile (Auto)", &user, LinkType::Auto, n);
+
+    // 真实应用子目录（更接近用户实际操作场景）
+    let candidates = [
+        r"C:\Program Files\NVIDIA Corporation",
+        r"C:\Program Files\WindowsPowerShell",
+        r"C:\Program Files\Common Files",
+    ];
+    for app in candidates {
+        if Path::new(app).exists() {
+            run_n("real_app_subdir", app, LinkType::Auto, n);
+            break;
+        }
+    }
 }
