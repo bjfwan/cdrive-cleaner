@@ -130,18 +130,74 @@ where
     samples
 }
 
+/// 系统环境信息，写进报告头便于横向对比不同机器/状态下的数据。
+#[derive(Debug, Clone, Serialize)]
+pub struct SystemInfo {
+    pub os: String,
+    pub cpu_brand: String,
+    pub cpu_cores: usize,
+    pub total_memory_mb: u64,
+    pub used_memory_mb: u64,
+    pub rust_target: &'static str,
+    pub timestamp: String,
+}
+
+impl SystemInfo {
+    pub fn capture() -> Self {
+        let mut sys = sysinfo::System::new_all();
+        sys.refresh_all();
+
+        let cpu_brand = sys
+            .cpus()
+            .first()
+            .map(|c| c.brand().to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+
+        Self {
+            os: format!(
+                "{} {}",
+                sysinfo::System::name().unwrap_or_default(),
+                sysinfo::System::os_version().unwrap_or_default()
+            ),
+            cpu_brand,
+            cpu_cores: sys.cpus().len(),
+            total_memory_mb: sys.total_memory() / 1024 / 1024,
+            used_memory_mb: sys.used_memory() / 1024 / 1024,
+            rust_target: std::env::consts::ARCH,
+            timestamp: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        }
+    }
+}
+
+/// 一次基准测试运行的总输出。
+#[derive(Debug, Clone, Serialize)]
+pub struct BenchReport {
+    pub system: SystemInfo,
+    pub series: Vec<BenchSeries>,
+}
+
 /// 把多个 series 渲染成 Markdown 报告。
-pub fn render_markdown(title: &str, series: &[BenchSeries]) -> String {
+pub fn render_markdown(title: &str, report: &BenchReport) -> String {
     let mut out = String::new();
     out.push_str(&format!("# {}\n\n", title));
+
+    out.push_str("## 运行环境\n\n");
+    out.push_str(&format!("- 时间：{}\n", report.system.timestamp));
+    out.push_str(&format!("- 操作系统：{}\n", report.system.os));
     out.push_str(&format!(
-        "生成时间：{}\n\n",
-        chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+        "- CPU：{}（{} 核）\n",
+        report.system.cpu_brand, report.system.cpu_cores
     ));
+    out.push_str(&format!(
+        "- 内存：{} MB 已用 / {} MB 总量\n",
+        report.system.used_memory_mb, report.system.total_memory_mb
+    ));
+    out.push_str(&format!("- 架构：{}\n\n", report.system.rust_target));
+
     out.push_str("## 摘要\n\n");
     out.push_str("| 实验 | n | mean (ms) | median | p95 | min | max | stddev | CV |\n");
     out.push_str("|---|---|---|---|---|---|---|---|---|\n");
-    for s in series {
+    for s in &report.series {
         out.push_str(&format!(
             "| {} | {} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.3} |\n",
             s.name,
@@ -157,7 +213,7 @@ pub fn render_markdown(title: &str, series: &[BenchSeries]) -> String {
     }
     out.push_str("\n> CV = stddev / mean，越小越稳定。CV < 0.1 通常视为可重复。\n\n");
 
-    for s in series {
+    for s in &report.series {
         out.push_str(&format!("## {}\n\n", s.name));
         out.push_str(&format!("{}\n\n", s.description));
         out.push_str("| run | ms | payload |\n|---|---|---|\n");

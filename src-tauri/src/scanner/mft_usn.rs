@@ -1369,7 +1369,16 @@ fn spawn_progress_thread(
         let mut est = estimated_total.load(Ordering::Relaxed).max(1);
 
         loop {
-            std::thread::sleep(std::time::Duration::from_millis(PROGRESS_INTERVAL_MS));
+            // 把 PROGRESS_INTERVAL_MS (300ms) 拆成 15 × 20ms，每片检查停止旗，
+            // 避免扫描已结束但仍硬等满间隔的尾部延迟。
+            let mut waited = 0u64;
+            while waited < PROGRESS_INTERVAL_MS {
+                if progress_stop.load(Ordering::Relaxed) || cancelled.load(Ordering::Relaxed) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                waited += 20;
+            }
             if progress_stop.load(Ordering::Relaxed) || cancelled.load(Ordering::Relaxed) {
                 break;
             }

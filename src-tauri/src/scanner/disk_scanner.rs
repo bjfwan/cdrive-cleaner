@@ -239,7 +239,18 @@ impl DiskScanner {
             let mut last_pct = 0.0f64;
 
             loop {
-                std::thread::sleep(std::time::Duration::from_millis(500));
+                // 把 500ms 拆成 25 片 × 20ms，每片之间检查停止旗，
+                // 避免扫描已结束但还要硬等 500ms 才退出的问题。
+                let mut waited = 0u64;
+                while waited < 500 {
+                    if should_stop_c.load(Ordering::Relaxed)
+                        || cancelled_c.load(Ordering::Relaxed)
+                    {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                    waited += 20;
+                }
                 if should_stop_c.load(Ordering::Relaxed) || cancelled_c.load(Ordering::Relaxed) {
                     break;
                 }

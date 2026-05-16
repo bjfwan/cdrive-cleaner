@@ -1,0 +1,5904 @@
+{
+  "system": {
+    "os": "Windows 11 (26200)",
+    "cpu_brand": "13th Gen Intel(R) Core(TM) i9-13900HX",
+    "cpu_cores": 32,
+    "total_memory_mb": 16112,
+    "used_memory_mb": 9752,
+    "rust_target": "x86_64",
+    "timestamp": "2026-05-16 19:04:00"
+  },
+  "series": [
+    {
+      "name": "scan_30_files_shallow",
+      "description": "扫描 30 文件浅树（fanout=2, depth=2, files_per_leaf=2）",
+      "stats": {
+        "n": 30,
+        "mean_ms": 20.95898333333333,
+        "median_ms": 20.90505,
+        "p95_ms": 21.3529,
+        "min_ms": 20.6561,
+        "max_ms": 21.6943,
+        "stddev_ms": 0.2222413974088137,
+        "cv": 0.010603634435614979
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 21.1745,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 21.106900000000003,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 20.9803,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 20.8337,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 21.1521,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 21.1329,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 20.741699999999998,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 20.8355,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 20.7871,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 20.725,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 20.9027,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 20.7298,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 20.6561,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 20.7898,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 21.0658,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 20.9745,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 20.7453,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 20.8646,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 20.8062,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 20.9074,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 21.1871,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 20.853,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 21.1573,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 21.1309,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 21.3529,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 20.7915,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 20.7198,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 20.988500000000002,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 20.9823,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 21.6943,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 6,
+            "total_files": 14,
+            "total_size": 3584
+          }
+        }
+      ]
+    },
+    {
+      "name": "scan_100_files_balanced",
+      "description": "扫描 ~100 文件均衡树（fanout=3, depth=3, files_per_leaf=2, file=256B）",
+      "stats": {
+        "n": 30,
+        "mean_ms": 21.33185,
+        "median_ms": 21.2807,
+        "p95_ms": 22.0777,
+        "min_ms": 20.928800000000003,
+        "max_ms": 22.195800000000002,
+        "stddev_ms": 0.3142971574269589,
+        "cv": 0.014733703707224592
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 21.2856,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 21.0565,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 21.4683,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 21.2783,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 21.475399999999997,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 21.3243,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 21.651,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 21.0109,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 21.375600000000002,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 21.5278,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 22.195800000000002,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 22.0777,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 21.6221,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 21.006400000000003,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 21.063599999999997,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 21.1166,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 21.003,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 21.148400000000002,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 20.928800000000003,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 21.5915,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 21.283099999999997,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 21.4201,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 21.321199999999997,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 21.2534,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 20.939200000000003,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 21.1756,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 21.2487,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 21.1288,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 21.0871,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 21.8907,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 39,
+            "total_files": 80,
+            "total_size": 20480
+          }
+        }
+      ]
+    },
+    {
+      "name": "scan_1k_files_balanced",
+      "description": "扫描 ~1k 文件均衡树（fanout=4, depth=4, files_per_leaf=4, file=1KB）",
+      "stats": {
+        "n": 30,
+        "mean_ms": 43.149083333333344,
+        "median_ms": 43.77475,
+        "p95_ms": 44.375,
+        "min_ms": 23.0624,
+        "max_ms": 45.8365,
+        "stddev_ms": 3.754875939103123,
+        "cv": 0.08702098976462896
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 43.877,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 43.964499999999994,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 43.7483,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 43.8187,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 43.9152,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 43.7186,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 43.8742,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 43.2119,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 43.7761,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 43.649899999999995,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 43.7688,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 44.375,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 43.9487,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 43.6423,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 43.979,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 45.8365,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 43.591,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 43.418400000000005,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 43.7979,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 43.6129,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 43.458200000000005,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 43.773399999999995,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 44.0922,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 43.5073,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 43.7042,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 23.0624,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 43.616299999999995,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 43.8141,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 43.8181,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 44.1014,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        }
+      ]
+    },
+    {
+      "name": "scan_deep_narrow_tree",
+      "description": "扫描深窄树（fanout=2, depth=8, files_per_leaf=1, file=512B）—— 路径深度大",
+      "stats": {
+        "n": 30,
+        "mean_ms": 46.07988,
+        "median_ms": 45.89935,
+        "p95_ms": 46.7044,
+        "min_ms": 45.2602,
+        "max_ms": 51.8594,
+        "stddev_ms": 1.137583608180076,
+        "cv": 0.02468720856434687
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 46.6655,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 45.8899,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 46.336099999999995,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 46.2266,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 45.2602,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 45.7646,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 45.5908,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 45.542899999999996,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 46.2334,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 45.523,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 46.0629,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 45.4202,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 45.482,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 46.2203,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 45.8636,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 45.9088,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 45.5497,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 46.523,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 45.7275,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 51.8594,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 46.033699999999996,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 45.324799999999996,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 45.862899999999996,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 45.945899999999995,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 46.036500000000004,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 45.6263,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 45.9405,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 45.9369,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 45.3341,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 46.7044,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 510,
+            "total_files": 511,
+            "total_size": 261632
+          }
+        }
+      ]
+    },
+    {
+      "name": "scan_shallow_wide_tree",
+      "description": "扫描浅宽树（fanout=20, depth=2, files_per_leaf=10, file=512B）—— 单层文件多",
+      "stats": {
+        "n": 30,
+        "mean_ms": 44.10592666666666,
+        "median_ms": 44.190799999999996,
+        "p95_ms": 44.5373,
+        "min_ms": 43.2827,
+        "max_ms": 44.5734,
+        "stddev_ms": 0.3100924227101049,
+        "cv": 0.007030629354046862
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 43.986,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 44.3133,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 44.5373,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 44.0297,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 44.208,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 44.174400000000006,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 43.6412,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 43.833999999999996,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 44.2631,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 44.421099999999996,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 44.325700000000005,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 44.201699999999995,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 44.5734,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 44.2891,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 44.1799,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 44.365300000000005,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 44.2898,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 44.5088,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 43.6458,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 43.9473,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 44.087599999999995,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 43.2827,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 44.4084,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 43.6089,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 44.0651,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 44.30159999999999,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 43.6586,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 43.810500000000005,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 44.2633,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 43.9562,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 420,
+            "total_files": 4210,
+            "total_size": 2155520
+          }
+        }
+      ]
+    },
+    {
+      "name": "scan_realistic_mixed_1k",
+      "description": "扫描 ~1000 文件混合大小目录（70% 小 1-4KB / 25% 中 10-100KB / 5% 大 1-2MB）",
+      "stats": {
+        "n": 30,
+        "mean_ms": 21.904293333333328,
+        "median_ms": 21.8271,
+        "p95_ms": 22.7316,
+        "min_ms": 21.3903,
+        "max_ms": 23.0059,
+        "stddev_ms": 0.3310553407245114,
+        "cv": 0.015113719291766463
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 22.064500000000002,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 21.9736,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 21.630300000000002,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 21.7892,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 21.7847,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 21.6686,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 22.0233,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 21.839000000000002,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 21.8087,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 22.314,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 22.0131,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 21.3903,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 21.8428,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 21.546,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 22.3714,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 21.656499999999998,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 21.9507,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 21.618499999999997,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 21.8886,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 21.7279,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 21.9239,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 21.8152,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 21.7674,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 21.7252,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 21.6082,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 23.0059,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 22.7316,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 21.7028,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 21.9189,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 22.028,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 124,
+            "total_files": 662,
+            "total_size": 72422764
+          }
+        }
+      ]
+    },
+    {
+      "name": "scan_10k_files_realistic",
+      "description": "扫描 ~10000 文件混合大小（默认 5 次重复，可通过 BENCH_LARGE_REPEAT 调整）",
+      "stats": {
+        "n": 5,
+        "mean_ms": 43.823339999999995,
+        "median_ms": 43.721700000000006,
+        "p95_ms": 44.7532,
+        "min_ms": 43.255,
+        "max_ms": 44.7532,
+        "stddev_ms": 0.5356079260055795,
+        "cv": 0.012221978653511566
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 43.3751,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 400,
+            "total_files": 6424,
+            "total_size": 736980642
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 44.0117,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 400,
+            "total_files": 6424,
+            "total_size": 736980642
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 43.255,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 400,
+            "total_files": 6424,
+            "total_size": 736980642
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 43.721700000000006,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 400,
+            "total_files": 6424,
+            "total_size": 736980642
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 44.7532,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 400,
+            "total_files": 6424,
+            "total_size": 736980642
+          }
+        }
+      ]
+    },
+    {
+      "name": "scan_cold_first_pass",
+      "description": "冷扫：每轮第一次扫描 1k 文件树（FS cache 较少命中）",
+      "stats": {
+        "n": 30,
+        "mean_ms": 38.26670666666667,
+        "median_ms": 43.42575,
+        "p95_ms": 44.183600000000006,
+        "min_ms": 22.984299999999998,
+        "max_ms": 45.654199999999996,
+        "stddev_ms": 8.910381437624068,
+        "cv": 0.23284944573988425
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 43.6402,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 23.6157,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 43.816599999999994,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 43.5754,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 43.4805,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 23.5396,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 43.3284,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 43.5502,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 43.4123,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 22.984299999999998,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 43.9764,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 25.502299999999998,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 23.0681,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 43.8335,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 23.255100000000002,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 43.4392,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 43.734500000000004,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 44.183600000000006,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 23.042900000000003,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 43.133199999999995,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 43.0618,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 43.018800000000006,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 43.4518,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 43.2529,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 45.654199999999996,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 43.685500000000005,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 43.4772,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 23.1862,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 43.3775,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 43.7233,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        }
+      ]
+    },
+    {
+      "name": "scan_hot_second_pass",
+      "description": "热扫：紧接冷扫之后第二次扫同一树（FS cache 命中）",
+      "stats": {
+        "n": 30,
+        "mean_ms": 35.98952,
+        "median_ms": 43.218149999999994,
+        "p95_ms": 44.1391,
+        "min_ms": 22.6547,
+        "max_ms": 44.2047,
+        "stddev_ms": 9.852334302434796,
+        "cv": 0.27375564615573633
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 43.204699999999995,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 43.3776,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 43.560300000000005,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 23.0983,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 43.3837,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 44.1391,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 23.5656,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 43.320299999999996,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 43.0828,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 23.2941,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 23.081500000000002,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 43.6157,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 22.737299999999998,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 43.100699999999996,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 43.2316,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 22.701800000000002,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 42.9617,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 43.622800000000005,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 43.4046,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 43.5523,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 23.3895,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 23.0031,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 23.2241,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 43.6708,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 44.2047,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 22.768900000000002,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 43.5302,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 43.5827,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 22.6547,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 43.6204,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 340,
+            "total_files": 1364,
+            "total_size": 1396736
+          }
+        }
+      ]
+    },
+    {
+      "name": "scan_real_path",
+      "description": "扫描真实路径 D:\\Desktop\\cdrive-cleaner\\node_modules（来自 BENCH_REAL_PATH 环境变量）",
+      "stats": {
+        "n": 5,
+        "mean_ms": 163.80852,
+        "median_ms": 171.5848,
+        "p95_ms": 172.2006,
+        "min_ms": 151.4865,
+        "max_ms": 172.2006,
+        "stddev_ms": 9.997662834762934,
+        "cv": 0.06103261805163086
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 171.5848,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 1386,
+            "total_files": 14700,
+            "total_size": 196093379
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 151.6472,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 1386,
+            "total_files": 14700,
+            "total_size": 196093379
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 151.4865,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 1386,
+            "total_files": 14700,
+            "total_size": 196093379
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 172.1235,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 1386,
+            "total_files": 14700,
+            "total_size": 196093379
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 172.2006,
+          "payload": {
+            "backend": "native",
+            "inaccessible": 0,
+            "total_dirs": 1386,
+            "total_files": 14700,
+            "total_size": 196093379
+          }
+        }
+      ]
+    },
+    {
+      "name": "safety_windows_dir",
+      "description": "C:\\Windows（系统关键目录，期望 Blocker）",
+      "stats": {
+        "n": 30,
+        "mean_ms": 0.04467,
+        "median_ms": 0.03295,
+        "p95_ms": 0.1242,
+        "min_ms": 0.0287,
+        "max_ms": 0.1666,
+        "stddev_ms": 0.03071156296901869,
+        "cv": 0.6875209977393931
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 0.1242,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 0.0431,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 0.0391,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 0.032100000000000004,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 0.0348,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 0.0332,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 0.0376,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 0.0304,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 0.0304,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 0.0336,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 0.028900000000000002,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 0.0293,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 0.0295,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 0.0327,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 0.0293,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 0.029,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 0.0287,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 0.0462,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 0.0287,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 0.031900000000000005,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 0.0566,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 0.0291,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 0.0288,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 0.0349,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 0.0293,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 0.1666,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 0.0466,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 0.0961,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 0.06420000000000001,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 0.0352,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 0,
+            "findings_count": 1,
+            "verdict": "SystemCritical"
+          }
+        }
+      ]
+    },
+    {
+      "name": "safety_program_files",
+      "description": "C:\\Program Files（应用安装目录，期望禁止）",
+      "stats": {
+        "n": 30,
+        "mean_ms": 2806.116703333334,
+        "median_ms": 2747.2989,
+        "p95_ms": 2810.5463999999997,
+        "min_ms": 2710.0265,
+        "max_ms": 4393.149,
+        "stddev_ms": 295.60374338677053,
+        "cv": 0.10534264060921926
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 4393.149,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 4393,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 2710.0265,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2710,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 2714.0507000000002,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2714,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 2733.4575,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2733,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 2725.3122,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2725,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 2742.3034,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2742,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 2728.3638,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2728,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 2743.0869,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2743,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 2730.4309,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2730,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 2721.3565,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2721,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 2746.2774,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2746,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 2738.3777999999998,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2738,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 2753.7085,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2753,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 2746.7259999999997,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2746,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 2793.1459,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2793,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 2747.8718,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2747,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 2753.1699,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2753,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 2757.7376,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2757,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 2741.3492,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2741,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 2758.239,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2758,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 2746.3429,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2746,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 2779.1982,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2779,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 2759.0609,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2759,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 2810.5463999999997,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2810,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 2794.9747,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2794,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 2742.7065000000002,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2742,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 2762.4654,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2762,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 2778.0334,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2778,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 2770.0743,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2770,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 2761.9579,
+          "payload": {
+            "can_migrate": false,
+            "duration_ms": 2761,
+            "findings_count": 3,
+            "verdict": "Blocked"
+          }
+        }
+      ]
+    },
+    {
+      "name": "safety_program_files_x86",
+      "description": "C:\\Program Files (x86)",
+      "stats": {
+        "n": 30,
+        "mean_ms": 1427.9963899999998,
+        "median_ms": 1425.0375000000001,
+        "p95_ms": 1466.5281000000002,
+        "min_ms": 1392.2339,
+        "max_ms": 1471.3436,
+        "stddev_ms": 21.556381344470463,
+        "cv": 0.015095543304889214
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 1471.3436,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1471,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 1419.0107,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1419,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 1392.2339,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1392,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 1425.0323,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1425,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 1421.0023,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1420,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 1408.956,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1408,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 1441.3957,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1441,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 1461.9767000000002,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1461,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 1466.5281000000002,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1466,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 1445.6421,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1445,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 1459.9981,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1459,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 1427.6023,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1427,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 1447.668,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1447,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 1445.8158999999998,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1445,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 1438.7998,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1438,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 1409.8609,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1409,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 1460.827,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1460,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 1401.2603000000001,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1401,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 1429.0923,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1429,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 1430.3319999999999,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1430,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 1437.5138000000002,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1437,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 1406.5585999999998,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1406,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 1405.8423,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1405,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 1403.0109,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1403,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 1415.8647,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1415,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 1409.9873,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1409,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 1418.8801,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1418,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 1409.2901,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1409,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 1425.0427000000002,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1425,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 1403.5231999999999,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1403,
+            "findings_count": 1,
+            "verdict": "SafeAfterAction"
+          }
+        }
+      ]
+    },
+    {
+      "name": "safety_user_desktop",
+      "description": "用户桌面下普通子目录",
+      "stats": {
+        "n": 30,
+        "mean_ms": 1.2058833333333332,
+        "median_ms": 1.21735,
+        "p95_ms": 1.5601,
+        "min_ms": 0.8664999999999999,
+        "max_ms": 1.7664,
+        "stddev_ms": 0.19978153248541822,
+        "cv": 0.1656723556607894
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 1.5601,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 1.7664,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 1.2052,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 0.9970000000000001,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 0,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 0.8735,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 0,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 1.0971,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 1.2294999999999998,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 1.042,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 0.9504999999999999,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 0,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 1.1499,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 0.894,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 0,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 0.8664999999999999,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 0,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 1.156,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 1.2351,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 1.1214,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 1.0556999999999999,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 1.2346,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 1.109,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 1.3075999999999999,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 1.1472,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 1.5346,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 1.3958,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 1.2329999999999999,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 1.2658,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 1.1522,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 1.353,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 1.3603,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 1.3228,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 1.2306000000000001,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 1.3301,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        }
+      ]
+    },
+    {
+      "name": "safety_user_appdata",
+      "description": "用户 AppData\\Local 下子目录",
+      "stats": {
+        "n": 30,
+        "mean_ms": 1.2728066666666666,
+        "median_ms": 1.2539500000000001,
+        "p95_ms": 1.5306,
+        "min_ms": 1.0655000000000001,
+        "max_ms": 1.6846999999999999,
+        "stddev_ms": 0.15590241377933256,
+        "cv": 0.12248711282100913
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 1.2745,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 1.2602,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 1.2734999999999999,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 1.5231999999999999,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 1.4526999999999999,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 1.5098,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 1.2477,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 1.3921000000000001,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 1.3309000000000002,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 1.6846999999999999,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 1.1287,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 1.1200999999999999,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 1.2672,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 1.3551,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 1.1291,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 1.2288,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 1.1905999999999999,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 1.1875,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 1.1467,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 1.1718,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 1.1228,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 1.3194000000000001,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 1.5306,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 1.1252,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 1.1205,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 1.0865,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 1.0655000000000001,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 1.1406,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 1.3182,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 1.48,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        }
+      ]
+    },
+    {
+      "name": "safety_temp_dir",
+      "description": "用户 Temp 目录下子目录",
+      "stats": {
+        "n": 30,
+        "mean_ms": 1.2880866666666668,
+        "median_ms": 1.2485,
+        "p95_ms": 1.6303999999999998,
+        "min_ms": 1.0927,
+        "max_ms": 1.6337000000000002,
+        "stddev_ms": 0.14256990036080158,
+        "cv": 0.1106834687837787
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 1.1824999999999999,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 1.2318,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 1.3441,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 1.1535,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 1.3168,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 1.2399,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 1.2792000000000001,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 1.6303999999999998,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 1.1622,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 1.1708999999999998,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 1.157,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 1.0927,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 1.5050000000000001,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 1.3635,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 1.1620000000000001,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 1.5706,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 1.3838,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 1.1651,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 1.3095999999999999,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 1.2545,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 1.2163,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 1.1699,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 1.3117999999999999,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 1.6337000000000002,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 1.2425,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 1.4237,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 1.1235,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 1.2103000000000002,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 1.3216,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 1.3142,
+          "payload": {
+            "can_migrate": true,
+            "duration_ms": 1,
+            "findings_count": 0,
+            "verdict": "Safe"
+          }
+        }
+      ]
+    },
+    {
+      "name": "db_insert_migration",
+      "description": "向 SQLite migration_db 插入一条记录",
+      "stats": {
+        "n": 30,
+        "mean_ms": 0.03799333333333333,
+        "median_ms": 0.03185,
+        "p95_ms": 0.0605,
+        "min_ms": 0.0293,
+        "max_ms": 0.1175,
+        "stddev_ms": 0.016865940695838924,
+        "cv": 0.443918425052788
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 0.1175,
+          "payload": {
+            "inserted_id": 1
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 0.0427,
+          "payload": {
+            "inserted_id": 2
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 0.0513,
+          "payload": {
+            "inserted_id": 3
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 0.0336,
+          "payload": {
+            "inserted_id": 4
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 0.031900000000000005,
+          "payload": {
+            "inserted_id": 5
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 0.0315,
+          "payload": {
+            "inserted_id": 6
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 0.0484,
+          "payload": {
+            "inserted_id": 7
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 0.0323,
+          "payload": {
+            "inserted_id": 8
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 0.031,
+          "payload": {
+            "inserted_id": 9
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 0.0318,
+          "payload": {
+            "inserted_id": 10
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 0.0318,
+          "payload": {
+            "inserted_id": 11
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 0.0313,
+          "payload": {
+            "inserted_id": 12
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 0.0327,
+          "payload": {
+            "inserted_id": 13
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 0.032,
+          "payload": {
+            "inserted_id": 14
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 0.0605,
+          "payload": {
+            "inserted_id": 15
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 0.055,
+          "payload": {
+            "inserted_id": 16
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 0.043300000000000005,
+          "payload": {
+            "inserted_id": 17
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 0.0361,
+          "payload": {
+            "inserted_id": 18
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 0.032,
+          "payload": {
+            "inserted_id": 19
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 0.0346,
+          "payload": {
+            "inserted_id": 20
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 0.0297,
+          "payload": {
+            "inserted_id": 21
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 0.0298,
+          "payload": {
+            "inserted_id": 22
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 0.0298,
+          "payload": {
+            "inserted_id": 23
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 0.0298,
+          "payload": {
+            "inserted_id": 24
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 0.030000000000000002,
+          "payload": {
+            "inserted_id": 25
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 0.0307,
+          "payload": {
+            "inserted_id": 26
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 0.0303,
+          "payload": {
+            "inserted_id": 27
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 0.0297,
+          "payload": {
+            "inserted_id": 28
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 0.0293,
+          "payload": {
+            "inserted_id": 29
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 0.0294,
+          "payload": {
+            "inserted_id": 30
+          }
+        }
+      ]
+    },
+    {
+      "name": "db_query_all_at_10_records",
+      "description": "get_all_migrations() 在 10 条记录的库上查询",
+      "stats": {
+        "n": 30,
+        "mean_ms": 0.03178,
+        "median_ms": 0.02725,
+        "p95_ms": 0.0493,
+        "min_ms": 0.0263,
+        "max_ms": 0.10569999999999999,
+        "stddev_ms": 0.014560892829768371,
+        "cv": 0.458177873812724
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 0.10569999999999999,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 0.0493,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 0.0406,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 0.0323,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 0.0288,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 0.0301,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 0.0276,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 0.0344,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 0.0312,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 0.0275,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 0.027100000000000003,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 0.0276,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 0.0275,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 0.027299999999999998,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 0.027100000000000003,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 0.026699999999999998,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 0.026699999999999998,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 0.027100000000000003,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 0.0268,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 0.0268,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 0.0266,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 0.0266,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 0.0265,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 0.027200000000000002,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 0.0263,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 0.027,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 0.0266,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 0.0265,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 0.0343,
+          "payload": {
+            "record_count": 10
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 0.0276,
+          "payload": {
+            "record_count": 10
+          }
+        }
+      ]
+    },
+    {
+      "name": "db_query_all_at_100_records",
+      "description": "get_all_migrations() 在 100 条记录的库上查询",
+      "stats": {
+        "n": 30,
+        "mean_ms": 0.14328,
+        "median_ms": 0.13175,
+        "p95_ms": 0.2212,
+        "min_ms": 0.1274,
+        "max_ms": 0.2457,
+        "stddev_ms": 0.027425273015961028,
+        "cv": 0.1914103365156409
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 0.1864,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 0.14100000000000001,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 0.2457,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 0.1676,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 0.14109999999999998,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 0.1562,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 0.1368,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 0.12999999999999998,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 0.13019999999999998,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 0.1313,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 0.1363,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 0.13119999999999998,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 0.1306,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 0.1314,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 0.1357,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 0.13210000000000002,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 0.1325,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 0.1283,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 0.1303,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 0.1292,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 0.2212,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 0.1484,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 0.1323,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 0.14129999999999998,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 0.1288,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 0.129,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 0.1293,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 0.12760000000000002,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 0.1274,
+          "payload": {
+            "record_count": 100
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 0.1292,
+          "payload": {
+            "record_count": 100
+          }
+        }
+      ]
+    },
+    {
+      "name": "db_query_all_at_1000_records",
+      "description": "get_all_migrations() 在 1000 条记录的库上查询",
+      "stats": {
+        "n": 30,
+        "mean_ms": 1.26948,
+        "median_ms": 1.2540999999999998,
+        "p95_ms": 1.424,
+        "min_ms": 1.1212,
+        "max_ms": 1.4552,
+        "stddev_ms": 0.09336476994384267,
+        "cv": 0.07354568007675795
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 1.2895999999999999,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 1.3171000000000002,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 1.2532999999999999,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 1.1974,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 1.1502000000000001,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 1.2462,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 1.2474999999999998,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 1.1656,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 1.2413999999999998,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 1.1781000000000001,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 1.1811,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 1.1212,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 1.2752,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 1.2881,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 1.1539,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 15,
+          "duration_ms": 1.2825,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 16,
+          "duration_ms": 1.2383,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 17,
+          "duration_ms": 1.1737,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 18,
+          "duration_ms": 1.3110000000000002,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 19,
+          "duration_ms": 1.2549,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 20,
+          "duration_ms": 1.1583999999999999,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 21,
+          "duration_ms": 1.1965000000000001,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 22,
+          "duration_ms": 1.424,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 23,
+          "duration_ms": 1.4109,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 24,
+          "duration_ms": 1.4115,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 25,
+          "duration_ms": 1.4552,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 26,
+          "duration_ms": 1.3417999999999999,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 27,
+          "duration_ms": 1.2983,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 28,
+          "duration_ms": 1.4215,
+          "payload": {
+            "record_count": 1000
+          }
+        },
+        {
+          "run_index": 29,
+          "duration_ms": 1.4,
+          "payload": {
+            "record_count": 1000
+          }
+        }
+      ]
+    },
+    {
+      "name": "end_to_end_scan_safety_migrate_rollback",
+      "description": "完整链路：扫描 ~30 文件 → 安全分析 → junction 迁移 → 回滚（payload 字段含每段耗时）",
+      "stats": {
+        "n": 15,
+        "mean_ms": 82.37279333333335,
+        "median_ms": 72.9381,
+        "p95_ms": 95.9208,
+        "min_ms": 70.2162,
+        "max_ms": 182.4027,
+        "stddev_ms": 27.41731842971924,
+        "cv": 0.33284434484054853
+      },
+      "samples": [
+        {
+          "run_index": 0,
+          "duration_ms": 73.36139999999999,
+          "payload": {
+            "bytes": 86016,
+            "migrate_ms": 22.449299999999997,
+            "rollback_ms": 17.476499999999998,
+            "safety_ms": 12.283999999999999,
+            "scan_ms": 21.150599999999997
+          }
+        },
+        {
+          "run_index": 1,
+          "duration_ms": 79.8751,
+          "payload": {
+            "bytes": 86016,
+            "migrate_ms": 22.6203,
+            "rollback_ms": 18.5624,
+            "safety_ms": 17.500600000000002,
+            "scan_ms": 21.1907
+          }
+        },
+        {
+          "run_index": 2,
+          "duration_ms": 71.17139999999999,
+          "payload": {
+            "bytes": 86016,
+            "migrate_ms": 21.370900000000002,
+            "rollback_ms": 17.1067,
+            "safety_ms": 11.8619,
+            "scan_ms": 20.8307
+          }
+        },
+        {
+          "run_index": 3,
+          "duration_ms": 73.2491,
+          "payload": {
+            "bytes": 86016,
+            "migrate_ms": 20.6508,
+            "rollback_ms": 17.2455,
+            "safety_ms": 14.387799999999999,
+            "scan_ms": 20.9637
+          }
+        },
+        {
+          "run_index": 4,
+          "duration_ms": 72.89760000000001,
+          "payload": {
+            "bytes": 86016,
+            "migrate_ms": 22.29,
+            "rollback_ms": 17.7241,
+            "safety_ms": 12.1593,
+            "scan_ms": 20.723200000000002
+          }
+        },
+        {
+          "run_index": 5,
+          "duration_ms": 70.2162,
+          "payload": {
+            "bytes": 86016,
+            "migrate_ms": 21.0803,
+            "rollback_ms": 16.6696,
+            "safety_ms": 11.4614,
+            "scan_ms": 21.003600000000002
+          }
+        },
+        {
+          "run_index": 6,
+          "duration_ms": 77.3459,
+          "payload": {
+            "bytes": 86016,
+            "migrate_ms": 26.042099999999998,
+            "rollback_ms": 17.1818,
+            "safety_ms": 13.1221,
+            "scan_ms": 20.9985
+          }
+        },
+        {
+          "run_index": 7,
+          "duration_ms": 77.3691,
+          "payload": {
+            "bytes": 86016,
+            "migrate_ms": 23.9488,
+            "rollback_ms": 18.0144,
+            "safety_ms": 14.0115,
+            "scan_ms": 21.3932
+          }
+        },
+        {
+          "run_index": 8,
+          "duration_ms": 72.15979999999999,
+          "payload": {
+            "bytes": 86016,
+            "migrate_ms": 22.1405,
+            "rollback_ms": 16.4989,
+            "safety_ms": 12.318900000000001,
+            "scan_ms": 21.2003
+          }
+        },
+        {
+          "run_index": 9,
+          "duration_ms": 72.9381,
+          "payload": {
+            "bytes": 86016,
+            "migrate_ms": 21.7728,
+            "rollback_ms": 17.5716,
+            "safety_ms": 12.2831,
+            "scan_ms": 21.309600000000003
+          }
+        },
+        {
+          "run_index": 10,
+          "duration_ms": 72.1315,
+          "payload": {
+            "bytes": 86016,
+            "migrate_ms": 22.0845,
+            "rollback_ms": 16.253400000000003,
+            "safety_ms": 12.9749,
+            "scan_ms": 20.818
+          }
+        },
+        {
+          "run_index": 11,
+          "duration_ms": 72.36380000000001,
+          "payload": {
+            "bytes": 86016,
+            "migrate_ms": 22.058600000000002,
+            "rollback_ms": 16.633100000000002,
+            "safety_ms": 12.475399999999999,
+            "scan_ms": 21.1956
+          }
+        },
+        {
+          "run_index": 12,
+          "duration_ms": 72.1894,
+          "payload": {
+            "bytes": 86016,
+            "migrate_ms": 21.5199,
+            "rollback_ms": 16.9391,
+            "safety_ms": 12.3615,
+            "scan_ms": 21.3679
+          }
+        },
+        {
+          "run_index": 13,
+          "duration_ms": 95.9208,
+          "payload": {
+            "bytes": 86016,
+            "migrate_ms": 38.222899999999996,
+            "rollback_ms": 22.5502,
+            "safety_ms": 14.2345,
+            "scan_ms": 20.9119
+          }
+        },
+        {
+          "run_index": 14,
+          "duration_ms": 182.4027,
+          "payload": {
+            "bytes": 86016,
+            "migrate_ms": 21.7043,
+            "rollback_ms": 128.7874,
+            "safety_ms": 10.6016,
+            "scan_ms": 21.3083
+          }
+        }
+      ]
+    }
+  ]
+}
