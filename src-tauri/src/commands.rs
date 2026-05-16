@@ -451,6 +451,8 @@ pub async fn migrate_file(
     ) {
         result.migration_id = id;
     }
+    // 迁移成功后，源/目标路径状态已变化，缓存的安全分析结果作废。
+    crate::safety::invalidate_safety_cache();
     println!(
         "[migration] completed source={} target={} actual_link_type={:?} size={} duration_ms={} history_id={}",
         result.source_path,
@@ -632,6 +634,8 @@ pub async fn rollback_migration(
     }
     db.update_status(migration_id, "rolled_back")
         .map_err(|e| e.to_string())?;
+    // 回滚后路径状态恢复，安全分析的缓存也要清。
+    crate::safety::invalidate_safety_cache();
     println!(
         "[migration] rollback completed id={} source={} target={} duration_ms={}",
         migration_id, result.source_path, result.target_path, result.duration_ms

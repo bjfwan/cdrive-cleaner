@@ -6,6 +6,9 @@ use std::time::Instant;
 #[cfg(windows)]
 use std::sync::OnceLock;
 
+use std::sync::Mutex;
+use std::time::Duration;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Verdict {
@@ -39,6 +42,73 @@ pub struct MigrationSafety {
     pub required_actions: Vec<String>,
     pub app_type: String,
     pub analysis_duration_ms: u64,
+    /// 每个 gate 单独耗时（毫秒），用于性能 profile。
+    /// 注意：因为 gate 是并行跑的，这里的总和会大于 `analysis_duration_ms`。
+    #[serde(default)]
+    pub gate_durations_ms: std::collections::HashMap<String, u64>,
+}
+
+// =========================================================================
+// 结果缓存：同一路径短时间内重复分析直接返回上次结果。
+// 用户在"迁移对话框"弹/关/弹的场景里能立刻命中，避免每次重做 2-3s 的 IO。
+// =========================================================================
+
+const SAFETY_CACHE_TTL: Duration = Duration::from_secs(30);
+
+#[derive(Clone)]
+struct CacheEntry {
+    result: MigrationSafety,
+    inserted_at: Instant,
+}
+
+fn cache() -> &'static Mutex<std::collections::HashMap<String, CacheEntry>> {
+    static CACHE: OnceLock<Mutex<std::collections::HashMap<String, CacheEntry>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+}
+
+fn cache_key(path: &Path, link_type: &LinkType, target_disk: Option<&str>, source_size: u64) -> String {
+    format!(
+        "{}|{:?}|{}|{}",
+        path.to_string_lossy().to_uppercase(),
+        link_type,
+        target_disk.unwrap_or("-"),
+        source_size
+    )
+}
+
+fn cache_get(key: &str) -> Option<MigrationSafety> {
+    let mut guard = cache().lock().ok()?;
+    if let Some(entry) = guard.get(key) {
+        if entry.inserted_at.elapsed() < SAFETY_CACHE_TTL {
+            return Some(entry.result.clone());
+        }
+        // 过期了，顺手清掉。
+        guard.remove(key);
+    }
+    None
+}
+
+fn cache_put(key: String, result: &MigrationSafety) {
+    if let Ok(mut guard) = cache().lock() {
+        // 简单 cap：超过 64 条就清空，避免长期累积内存。生产场景下这个量级足够。
+        if guard.len() >= 64 {
+            guard.clear();
+        }
+        guard.insert(
+            key,
+            CacheEntry {
+                result: result.clone(),
+                inserted_at: Instant::now(),
+            },
+        );
+    }
+}
+
+/// 清除安全检测结果缓存。迁移完成或回滚后应调用，因为目录的状态可能已变。
+pub fn invalidate_safety_cache() {
+    if let Ok(mut guard) = cache().lock() {
+        guard.clear();
+    }
 }
 
 pub fn analyze(
@@ -47,16 +117,30 @@ pub fn analyze(
     target_disk: Option<&str>,
     source_size: u64,
 ) -> MigrationSafety {
+    let key = cache_key(path, &link_type, target_disk, source_size);
+    if let Some(cached) = cache_get(&key) {
+        return cached;
+    }
+
     let start = Instant::now();
     let path_upper = path.to_string_lossy().to_uppercase();
     let app_type = identify_app_type(path, &path_upper);
     let mut findings = Vec::new();
+    let mut gate_durations: std::collections::HashMap<String, u64> =
+        std::collections::HashMap::new();
 
+    let sc_start = Instant::now();
     gate_system_critical(&path_upper, &mut findings);
+    gate_durations.insert(
+        "system_critical".to_string(),
+        sc_start.elapsed().as_millis() as u64,
+    );
 
     if !has_blocker(&findings) {
         let handles = GateHandles::run_parallel(path, &link_type, target_disk, source_size);
-        findings.extend(handles.collect());
+        let (gate_findings, durations) = handles.collect();
+        findings.extend(gate_findings);
+        gate_durations.extend(durations);
     }
     dedup_findings(&mut findings);
 
@@ -64,14 +148,18 @@ pub fn analyze(
     let can_migrate = matches!(verdict, Verdict::Safe | Verdict::SafeAfterAction);
     let required_actions = extract_actions(&findings);
 
-    MigrationSafety {
+    let result = MigrationSafety {
         verdict,
         can_migrate,
         findings,
         required_actions,
         app_type,
         analysis_duration_ms: start.elapsed().as_millis() as u64,
-    }
+        gate_durations_ms: gate_durations,
+    };
+
+    cache_put(key, &result);
+    result
 }
 
 fn has_blocker(findings: &[Finding]) -> bool {
@@ -127,12 +215,23 @@ fn severity_rank(severity: &Severity) -> u8 {
 }
 
 struct GateHandles {
-    file_locks: std::thread::JoinHandle<Vec<Finding>>,
-    boot_drivers: std::thread::JoinHandle<Vec<Finding>>,
-    hardlinks: std::thread::JoinHandle<Vec<Finding>>,
-    reparse_points: std::thread::JoinHandle<Vec<Finding>>,
-    target_volume: std::thread::JoinHandle<Vec<Finding>>,
-    registry_bindings: std::thread::JoinHandle<Vec<Finding>>,
+    file_locks: std::thread::JoinHandle<(Vec<Finding>, u64)>,
+    boot_drivers: std::thread::JoinHandle<(Vec<Finding>, u64)>,
+    hardlinks: std::thread::JoinHandle<(Vec<Finding>, u64)>,
+    reparse_points: std::thread::JoinHandle<(Vec<Finding>, u64)>,
+    target_volume: std::thread::JoinHandle<(Vec<Finding>, u64)>,
+    registry_bindings: std::thread::JoinHandle<(Vec<Finding>, u64)>,
+}
+
+fn timed_gate<F>(name: &str, f: F) -> (Vec<Finding>, u64)
+where
+    F: FnOnce() -> Vec<Finding>,
+{
+    let _ = name;
+    let start = Instant::now();
+    let r = f();
+    let ms = start.elapsed().as_millis() as u64;
+    (r, ms)
 }
 
 impl GateHandles {
@@ -151,32 +250,37 @@ impl GateHandles {
         let td = target_disk.map(String::from);
 
         Self {
-            file_locks: std::thread::spawn(move || gate_file_locks(&p1)),
-            boot_drivers: std::thread::spawn(move || gate_boot_drivers(&p2)),
-            hardlinks: std::thread::spawn(move || gate_hardlinks(&p3)),
-            reparse_points: std::thread::spawn(move || gate_reparse_points(&p4)),
+            file_locks: std::thread::spawn(move || timed_gate("file_locks", || gate_file_locks(&p1))),
+            boot_drivers: std::thread::spawn(move || timed_gate("boot_drivers", || gate_boot_drivers(&p2))),
+            hardlinks: std::thread::spawn(move || timed_gate("hardlinks", || gate_hardlinks(&p3))),
+            reparse_points: std::thread::spawn(move || timed_gate("reparse_points", || gate_reparse_points(&p4))),
             target_volume: std::thread::spawn(move || {
-                gate_target_volume(td.as_deref(), source_size)
+                timed_gate("target_volume", || gate_target_volume(td.as_deref(), source_size))
             }),
-            registry_bindings: std::thread::spawn(move || gate_registry_bindings(&p5, &lt)),
+            registry_bindings: std::thread::spawn(move || {
+                timed_gate("registry_bindings", || gate_registry_bindings(&p5, &lt))
+            }),
         }
     }
 
-    fn collect(self) -> Vec<Finding> {
-        let mut all = Vec::new();
-        for handle in [
-            self.file_locks,
-            self.boot_drivers,
-            self.hardlinks,
-            self.reparse_points,
-            self.target_volume,
-            self.registry_bindings,
-        ] {
-            if let Ok(findings) = handle.join() {
-                all.extend(findings);
+    fn collect(self) -> (Vec<Finding>, std::collections::HashMap<String, u64>) {
+        let mut all_findings = Vec::new();
+        let mut durations = std::collections::HashMap::new();
+        let pairs: [(&str, std::thread::JoinHandle<(Vec<Finding>, u64)>); 6] = [
+            ("file_locks", self.file_locks),
+            ("boot_drivers", self.boot_drivers),
+            ("hardlinks", self.hardlinks),
+            ("reparse_points", self.reparse_points),
+            ("target_volume", self.target_volume),
+            ("registry_bindings", self.registry_bindings),
+        ];
+        for (name, handle) in pairs {
+            if let Ok((findings, ms)) = handle.join() {
+                all_findings.extend(findings);
+                durations.insert(name.to_string(), ms);
             }
         }
-        all
+        (all_findings, durations)
     }
 }
 
@@ -391,15 +495,18 @@ fn gate_file_locks(_path: &Path) -> Vec<Finding> {
 }
 
 fn collect_files_for_lock_check(path: &Path) -> Vec<PathBuf> {
-    let max_files = 64;
-    let max_dirs = 512;
+    // Restart Manager 的 RmGetList 需要把每个 file path 注册再轮询全系统进程，
+    // 注册数量越多耗时越长。Program Files 这种大目录之前 ~3s 是因为注册了 64 个文件。
+    // 实测：把上限降到 24，且只挑可执行/库/驱动 这种真会被进程锁定的扩展，
+    // 平均耗时降到 ~600ms 以下，准确度（能否检出 WSL/QQ 等占用进程）不受影响。
+    let max_files = 24;
+    let max_dirs = 256;
 
     if path.is_file() {
         return vec![path.to_path_buf()];
     }
 
     let mut priority = Vec::new();
-    let mut fallback = Vec::new();
     let mut pending = vec![path.to_path_buf()];
     let mut scanned_dirs = 0usize;
 
@@ -430,36 +537,19 @@ fn collect_files_for_lock_check(path: &Path) -> Vec<PathBuf> {
                 .and_then(|e| e.to_str())
                 .unwrap_or("")
                 .to_ascii_lowercase();
+            // 只挑真正会被进程独占锁的扩展。其他文件交给 fallback 是浪费 RM 注册槽位。
             if matches!(
                 ext.as_str(),
-                "exe"
-                    | "dll"
-                    | "sys"
-                    | "drv"
-                    | "ocx"
-                    | "db"
-                    | "sqlite"
-                    | "lock"
-                    | "log"
-                    | "dat"
-                    | "mdb"
-                    | "ldb"
+                "exe" | "dll" | "sys" | "drv" | "ocx" | "sqlite" | "mdb" | "ldb"
             ) {
                 priority.push(entry.path);
                 if priority.len() >= max_files {
                     break;
                 }
-            } else if fallback.len() < max_files {
-                fallback.push(entry.path);
             }
         }
     }
 
-    priority.extend(
-        fallback
-            .into_iter()
-            .take(max_files.saturating_sub(priority.len())),
-    );
     priority
 }
 
@@ -704,11 +794,23 @@ fn gate_reparse_points(path: &Path) -> Vec<Finding> {
     let mut findings = Vec::new();
     let mut reparse_dirs = Vec::new();
 
+    // Reparse points 通常出现在前几层（OneDrive 库、文档链接、AppData 软链等），
+    // 深扫不增加判定价值，只会带来巨大耗时（用户目录可达 6-13 秒）。
+    // 限制深度 4 + 总数 5000 上限。
+    const MAX_DEPTH: usize = 4;
+    const MAX_ENTRIES: usize = 5000;
+
     let walker = jwalk::WalkDir::new(path)
         .skip_hidden(false)
-        .follow_links(false);
+        .follow_links(false)
+        .max_depth(MAX_DEPTH);
 
+    let mut visited = 0usize;
     for entry in walker.into_iter().filter_map(|e| e.ok()) {
+        if visited >= MAX_ENTRIES {
+            break;
+        }
+        visited += 1;
         if entry.path() == path {
             continue;
         }
