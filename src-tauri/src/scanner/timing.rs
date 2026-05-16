@@ -1,4 +1,4 @@
-use std::time::Instant;
+﻿use std::time::Instant;
 
 pub struct StageTimer {
     scope: String,
@@ -26,7 +26,7 @@ impl StageTimer {
 impl Drop for StageTimer {
     fn drop(&mut self) {
         if !self.finished {
-            println!(
+            tracing::debug!(
                 "[scan-timing][{}] {} aborted_after={:.2}ms",
                 self.scope,
                 self.step,
@@ -43,14 +43,14 @@ pub fn elapsed_ms(start: Instant) -> f64 {
 pub fn log_elapsed(scope: &str, step: &str, start: Instant, detail: impl AsRef<str>) {
     let detail = detail.as_ref();
     if detail.is_empty() {
-        println!(
+        tracing::debug!(
             "[scan-timing][{}] {} took {:.2}ms",
             scope,
             step,
             elapsed_ms(start)
         );
     } else {
-        println!(
+        tracing::debug!(
             "[scan-timing][{}] {} took {:.2}ms | {}",
             scope,
             step,

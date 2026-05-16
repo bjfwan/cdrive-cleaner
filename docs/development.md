@@ -58,3 +58,22 @@ npm run tauri build
 - 迁移：`[migration]`、`[migration-core]`
 - MFT 回退：`[mft-usn]`
 - USN / 权限 / 漏算定位：`[winfs]`、`enabled privileges`、`captured USN checkpoint`、`metadata path fallback hits`
+
+## 日志级别
+
+后端用 [`tracing`](https://docs.rs/tracing/) 框架，可通过 `RUST_LOG` 环境变量调级别：
+
+```powershell
+# 默认 info：流程关键节点（启动、扫描完成、迁移完成、错误）
+$env:RUST_LOG = 'info'
+npm run tauri dev
+
+# debug：含详细计时（[scan-timing] 等），调性能用
+$env:RUST_LOG = 'debug'
+
+# 仅本 crate 开 debug，其它依赖保持 warn 安静
+$env:RUST_LOG = 'cdrive_cleaner_lib=debug,warn'
+
+# 关掉日志
+$env:RUST_LOG = 'off'
+```

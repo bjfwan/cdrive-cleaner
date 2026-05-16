@@ -1,4 +1,4 @@
-use crate::database::{MigrationDb, ScanCacheDb};
+﻿use crate::database::{MigrationDb, ScanCacheDb};
 use crate::migration::{
     file_migrator::{MigrationProgress, MigrationProgressCallback, MigrationResult},
     FileMigrator, LinkType,
@@ -47,9 +47,9 @@ fn persist_scan_result_async(
         match save_task.await {
             Ok(Ok(())) => {}
             Ok(Err(err)) => {
-                eprintln!("[scan-cache] failed to persist {scan_type} scan for {log_path}: {err}")
+                tracing::warn!("[scan-cache] failed to persist {scan_type} scan for {log_path}: {err}")
             }
-            Err(err) => eprintln!("[scan-cache] background task join failed for {log_path}: {err}"),
+            Err(err) => tracing::warn!("[scan-cache] background task join failed for {log_path}: {err}"),
         }
     });
 }
@@ -100,7 +100,7 @@ pub async fn scan_disk_deep(
     let estimated_files = estimated_files.unwrap_or(800000);
     let command_timer =
         StageTimer::start("scan-deep-command", format!("scan_disk_deep path={path}"));
-    println!(
+    tracing::info!(
         "[scan-deep] request path={} estimated_files={estimated_files}",
         path
     );
@@ -118,7 +118,7 @@ pub async fn scan_disk_deep(
 
     let mut strategy = "fresh_scan";
     let full_result = if let Ok(Some(cached)) = cached {
-        println!("[scan-deep] found cached deep snapshot for {}", path);
+        tracing::info!("[scan-deep] found cached deep snapshot for {}", path);
         let deserialize_timer = StageTimer::start(
             "scan-deep-command",
             format!("deserialize_cached_result path={path}"),
@@ -133,7 +133,7 @@ pub async fn scan_disk_deep(
         }
 
         if let Ok(cached_result) = cached_result {
-            println!(
+            tracing::info!(
                 "[scan-deep] cached summary backend={:?} files={} dirs={} size={} inaccessible={} root_file_id={:?} usn_journal_id={:?} usn_next_usn={:?}",
                 cached_result.scan_backend,
                 cached_result.total_files,
@@ -149,7 +149,7 @@ pub async fn scan_disk_deep(
                 should_rebuild_cached_deep_scan(std::path::Path::new(&path), &cached_result)
             {
                 strategy = "fresh_rebuild_stale_deep_cache";
-                println!(
+                tracing::info!(
                     "[scan-deep] cached deep snapshot is not eligible for incremental reuse: {reason}; rebuilding from scratch"
                 );
                 let execute_timer = StageTimer::start(
@@ -207,7 +207,7 @@ pub async fn scan_disk_deep(
             }
         } else {
             strategy = "fresh_rebuild_corrupt_deep_cache";
-            println!("[scan-deep] cached deep snapshot is corrupt, rebuilding from scratch");
+            tracing::info!("[scan-deep] cached deep snapshot is corrupt, rebuilding from scratch");
             let execute_timer = StageTimer::start(
                 "scan-deep-command",
                 format!("execute_strategy strategy={strategy} path={path}"),
@@ -233,7 +233,7 @@ pub async fn scan_disk_deep(
             result
         }
     } else {
-        println!(
+        tracing::info!(
             "[scan-deep] no cached deep snapshot for {}, running fresh deep scan",
             path
         );
@@ -262,7 +262,7 @@ pub async fn scan_disk_deep(
         result
     };
 
-    println!(
+    tracing::info!(
         "[scan-deep] completed strategy={} backend={:?} files={} dirs={} size={} inaccessible={} duration_ms={}",
         strategy,
         full_result.scan_backend,
@@ -283,7 +283,7 @@ pub async fn scan_disk_deep(
         "backend={:?} files={} dirs={} size={}",
         snapshot.scan_backend, snapshot.total_files, snapshot.total_dirs, snapshot.total_size
     ));
-    println!(
+    tracing::info!(
         "[scan-deep] indexed root snapshot ready path={} backend={:?} files={} dirs={} size={}",
         snapshot.root_path,
         snapshot.scan_backend,
@@ -394,7 +394,7 @@ pub async fn migrate_file(
     app: AppHandle,
     migration_db: tauri::State<'_, MigrationDb>,
 ) -> Result<MigrationResult, String> {
-    println!(
+    tracing::info!(
         "[migration] request source={} target_disk={} requested_link_type={:?} known_size={:?} known_files={:?}",
         source,
         target_disk,
@@ -426,7 +426,7 @@ pub async fn migrate_file(
         .map_err(|e| e.to_string())?;
 
     if !result.success {
-        eprintln!(
+        tracing::warn!(
             "[migration] failed source={} target_disk={} error={:?}",
             source, target_disk, result.error
         );
@@ -453,7 +453,7 @@ pub async fn migrate_file(
     }
     // 迁移成功后，源/目标路径状态已变化，缓存的安全分析结果作废。
     crate::safety::invalidate_safety_cache();
-    println!(
+    tracing::info!(
         "[migration] completed source={} target={} actual_link_type={:?} size={} duration_ms={} history_id={}",
         result.source_path,
         result.target_path,
@@ -612,7 +612,7 @@ pub async fn rollback_migration(
     if record.status != "active" {
         return Err("Migration is not active".to_string());
     }
-    println!(
+    tracing::info!(
         "[migration] rollback request id={} source={} target={}",
         migration_id, record.source_path, record.target_path
     );
@@ -626,7 +626,7 @@ pub async fn rollback_migration(
         .await
         .map_err(|e| e.to_string())?;
     if !result.success {
-        eprintln!(
+        tracing::warn!(
             "[migration] rollback failed id={} source={} target={} error={:?}",
             migration_id, record.source_path, record.target_path, result.error
         );
@@ -636,7 +636,7 @@ pub async fn rollback_migration(
         .map_err(|e| e.to_string())?;
     // 回滚后路径状态恢复，安全分析的缓存也要清。
     crate::safety::invalidate_safety_cache();
-    println!(
+    tracing::info!(
         "[migration] rollback completed id={} source={} target={} duration_ms={}",
         migration_id, result.source_path, result.target_path, result.duration_ms
     );

@@ -13,8 +13,21 @@ pub mod bench;
 use database::{MigrationDb, ScanCacheDb};
 use scanner::DiskScanner;
 
+fn init_tracing() {
+    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+    // 默认 info 级别，可用 RUST_LOG 环境变量覆盖。
+    // 例：`set RUST_LOG=cdrive_cleaner_lib=debug,info` 看本 crate debug，其它默认 info。
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let _ = tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt::layer().with_target(true).with_level(true))
+        .try_init();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    init_tracing();
+    tracing::info!("CDrive Cleaner 启动");
     let scan_cache_db = utils::get_scan_cache_db_path()
         .and_then(|p| ScanCacheDb::new(p.to_string_lossy().as_ref()).map_err(Into::into))
         .expect("Failed to open scan cache database");

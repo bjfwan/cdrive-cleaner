@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+﻿use anyhow::{anyhow, Result};
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -203,7 +203,7 @@ pub fn scan_path(
         }
     ));
     if !enabled_privileges.is_empty() {
-        println!(
+        tracing::info!(
             "[mft-usn] enabled privileges: {}",
             enabled_privileges.join(", ")
         );
@@ -297,7 +297,7 @@ pub fn scan_path(
                 );
                 reconcile_timer.finish_with(&detail);
                 attempt_timer.finish_with(&detail);
-                println!(
+                tracing::info!(
                     "[mft-usn] post-scan reconcile requires retry: {} | rerunning fresh scan",
                     reason
                 );
@@ -315,7 +315,7 @@ pub fn scan_path(
                 reconcile_timer.finish_with(&detail);
                 attempt_timer.finish_with(&detail);
                 total_timer.finish_with(&detail);
-                println!(
+                tracing::info!(
                     "[mft-usn] post-scan reconcile incomplete after retry budget: {} | returning latest fresh snapshot",
                     reason
                 );
@@ -340,7 +340,7 @@ fn scan_path_once(
         "mft-usn-pass",
         format!("scan_path_once path={}", path.display()),
     );
-    println!(
+    tracing::info!(
         "\n========== MFT + USN 深度扫描开始 ==========\n扫描路径: {}\n卷根路径: {}\n卷标识: {} | 文件系统: {}",
         path.display(),
         volume.volume_root.display(),
@@ -409,7 +409,7 @@ fn scan_path_once(
     if cancelled.load(Ordering::Relaxed) {
         return Err(anyhow!("扫描已取消"));
     }
-    println!("[mft-usn] MFT 枚举完成: {} 条记录", mft_entries.len());
+    tracing::info!("[mft-usn] MFT 枚举完成: {} 条记录", mft_entries.len());
 
     let records = Arc::new(
         mft_entries
@@ -602,17 +602,17 @@ fn scan_path_once(
     let duration = start.elapsed();
 
     if let Some(checkpoint) = &end_checkpoint {
-        println!(
+        tracing::info!(
             "[mft-usn] captured USN checkpoint journal_id={} next_usn={}",
             checkpoint.journal_id, checkpoint.next_usn
         );
     } else {
-        println!(
+        tracing::info!(
             "[mft-usn] USN checkpoint unavailable after scan; subsequent runs will rebuild the deep cache instead of using slow mtime incremental"
         );
     }
 
-    println!(
+    tracing::info!(
         "========== MFT + USN 深度扫描完成 ==========\n耗时: {:.2}s | 文件: {} | 目录: {} | 大小: {:.2} GB",
         duration.as_secs_f64(),
         scanned_files,
@@ -634,7 +634,7 @@ fn scan_path_once(
             } else {
                 0.0
             };
-            println!(
+            tracing::info!(
                 "磁盘已用: {:.2} GB | 扫描到: {:.2} GB | 漏算量: {:.2} GB ({:.1}%) (系统保留/无权限文件)",
                 bytes as f64 / 1024.0 / 1024.0 / 1024.0,
                 scanned_size as f64 / 1024.0 / 1024.0 / 1024.0,
@@ -645,14 +645,14 @@ fn scan_path_once(
         None => disk_usage_timer.finish_with("disk_used=unavailable"),
     }
 
-    println!(
+    tracing::info!(
         "[mft-usn] metadata path fallback hits={} recovered_size={:.2} GB unresolved_inaccessible={}",
         aggregate.metadata_fallback_count,
         aggregate.metadata_fallback_bytes as f64 / 1024.0 / 1024.0 / 1024.0,
         aggregate.inaccessible_count
     );
     if !aggregate.inaccessible_samples.is_empty() {
-        println!(
+        tracing::info!(
             "[mft-usn] inaccessible sample paths: {}",
             aggregate.inaccessible_samples.join(" | ")
         );
@@ -1166,7 +1166,7 @@ fn reconcile_post_scan_window(
         return PostScanDecision::Complete(result);
     }
 
-    println!(
+    tracing::info!(
         "[mft-usn] post-scan delta detected changed_dirs={} root_files_changed={}",
         changed_dirs.len(),
         change_set.root_files_changed
@@ -1264,7 +1264,7 @@ fn reconcile_post_scan_window(
         result.large_files.len()
     ));
 
-    println!(
+    tracing::info!(
         "[mft-usn] post-scan delta reconciled in {:.2}ms",
         started.elapsed().as_secs_f64() * 1000.0
     );

@@ -1,4 +1,4 @@
-use super::link_creator::{LinkCreator, LinkType};
+﻿use super::link_creator::{LinkCreator, LinkType};
 use anyhow::{anyhow, Result};
 use rayon::prelude::*;
 #[cfg(target_os = "windows")]
@@ -183,7 +183,7 @@ impl FileMigrator {
             .ok_or_else(|| anyhow!("Invalid source path"))?;
         let target_path = target_disk.join(file_name);
         let is_directory = source_metadata.is_dir();
-        println!(
+        tracing::info!(
             "[migration-core] begin source={} target_disk={} target_path={} requested_link_type={:?} is_directory={}",
             source.display(),
             target_disk.display(),
@@ -207,13 +207,13 @@ impl FileMigrator {
         };
         let (file_size, total_files) = source_stats;
         let available_space = self.get_available_space(target_disk)?;
-        println!(
+        tracing::info!(
             "[migration-core] source_stats bytes={} files={} target_free_bytes={}",
             file_size, total_files, available_space
         );
 
         if target_path.exists() {
-            eprintln!(
+            tracing::warn!(
                 "[migration-core] abort target already exists: {}",
                 target_path.display()
             );
@@ -226,7 +226,7 @@ impl FileMigrator {
 
         let required_space = Self::required_target_space(file_size);
         if available_space < required_space {
-            eprintln!(
+            tracing::warn!(
                 "[migration-core] abort target disk full target={} required={} available={}",
                 target_disk.display(),
                 required_space,
@@ -275,7 +275,7 @@ impl FileMigrator {
             Ok(summary) => summary,
             Err(e) => {
                 let _ = self.cleanup_target(&staging_path);
-                eprintln!(
+                tracing::warn!(
                     "[migration-core] copy failed source={} staging={} error={e}",
                     source.display(),
                     staging_path.display()
@@ -283,7 +283,7 @@ impl FileMigrator {
                 return Ok(make_err_with_target(format!("Copy failed: {}", e)));
             }
         };
-        println!(
+        tracing::info!(
             "[migration-core] copy complete staging={} copied_bytes={} copied_files={} elapsed_ms={}",
             staging_path.display(),
             copy_summary.copied_bytes,
@@ -302,7 +302,7 @@ impl FileMigrator {
         );
         if copy_summary.copied_bytes != file_size || copy_summary.copied_files != total_files {
             let _ = self.cleanup_target(&staging_path);
-            eprintln!(
+            tracing::warn!(
                 "[migration-core] verification failed staging={} expected_bytes={} actual_bytes={} expected_files={} actual_files={}",
                 staging_path.display(),
                 file_size,
@@ -312,7 +312,7 @@ impl FileMigrator {
             );
             return Ok(make_err_with_target("Verification failed".to_string()));
         }
-        println!(
+        tracing::info!(
             "[migration-core] verification passed staging={}",
             staging_path.display()
         );
@@ -326,14 +326,14 @@ impl FileMigrator {
 
         if let Err(e) = fs::rename(&staging_path, &target_path) {
             let _ = self.cleanup_target(&staging_path);
-            eprintln!(
+            tracing::warn!(
                 "[migration-core] commit failed staging={} target={} error={e}",
                 staging_path.display(),
                 target_path.display()
             );
             return Ok(make_err_with_target(format!("Commit failed: {}", e)));
         }
-        println!(
+        tracing::info!(
             "[migration-core] commit complete staging={} target={}",
             staging_path.display(),
             target_path.display()
@@ -341,7 +341,7 @@ impl FileMigrator {
 
         if let Err(e) = Self::verify_committed_target(&target_path, is_directory, file_size) {
             let _ = self.cleanup_target(&target_path);
-            eprintln!(
+            tracing::warn!(
                 "[migration-core] committed target verification failed target={} error={e}",
                 target_path.display()
             );
@@ -353,7 +353,7 @@ impl FileMigrator {
 
         if let Err(e) = Self::verify_source_manifest(&copy_summary.source_manifest) {
             cleanup_staged_target(&target_path);
-            eprintln!(
+            tracing::warn!(
                 "[migration-core] source changed after copy source={} error={e}",
                 source.display()
             );
@@ -374,14 +374,14 @@ impl FileMigrator {
         let backup_path = self.create_backup_path(source);
         if let Err(e) = fs::rename(source, &backup_path) {
             let _ = self.cleanup_target(&target_path);
-            eprintln!(
+            tracing::warn!(
                 "[migration-core] backup failed source={} backup={} error={e}",
                 source.display(),
                 backup_path.display()
             );
             return Ok(make_err_with_target(format!("Backup failed: {}", e)));
         }
-        println!(
+        tracing::info!(
             "[migration-core] source swapped to backup source={} backup={}",
             source.display(),
             backup_path.display()
@@ -394,7 +394,7 @@ impl FileMigrator {
         ) {
             let _ = fs::rename(&backup_path, source);
             let _ = self.cleanup_target(&target_path);
-            eprintln!(
+            tracing::warn!(
                 "[migration-core] backup verification failed backup={} error={e}",
                 backup_path.display()
             );
@@ -415,7 +415,7 @@ impl FileMigrator {
                 source.to_string_lossy().as_ref(),
             );
             let _ = self.cleanup_backup(&backup_path);
-            println!(
+            tracing::info!(
                 "[migration-core] completed without link source={} target={} duration_ms={}",
                 source.display(),
                 target_path.display(),
@@ -453,7 +453,7 @@ impl FileMigrator {
             Err(e) => {
                 let _ = fs::rename(&backup_path, source);
                 let _ = self.cleanup_target(&target_path);
-                eprintln!(
+                tracing::warn!(
                     "[migration-core] link creation failed source={} target={} requested_link_type={:?} error={e}",
                     source.display(),
                     target_path.display(),
@@ -462,7 +462,7 @@ impl FileMigrator {
                 return Ok(make_err_with_target(format!("Link creation failed: {}", e)));
             }
         };
-        println!(
+        tracing::info!(
             "[migration-core] link created source={} target={} actual_link_type={:?}",
             source.display(),
             target_path.display(),
@@ -473,7 +473,7 @@ impl FileMigrator {
             let _ = self.remove_path(source);
             let _ = fs::rename(&backup_path, source);
             let _ = self.cleanup_target(&target_path);
-            eprintln!(
+            tracing::warn!(
                 "[migration-core] link verification failed source={} target={} actual_link_type={:?}",
                 source.display(),
                 target_path.display(),
@@ -484,7 +484,7 @@ impl FileMigrator {
                 ..make_err_with_target("Link verification failed".to_string())
             });
         }
-        println!(
+        tracing::info!(
             "[migration-core] link verification passed source={}",
             source.display()
         );
@@ -499,7 +499,7 @@ impl FileMigrator {
             source.to_string_lossy().as_ref(),
         );
         let _ = self.cleanup_backup(&backup_path);
-        println!(
+        tracing::info!(
             "[migration-core] cleanup complete backup={} duration_ms={}",
             backup_path.display(),
             start.elapsed().as_millis()
@@ -1061,7 +1061,7 @@ impl FileMigrator {
             Ok(copied) => copied,
             Err(copyfile2_err) => {
                 let _ = fs::remove_file(target);
-                eprintln!(
+                tracing::warn!(
                     "[migration] CopyFile2 failed for {}: {copyfile2_err}; falling back to buffered copy (ADS/ACL may be lost)",
                     source.display()
                 );
@@ -1477,7 +1477,7 @@ pub struct MigrationResult {
 impl FileMigrator {
     pub async fn rollback(&self, source: &Path, target: &Path) -> Result<RollbackResult> {
         let start = Instant::now();
-        println!(
+        tracing::info!(
             "[migration-core] rollback begin source={} target={}",
             source.display(),
             target.display()
@@ -1492,7 +1492,7 @@ impl FileMigrator {
         };
 
         if !target.exists() {
-            eprintln!(
+            tracing::warn!(
                 "[migration-core] rollback abort missing target={}",
                 target.display()
             );
@@ -1501,7 +1501,7 @@ impl FileMigrator {
 
         if source.exists() {
             if let Err(e) = self.remove_path(source) {
-                eprintln!(
+                tracing::warn!(
                     "[migration-core] rollback failed removing source link {}: {e}",
                     source.display()
                 );
@@ -1513,7 +1513,7 @@ impl FileMigrator {
         if let Err(e) =
             self.copy_with_progress(target, source, target_size, target_files, &None, None)
         {
-            eprintln!(
+            tracing::warn!(
                 "[migration-core] rollback failed restoring source={} from target={} error={e}",
                 source.display(),
                 target.display()
@@ -1522,14 +1522,14 @@ impl FileMigrator {
         }
 
         if let Err(e) = self.cleanup_target(target) {
-            eprintln!(
+            tracing::warn!(
                 "[migration-core] rollback failed cleaning target={} error={e}",
                 target.display()
             );
             return Ok(make_err(format!("Failed to cleanup target: {}", e)));
         }
 
-        println!(
+        tracing::info!(
             "[migration-core] rollback completed source={} target={} duration_ms={}",
             source.display(),
             target.display(),

@@ -562,7 +562,7 @@ mod windows_impl {
         let volume = match open_volume_handle(path) {
             Ok(handle) => handle,
             Err(err) => {
-                eprintln!(
+                tracing::warn!(
                     "[winfs] failed to open volume for USN checkpoint {}: {}",
                     path.display(),
                     err
@@ -586,7 +586,7 @@ mod windows_impl {
                 None,
             )
         } {
-            eprintln!(
+            tracing::warn!(
                 "[winfs] FSCTL_QUERY_USN_JOURNAL failed for {}: {}",
                 path.display(),
                 err
@@ -610,7 +610,7 @@ mod windows_impl {
         let volume = match open_volume_handle(root_path) {
             Ok(handle) => handle,
             Err(err) => {
-                eprintln!(
+                tracing::warn!(
                     "[winfs] failed to open volume for USN read {}: {}",
                     root_path.display(),
                     err
@@ -636,7 +636,7 @@ mod windows_impl {
         }
         .is_err()
         {
-            eprintln!(
+            tracing::warn!(
                 "[winfs] FSCTL_QUERY_USN_JOURNAL failed before delta read for {}",
                 root_path.display()
             );
@@ -644,8 +644,7 @@ mod windows_impl {
         }
 
         if current.UsnJournalID != checkpoint.journal_id || current.NextUsn < checkpoint.next_usn {
-            println!(
-                "[scan-timing][winfs-usn] collect_usn_changed_dirs path={} took {:.2}ms | status=checkpoint_invalid current_journal_id={} checkpoint_journal_id={} current_next_usn={} checkpoint_next_usn={}",
+            tracing::debug!("[scan-timing][winfs-usn] collect_usn_changed_dirs path={} took {:.2}ms | status=checkpoint_invalid current_journal_id={} checkpoint_journal_id={} current_next_usn={} checkpoint_next_usn={}",
                 root_path.display(),
                 started.elapsed().as_secs_f64() * 1000.0,
                 current.UsnJournalID,
@@ -690,7 +689,7 @@ mod windows_impl {
             }
             .is_err()
             {
-                eprintln!(
+                tracing::warn!(
                     "[winfs] FSCTL_READ_USN_JOURNAL failed for {} at start_usn={}",
                     root_path.display(),
                     input.StartUsn
@@ -748,8 +747,7 @@ mod windows_impl {
             }
         }
 
-        println!(
-            "[scan-timing][winfs-usn] collect_usn_changed_dirs path={} took {:.2}ms | read_calls={} records_seen={} recursive_dirs={} direct_file_dirs={} root_files_changed={} start_usn={} end_usn={}",
+        tracing::debug!("[scan-timing][winfs-usn] collect_usn_changed_dirs path={} took {:.2}ms | read_calls={} records_seen={} recursive_dirs={} direct_file_dirs={} root_files_changed={} start_usn={} end_usn={}",
             root_path.display(),
             started.elapsed().as_secs_f64() * 1000.0,
             read_calls,

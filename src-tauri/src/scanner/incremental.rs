@@ -482,8 +482,7 @@ pub(crate) fn scan_root_files(
     large_files.sort_by(|a, b| b.size.cmp(&a.size));
     let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
     if elapsed_ms >= 100.0 {
-        println!(
-            "[scan-timing][incremental] scan_root_files path={} took {:.2}ms | files={} size={} large_files={}",
+        tracing::debug!("[scan-timing][incremental] scan_root_files path={} took {:.2}ms | files={} size={} large_files={}",
             path.display(),
             elapsed_ms,
             total_files,
@@ -838,7 +837,7 @@ async fn fallback_to_full_scan(
             path.display()
         ),
     );
-    println!("[增量->全量] {reason}");
+    tracing::info!("[增量->全量] {reason}");
     emit_deep_scan_progress(
         deep_progress_emitter,
         ScanProgress {
@@ -885,9 +884,9 @@ async fn scan_incremental_internal(
     let large_file_threshold = 100 * 1024 * 1024u64;
     let root_path_str = path.to_string_lossy().to_string();
 
-    println!("\n========== 增量扫描开始 ==========");
-    println!("扫描路径: {}", path.display());
-    println!(
+    tracing::info!("\n========== 增量扫描开始 ==========");
+    tracing::info!("扫描路径: {}", path.display());
+    tracing::info!(
         "[阶段0] 缓存摘要 backend={:?} files={} dirs={} size={} root_file_id={:?} usn_journal_id={:?} usn_next_usn={:?}",
         cached_result.scan_backend,
         cached_result.total_files,
@@ -904,7 +903,7 @@ async fn scan_incremental_internal(
     );
     let total_cached_dirs = count_directories(&cached_result.directories, &root_path_str);
     cached_count_timer.finish_with(format!("cached_dirs={}", total_cached_dirs));
-    println!("[阶段1] 缓存目录总数: {}", total_cached_dirs);
+    tracing::info!("[阶段1] 缓存目录总数: {}", total_cached_dirs);
 
     emit_incremental_progress(
         progress_emitter.as_ref(),
@@ -954,19 +953,19 @@ async fn scan_incremental_internal(
     root_files_changed = root_files_changed
         || cached_root_size != current_root_size
         || cached_root_files != current_root_files;
-    println!(
+    tracing::info!(
         "[阶段1] 变化检测完成，耗时: {:.2}ms | mode={}",
         detect_start.elapsed().as_secs_f64() * 1000.0,
         detection_mode
     );
     if detection_mode == "mtime" {
         if cached_result.usn_journal_id.is_some() && cached_result.usn_next_usn.is_some() {
-            println!("[阶段1] USN checkpoint 存在，但本次未能直接使用，已回退到 mtime 递归检测");
+            tracing::info!("[阶段1] USN checkpoint 存在，但本次未能直接使用，已回退到 mtime 递归检测");
         } else {
-            println!("[阶段1] 缓存缺少 USN checkpoint，本次只能使用 mtime 递归检测");
+            tracing::info!("[阶段1] 缓存缺少 USN checkpoint，本次只能使用 mtime 递归检测");
         }
     } else {
-        println!("[阶段1] 本次增量检测使用了 USN 日志");
+        tracing::info!("[阶段1] 本次增量检测使用了 USN 日志");
     }
 
     let change_dirs = changes
@@ -982,7 +981,7 @@ async fn scan_incremental_internal(
         "mode={} total_changes={} rescan_dirs={} deleted_dirs={} root_files_changed={}",
         detection_mode, total_changes, change_dirs, delete_dirs, root_files_changed
     ));
-    println!(
+    tracing::info!(
         "[阶段1] 总变化: {} 个 (重扫: {}, 删除: {}, 根文件变化: {})",
         total_changes, change_dirs, delete_dirs, root_files_changed
     );
@@ -1007,7 +1006,7 @@ async fn scan_incremental_internal(
 
     // 无变化，直接返回缓存
     if total_changes == 0 {
-        println!("[结果] 无变化，直接使用缓存");
+        tracing::info!("[结果] 无变化，直接使用缓存");
         emit_incremental_progress(
             progress_emitter.as_ref(),
             IncrementalScanProgress {
@@ -1018,7 +1017,7 @@ async fn scan_incremental_internal(
                 scanned_dirs: 0,
             },
         );
-        println!(
+        tracing::info!(
             "========== 增量扫描完成 (耗时: {:.2}ms) ==========\n",
             start.elapsed().as_secs_f64() * 1000.0
         );
@@ -1031,14 +1030,14 @@ async fn scan_incremental_internal(
 
     // 变化过多，回退到全量扫描
     let change_ratio = total_changes as f64 / (total_cached_dirs as f64).max(1.0);
-    println!(
+    tracing::info!(
         "[阶段1] 变化比例: {:.2}% ({} / {})",
         change_ratio * 100.0,
         total_changes,
         total_cached_dirs.max(1)
     );
     if change_ratio > 0.3 {
-        println!(
+        tracing::info!(
             "[阶段2] 变化超过30% ({:.1}%)，切换到全量扫描",
             change_ratio * 100.0
         );
@@ -1063,7 +1062,7 @@ async fn scan_incremental_internal(
         .filter(|c| c.status != ChangeStatus::Deleted)
         .collect();
     let total_rescans = rescan_candidates.len() + usize::from(root_files_changed);
-    println!(
+    tracing::info!(
         "[阶段2] 开始重扫 {} 个目录 | 删除 {} 个 | 根文件变化={}",
         rescan_candidates.len(),
         delete_dirs,
@@ -1108,7 +1107,7 @@ async fn scan_incremental_internal(
         if let Some(node) = result {
             let elapsed_ms = rescan_start.elapsed().as_secs_f64() * 1000.0;
             if elapsed_ms >= 2000.0 {
-                println!(
+                tracing::info!(
                     "[阶段2] 慢重扫 {:.2}ms mode={:?} path={}",
                     elapsed_ms,
                     change.mode,
@@ -1139,7 +1138,7 @@ async fn scan_incremental_internal(
             } else {
                 completed as f64 / rescan_candidates.len() as f64 * 100.0
             };
-            println!(
+            tracing::info!(
                 "[阶段2] 重扫进度 {}/{} ({:.1}%) latest_mode={:?} path={}",
                 completed,
                 rescan_candidates.len(),
@@ -1152,7 +1151,7 @@ async fn scan_incremental_internal(
     }
 
     if root_files_changed {
-        println!("[阶段2] 根目录直接文件存在变化，已将根节点刷新纳入结果");
+        tracing::info!("[阶段2] 根目录直接文件存在变化，已将根节点刷新纳入结果");
         emit_incremental_progress(
             progress_emitter.as_ref(),
             IncrementalScanProgress {
@@ -1173,7 +1172,7 @@ async fn scan_incremental_internal(
         .iter()
         .filter(|item| item.mode == RescanMode::DirectFilesOnly)
         .count();
-    println!(
+    tracing::info!(
         "[阶段2] 重新扫描了 {} 个目录, 删除 {} 个 | recursive={} direct_only={} stage2_ms={:.2}",
         rescanned_dirs.len(),
         deleted_paths.len(),
@@ -1227,7 +1226,7 @@ async fn scan_incremental_internal(
     } else {
         "full_tree_merge"
     };
-    println!(
+    tracing::info!(
         "[阶段3] 开始合并 | strategy={} rescanned={} deleted={}",
         merge_strategy,
         rescanned_dirs.len(),
@@ -1261,7 +1260,7 @@ async fn scan_incremental_internal(
         current_root_files,
     );
 
-    println!(
+    tracing::info!(
         "[阶段3] 数据合并完成，耗时: {:.2}ms",
         merge_start.elapsed().as_secs_f64() * 1000.0
     );
@@ -1271,7 +1270,7 @@ async fn scan_incremental_internal(
     let (new_total_size, new_total_files) = (tree_size, tree_files);
     let new_total_dirs = count_directories(&updated_tree, &root_path_str);
     let merge_health = inspect_tree_merge_health(&updated_tree, path);
-    println!(
+    tracing::info!(
         "[阶段3] 合并后树校验 roots={} unique_dirs={} duplicate_paths={} orphan_roots={} inconsistent_nodes={}",
         updated_tree.len(),
         merge_health.unique_dir_nodes,
@@ -1280,13 +1279,13 @@ async fn scan_incremental_internal(
         merge_health.inconsistent_node_count
     );
     if !merge_health.orphan_root_samples.is_empty() {
-        println!(
+        tracing::info!(
             "[阶段3] 异常根节点样本: {}",
             merge_health.orphan_root_samples.join(" | ")
         );
     }
     if !merge_health.inconsistent_node_samples.is_empty() {
-        println!(
+        tracing::info!(
             "[阶段3] 统计异常样本: {}",
             merge_health.inconsistent_node_samples.join(" | ")
         );
@@ -1304,7 +1303,7 @@ async fn scan_incremental_internal(
             merge_health.orphan_root_count,
             merge_health.inconsistent_node_count
         ));
-        println!("[阶段3] 检测到增量合并结构异常，放弃本次增量结果并切换到全量深度扫描重建缓存");
+        tracing::info!("[阶段3] 检测到增量合并结构异常，放弃本次增量结果并切换到全量深度扫描重建缓存");
         let result = fallback_to_full_scan(
             path,
             scanner,
@@ -1381,14 +1380,14 @@ async fn scan_incremental_internal(
         },
     );
 
-    println!("\n========== 增量扫描完成 ==========");
-    println!("总耗时: {:.2}ms", scan_duration_ms as f64);
-    println!(
+    tracing::info!("\n========== 增量扫描完成 ==========");
+    tracing::info!("总耗时: {:.2}ms", scan_duration_ms as f64);
+    tracing::info!(
         "更新后: {:.2} GB, {} 文件",
         new_total_size as f64 / 1024.0 / 1024.0 / 1024.0,
         new_total_files
     );
-    println!("==================================\n");
+    tracing::info!("==================================\n");
 
     let checkpoint_timer = StageTimer::start(
         "incremental",
@@ -1403,12 +1402,12 @@ async fn scan_incremental_internal(
         None => checkpoint_timer.finish_with("available=false"),
     }
     if let Some(checkpoint) = &journal {
-        println!(
+        tracing::info!(
             "[阶段3] 更新后的 USN checkpoint journal_id={} next_usn={}",
             checkpoint.journal_id, checkpoint.next_usn
         );
     } else {
-        println!("[阶段3] 更新后仍未获取到 USN checkpoint");
+        tracing::info!("[阶段3] 更新后仍未获取到 USN checkpoint");
     }
 
     total_timer.finish_with(format!(

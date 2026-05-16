@@ -1,4 +1,4 @@
-use super::backend::{self, ScanBackendKind};
+﻿use super::backend::{self, ScanBackendKind};
 use super::file_info::{DirectoryNode, ScanResult};
 use super::progress::ScanProgress;
 use super::scan_index::IndexedScanResult;
@@ -149,7 +149,7 @@ impl DiskScanner {
         );
         let preferred_backend = backend::select_backend(path);
         backend_timer.finish_with(format!("preferred_backend={}", preferred_backend.label()));
-        println!(
+        tracing::info!(
             "[deep-scan] request path={} estimated_files={} preferred_backend={}",
             path.display(),
             estimated_files,
@@ -182,11 +182,11 @@ impl DiskScanner {
                 }
                 Ok(None) => {
                     mft_timer.finish_with("status=fallback reason=unsupported_or_unavailable");
-                    println!("[mft-usn] 路径不满足条件，回退到原生递归扫描");
+                    tracing::info!("[mft-usn] 路径不满足条件，回退到原生递归扫描");
                 }
                 Err(err) => {
                     mft_timer.finish_with(format!("status=fallback reason={err}"));
-                    println!("[mft-usn] 扫描失败({err})，回退到原生递归扫描");
+                    tracing::info!("[mft-usn] 扫描失败({err})，回退到原生递归扫描");
                 }
             }
         }
@@ -194,8 +194,8 @@ impl DiskScanner {
         let start = Instant::now();
         let root_path = path.to_string_lossy().to_string();
 
-        println!("\n========== 深度扫描开始 ==========");
-        println!("扫描路径: {}", root_path);
+        tracing::info!("\n========== 深度扫描开始 ==========");
+        tracing::info!("扫描路径: {}", root_path);
 
         let inaccessible_count = Arc::new(AtomicUsize::new(0));
         let mut large_files: Vec<super::file_info::FileInfo> = Vec::new();
@@ -520,8 +520,8 @@ impl DiskScanner {
         let duration = start.elapsed();
         let large_files_vec = large_files;
 
-        println!("========== 深度扫描完成 ==========");
-        println!(
+        tracing::info!("========== 深度扫描完成 ==========");
+        tracing::info!(
             "耗时: {:.2}s | 文件: {} | 目录: {} | 大小: {:.2} GB",
             duration.as_secs_f64(),
             scanned_files,
@@ -543,7 +543,7 @@ impl DiskScanner {
                 } else {
                     0.0
                 };
-                println!(
+                tracing::info!(
                     "磁盘已用: {:.2} GB | 扫描到: {:.2} GB | 漏算量: {:.2} GB ({:.1}%) (系统保留/无权限文件)",
                     disk_used as f64 / 1024.0 / 1024.0 / 1024.0,
                     scanned_size as f64 / 1024.0 / 1024.0 / 1024.0,
@@ -574,12 +574,12 @@ impl DiskScanner {
         }
 
         if let Some(checkpoint) = journal {
-            println!(
+            tracing::info!(
                 "[deep-scan] captured USN checkpoint journal_id={} next_usn={}",
                 checkpoint.journal_id, checkpoint.next_usn
             );
         } else {
-            println!(
+            tracing::info!(
                 "[deep-scan] USN checkpoint unavailable for {}; future runs will reuse the fresh cache only when fast incremental data is available",
                 path.display()
             );
