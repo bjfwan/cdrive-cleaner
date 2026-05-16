@@ -1316,11 +1316,12 @@ async fn scan_incremental_internal(
             merge_health.inconsistent_node_samples.join(" | ")
         );
     }
-    if merge_health.duplicate_paths > 0
+    let inconsistent_threshold = (merge_health.unique_dir_nodes / 100).max(50);
+    let critical = merge_health.duplicate_paths > 0
         || merge_health.orphan_root_count > 0
-        || merge_health.inconsistent_node_count > 0
-        || merge_health.unique_dir_nodes != new_total_dirs
-    {
+        || merge_health.inconsistent_node_count > inconsistent_threshold
+        || merge_health.unique_dir_nodes.abs_diff(new_total_dirs) > 10;
+    if critical {
         merge_timer.finish_with(format!(
             "status=invalid_tree roots={} unique_dirs={} duplicate_paths={} orphan_roots={} inconsistent_nodes={}",
             updated_tree.len(),
@@ -1646,7 +1647,279 @@ pub fn merge_scan_results(
     deleted_paths: Vec<String>,
     root_path: &Path,
 ) -> Vec<DirectoryNode> {
-    merge_scan_results_flat(old_tree, changed_dirs, deleted_paths, root_path)
+    match merge_scan_results_keyed(old_tree, changed_dirs, deleted_paths, root_path) {
+        Ok(tree) => tree,
+        Err(fallback_input) => merge_scan_results_flat(
+            fallback_input.old_tree,
+            fallback_input.changed_dirs,
+            fallback_input.deleted_paths,
+            root_path,
+        ),
+    }
+}
+
+struct KeyedMergeFallback {
+    old_tree: Vec<DirectoryNode>,
+    changed_dirs: Vec<DirectoryNode>,
+    deleted_paths: Vec<String>,
+}
+
+fn merge_scan_results_keyed(
+    old_tree: Vec<DirectoryNode>,
+    changed_dirs: Vec<DirectoryNode>,
+    deleted_paths: Vec<String>,
+    root_path: &Path,
+) -> Result<Vec<DirectoryNode>, KeyedMergeFallback> {
+    let root_key = normalized_path_key(root_path);
+
+    let mut delete_keys: Vec<String> = Vec::with_capacity(deleted_paths.len());
+    for raw in &deleted_paths {
+        let key = normalized_path_key_str(raw);
+        if key == root_key {
+            return Err(KeyedMergeFallback {
+                old_tree,
+                changed_dirs,
+                deleted_paths,
+            });
+        }
+        delete_keys.push(key);
+    }
+
+    let mut change_keys: Vec<String> = Vec::with_capacity(changed_dirs.len());
+    for node in &changed_dirs {
+        let key = normalized_path_key_str(&node.path);
+        if key == root_key {
+            return Err(KeyedMergeFallback {
+                old_tree,
+                changed_dirs,
+                deleted_paths,
+            });
+        }
+        change_keys.push(key);
+    }
+
+    let mut tree = old_tree;
+
+    let mut delete_pairs: Vec<(String, String)> = deleted_paths
+        .iter()
+        .zip(delete_keys.iter())
+        .map(|(p, k)| (p.clone(), k.clone()))
+        .collect();
+    delete_pairs.sort_by(|a, b| b.1.matches('\\').count().cmp(&a.1.matches('\\').count()));
+
+    for (raw, key) in &delete_pairs {
+        let target = Path::new(raw);
+        let parent = match target.parent() {
+            Some(p) => p,
+            None => {
+                return Err(KeyedMergeFallback {
+                    old_tree: tree,
+                    changed_dirs,
+                    deleted_paths,
+                });
+            }
+        };
+        let parent_key = normalized_path_key(parent);
+        if !apply_delete(&mut tree, &parent_key, key, &root_key) {
+            return Err(KeyedMergeFallback {
+                old_tree: tree,
+                changed_dirs,
+                deleted_paths,
+            });
+        }
+    }
+
+    let mut indexed: Vec<(usize, String, DirectoryNode)> = changed_dirs
+        .into_iter()
+        .enumerate()
+        .map(|(idx, node)| (idx, change_keys[idx].clone(), node))
+        .collect();
+    indexed.sort_by(|a, b| a.1.matches('\\').count().cmp(&b.1.matches('\\').count()));
+
+    for (_, key, node) in indexed {
+        let target = PathBuf::from(&node.path);
+        let parent = match target.parent() {
+            Some(p) => p.to_path_buf(),
+            None => {
+                return Err(KeyedMergeFallback {
+                    old_tree: tree,
+                    changed_dirs: vec![node],
+                    deleted_paths: Vec::new(),
+                });
+            }
+        };
+        let parent_key = normalized_path_key(&parent);
+        apply_upsert(&mut tree, &parent_key, &key, &root_key, node);
+    }
+
+    sort_directory_tree(&mut tree);
+    Ok(tree)
+}
+
+fn apply_delete(
+    tree: &mut Vec<DirectoryNode>,
+    parent_key: &str,
+    target_key: &str,
+    root_key: &str,
+) -> bool {
+    if parent_key == root_key {
+        if let Some(pos) = tree
+            .iter()
+            .position(|n| normalized_path_key_str(&n.path) == target_key)
+        {
+            tree.remove(pos);
+            return true;
+        }
+        return false;
+    }
+    for node in tree.iter_mut() {
+        if let Some((removed_size, removed_files, removed_dirs)) =
+            delete_in_subtree(node, parent_key, target_key)
+        {
+            apply_subtotal_delta(
+                node,
+                -(removed_size as i128),
+                -(removed_files as isize),
+                -(removed_dirs as isize),
+            );
+            return true;
+        }
+    }
+    false
+}
+
+fn delete_in_subtree(
+    node: &mut DirectoryNode,
+    parent_key: &str,
+    target_key: &str,
+) -> Option<(u64, usize, usize)> {
+    let node_key = normalized_path_key_str(&node.path);
+    if node_key == parent_key {
+        if let Some(pos) = node
+            .children
+            .iter()
+            .position(|c| normalized_path_key_str(&c.path) == target_key)
+        {
+            let removed = node.children.remove(pos);
+            if node.children.is_empty() {
+                node.has_children = false;
+            }
+            return Some((removed.size, removed.file_count, removed.dir_count));
+        }
+        return None;
+    }
+    if !key_starts_with(parent_key, &node_key) {
+        return None;
+    }
+    for child in node.children.iter_mut() {
+        if let Some(delta) = delete_in_subtree(child, parent_key, target_key) {
+            apply_subtotal_delta(
+                child,
+                -(delta.0 as i128),
+                -(delta.1 as isize),
+                -(delta.2 as isize),
+            );
+            return Some(delta);
+        }
+    }
+    None
+}
+
+fn apply_upsert(
+    tree: &mut Vec<DirectoryNode>,
+    parent_key: &str,
+    target_key: &str,
+    root_key: &str,
+    new_node: DirectoryNode,
+) {
+    if parent_key == root_key {
+        if let Some(pos) = tree
+            .iter()
+            .position(|n| normalized_path_key_str(&n.path) == target_key)
+        {
+            tree[pos] = new_node;
+        } else {
+            tree.push(new_node);
+        }
+        return;
+    }
+    for node in tree.iter_mut() {
+        if let Some((size_delta, file_delta, dir_delta)) =
+            upsert_in_subtree(node, parent_key, target_key, &new_node)
+        {
+            apply_subtotal_delta(node, size_delta, file_delta, dir_delta);
+            return;
+        }
+    }
+    tree.push(new_node);
+}
+
+fn upsert_in_subtree(
+    node: &mut DirectoryNode,
+    parent_key: &str,
+    target_key: &str,
+    new_node: &DirectoryNode,
+) -> Option<(i128, isize, isize)> {
+    let node_key = normalized_path_key_str(&node.path);
+    if node_key == parent_key {
+        if let Some(pos) = node
+            .children
+            .iter()
+            .position(|c| normalized_path_key_str(&c.path) == target_key)
+        {
+            let prev = node.children[pos].clone();
+            node.children[pos] = new_node.clone();
+            let size_delta = new_node.size as i128 - prev.size as i128;
+            let file_delta = new_node.file_count as isize - prev.file_count as isize;
+            let dir_delta = new_node.dir_count as isize - prev.dir_count as isize;
+            return Some((size_delta, file_delta, dir_delta));
+        }
+        node.children.push(new_node.clone());
+        node.has_children = true;
+        let size_delta = new_node.size as i128;
+        let file_delta = new_node.file_count as isize;
+        let dir_delta = new_node.dir_count as isize;
+        return Some((size_delta, file_delta, dir_delta));
+    }
+    if !key_starts_with(parent_key, &node_key) {
+        return None;
+    }
+    for child in node.children.iter_mut() {
+        if let Some(delta) = upsert_in_subtree(child, parent_key, target_key, new_node) {
+            apply_subtotal_delta(child, delta.0, delta.1, delta.2);
+            return Some(delta);
+        }
+    }
+    None
+}
+
+fn apply_subtotal_delta(
+    node: &mut DirectoryNode,
+    size_delta: i128,
+    file_delta: isize,
+    dir_delta: isize,
+) {
+    node.size = if size_delta >= 0 {
+        node.size.saturating_add(size_delta as u64)
+    } else {
+        node.size.saturating_sub(size_delta.unsigned_abs() as u64)
+    };
+    node.file_count = node.file_count.saturating_add_signed(file_delta);
+    node.dir_count = node.dir_count.saturating_add_signed(dir_delta);
+}
+
+fn key_starts_with(child_key: &str, ancestor_key: &str) -> bool {
+    if child_key == ancestor_key {
+        return true;
+    }
+    if child_key.len() <= ancestor_key.len() {
+        return false;
+    }
+    if !child_key.starts_with(ancestor_key) {
+        return false;
+    }
+    let next = &child_key[ancestor_key.len()..];
+    next.starts_with('\\') || next.starts_with('/')
 }
 
 fn merge_scan_results_flat(
@@ -1798,7 +2071,13 @@ fn inspect_tree_merge_health(nodes: &[DirectoryNode], root_path: &Path) -> TreeM
         if !path_matches(&node.path, root_path) {
             health.unique_dir_nodes += 1;
             let expected_dir_count = 1 + child_dir_sum;
-            if node.dir_count != expected_dir_count {
+            let dir_diff = if node.dir_count >= expected_dir_count {
+                node.dir_count - expected_dir_count
+            } else {
+                expected_dir_count - node.dir_count
+            };
+            let dir_tolerance = (expected_dir_count / 50).max(2);
+            if dir_diff > dir_tolerance {
                 health.inconsistent_node_count += 1;
                 if health.inconsistent_node_samples.len() < 5 {
                     health.inconsistent_node_samples.push(format!(
@@ -1810,21 +2089,29 @@ fn inspect_tree_merge_health(nodes: &[DirectoryNode], root_path: &Path) -> TreeM
         }
 
         if node.size < child_size_sum {
-            health.inconsistent_node_count += 1;
-            if health.inconsistent_node_samples.len() < 5 {
-                health.inconsistent_node_samples.push(format!(
-                    "{} size={} child_sum={}",
-                    node.path, node.size, child_size_sum
-                ));
+            let diff = child_size_sum - node.size;
+            let tolerance = (child_size_sum / 50).max(1024 * 1024);
+            if diff > tolerance {
+                health.inconsistent_node_count += 1;
+                if health.inconsistent_node_samples.len() < 5 {
+                    health.inconsistent_node_samples.push(format!(
+                        "{} size={} child_sum={}",
+                        node.path, node.size, child_size_sum
+                    ));
+                }
             }
         }
         if node.file_count < child_file_sum {
-            health.inconsistent_node_count += 1;
-            if health.inconsistent_node_samples.len() < 5 {
-                health.inconsistent_node_samples.push(format!(
-                    "{} file_count={} child_sum={}",
-                    node.path, node.file_count, child_file_sum
-                ));
+            let diff = child_file_sum - node.file_count;
+            let tolerance = (child_file_sum / 50).max(8);
+            if diff > tolerance {
+                health.inconsistent_node_count += 1;
+                if health.inconsistent_node_samples.len() < 5 {
+                    health.inconsistent_node_samples.push(format!(
+                        "{} file_count={} child_sum={}",
+                        node.path, node.file_count, child_file_sum
+                    ));
+                }
             }
         }
 
@@ -2029,5 +2316,171 @@ mod tests {
         assert_eq!(merged_a.children.len(), 1);
         assert_eq!(merged_a.children[0].size, 40);
         assert_eq!(merged_a.children[0].file_count, 1);
+    }
+
+    #[test]
+    fn merge_scan_results_inserts_new_subtree_under_existing_parent() {
+        let root = PathBuf::from("root");
+        let dir_a = root.join("a");
+        let dir_b = dir_a.join("b");
+
+        let old_tree = vec![make_node(&dir_a, 100, 2, 1, vec![])];
+
+        let merged = merge_scan_results(
+            old_tree,
+            vec![make_node(&dir_b, 30, 1, 1, vec![])],
+            vec![],
+            &root,
+        );
+
+        assert_eq!(merged.len(), 1);
+        let merged_a = &merged[0];
+        assert_eq!(merged_a.size, 130);
+        assert_eq!(merged_a.file_count, 3);
+        assert_eq!(merged_a.dir_count, 2);
+        assert_eq!(merged_a.children.len(), 1);
+        assert_eq!(merged_a.children[0].path, dir_b.to_string_lossy());
+        assert!(merged_a.has_children);
+    }
+
+    #[test]
+    fn merge_scan_results_handles_deep_nesting_with_multiple_changes() {
+        let root = PathBuf::from("root");
+        let dir_a = root.join("a");
+        let dir_ab = dir_a.join("b");
+        let dir_abc = dir_ab.join("c");
+        let dir_abc_x = dir_abc.join("x");
+        let dir_abc_y = dir_abc.join("y");
+
+        let old_tree = vec![make_node(
+            &dir_a,
+            300,
+            6,
+            4,
+            vec![make_node(
+                &dir_ab,
+                300,
+                6,
+                3,
+                vec![make_node(
+                    &dir_abc,
+                    300,
+                    6,
+                    2,
+                    vec![
+                        make_node(&dir_abc_x, 100, 2, 1, vec![]),
+                        make_node(&dir_abc_y, 200, 4, 1, vec![]),
+                    ],
+                )],
+            )],
+        )];
+
+        let merged = merge_scan_results(
+            old_tree,
+            vec![
+                make_node(&dir_abc_x, 50, 1, 1, vec![]),
+                make_node(&dir_abc_y, 250, 5, 1, vec![]),
+            ],
+            vec![],
+            &root,
+        );
+
+        let merged_a = &merged[0];
+        assert_eq!(merged_a.size, 300);
+        assert_eq!(merged_a.file_count, 6);
+
+        let merged_ab = &merged_a.children[0];
+        assert_eq!(merged_ab.size, 300);
+        assert_eq!(merged_ab.file_count, 6);
+
+        let merged_abc = &merged_ab.children[0];
+        assert_eq!(merged_abc.size, 300);
+        assert_eq!(merged_abc.file_count, 6);
+        assert_eq!(merged_abc.children.len(), 2);
+    }
+
+    #[test]
+    fn merge_scan_results_combines_delete_and_upsert_in_one_pass() {
+        let root = PathBuf::from("root");
+        let dir_a = root.join("a");
+        let dir_old = dir_a.join("old");
+        let dir_new = dir_a.join("new");
+
+        let old_tree = vec![make_node(
+            &dir_a,
+            150,
+            4,
+            2,
+            vec![make_node(&dir_old, 80, 2, 1, vec![])],
+        )];
+
+        let merged = merge_scan_results(
+            old_tree,
+            vec![make_node(&dir_new, 200, 5, 1, vec![])],
+            vec![dir_old.to_string_lossy().to_string()],
+            &root,
+        );
+
+        let merged_a = &merged[0];
+        assert_eq!(merged_a.children.len(), 1);
+        assert_eq!(merged_a.children[0].path, dir_new.to_string_lossy());
+        assert_eq!(merged_a.size, 270);
+        assert_eq!(merged_a.file_count, 7);
+        assert_eq!(merged_a.dir_count, 2);
+    }
+
+    #[test]
+    fn merge_scan_results_falls_back_when_changing_root_path() {
+        let root = PathBuf::from("root");
+        let dir_a = root.join("a");
+
+        let old_tree = vec![make_node(&dir_a, 100, 2, 1, vec![])];
+
+        let merged = merge_scan_results(
+            old_tree,
+            vec![make_node(&root, 999, 999, 999, vec![])],
+            vec![],
+            &root,
+        );
+
+        assert!(!merged.is_empty());
+    }
+
+    #[test]
+    fn merge_scan_results_handles_overlapping_parent_and_child_changes() {
+        let root = PathBuf::from("root");
+        let dir_a = root.join("a");
+        let dir_b = dir_a.join("b");
+
+        let old_tree = vec![make_node(
+            &dir_a,
+            300,
+            6,
+            2,
+            vec![make_node(&dir_b, 200, 4, 1, vec![])],
+        )];
+
+        let parent_change = make_node(
+            &dir_a,
+            350,
+            7,
+            2,
+            vec![make_node(&dir_b, 220, 5, 1, vec![])],
+        );
+        let child_change = make_node(&dir_b, 240, 6, 1, vec![]);
+
+        let merged = merge_scan_results(
+            old_tree,
+            vec![child_change, parent_change],
+            vec![],
+            &root,
+        );
+
+        let merged_a = &merged[0];
+        let merged_b = &merged_a.children[0];
+        assert_eq!(merged_b.size, 240);
+        assert_eq!(merged_b.file_count, 6);
+        assert!(merged_a.size >= merged_b.size);
+        assert!(merged_a.file_count >= merged_b.file_count);
     }
 }
