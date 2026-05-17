@@ -7,6 +7,7 @@ pub mod safety;
 pub mod scanner;
 mod utils;
 mod winfs;
+pub mod junk;
 
 #[cfg(any(test, feature = "bench"))]
 pub mod bench;
@@ -82,6 +83,8 @@ pub fn run() {
             commands::detect_game_libraries,
             commands::migrate_game,
             commands::open_native_migration_ui,
+            commands::scan_junk_files,
+            commands::clean_junk_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

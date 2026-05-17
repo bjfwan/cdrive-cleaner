@@ -6,7 +6,7 @@ use std::fs::File;
 use std::hash::Hasher;
 use std::io::Read;
 use std::path::Path;
-use tauri::{AppHandle, Emitter};
+use std::sync::Arc;
 use twox_hash::XxHash3_64;
 
 const QUICK_HASH_BYTES: usize = 64 * 1024;
@@ -33,10 +33,14 @@ pub struct DuplicateProgress {
     pub found_groups: usize,
 }
 
+/// Callback used to forward progress to the UI without coupling this module to
+/// the Tauri runtime (keeps integration tests free of Wry/WebView2 imports).
+pub type DuplicateProgressEmitter = Arc<dyn Fn(DuplicateProgress) + Send + Sync>;
+
 /// Detect duplicate files >= 100MB by size + xxhash3 (quick + full).
 pub fn find_duplicates_blocking(
     candidates: Vec<FileInfo>,
-    app: Option<AppHandle>,
+    on_progress: Option<DuplicateProgressEmitter>,
 ) -> Result<Vec<DuplicateGroup>> {
     let mut by_size: HashMap<u64, Vec<FileInfo>> = HashMap::new();
     for file in candidates {
@@ -116,15 +120,12 @@ pub fn find_duplicates_blocking(
                 };
                 groups.push(group);
 
-                if let Some(app) = app.as_ref() {
-                    let _ = app.emit(
-                        "duplicate-progress",
-                        DuplicateProgress {
-                            current_size: size,
-                            scanned_files,
-                            found_groups: groups.len(),
-                        },
-                    );
+                if let Some(emit) = on_progress.as_ref() {
+                    emit(DuplicateProgress {
+                        current_size: size,
+                        scanned_files,
+                        found_groups: groups.len(),
+                    });
                 }
             }
         }

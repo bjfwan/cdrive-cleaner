@@ -1043,7 +1043,11 @@ pub async fn find_duplicates(
     );
 
     let app_handle = app.clone();
-    tokio::task::spawn_blocking(move || find_duplicates_blocking(candidates, Some(app_handle)))
+    let emitter: crate::scanner::duplicates::DuplicateProgressEmitter =
+        std::sync::Arc::new(move |progress| {
+            let _ = app_handle.emit("duplicate-progress", progress);
+        });
+    tokio::task::spawn_blocking(move || find_duplicates_blocking(candidates, Some(emitter)))
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())
@@ -1271,4 +1275,32 @@ pub fn open_native_migration_ui(
         let _ = platform;
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn scan_junk_files(
+    app: tauri::AppHandle,
+    categories: Option<Vec<crate::junk::rules::JunkCategory>>,
+) -> Result<crate::junk::scanner::JunkScanResult, String> {
+    let is_admin = is_elevated();
+    let app_handle = app.clone();
+    let cb: crate::junk::scanner::JunkScanProgressCallback = std::sync::Arc::new(move |p| {
+        let _ = tauri::Emitter::emit(&app_handle, "junk-scan-progress", p);
+    });
+    tokio::task::spawn_blocking(move || {
+        crate::junk::scanner::scan_junk_blocking(categories, is_admin, Some(cb))
+    })
+    .await
+    .map_err(|e| format!("join: {e}"))?
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn clean_junk_files(
+    paths: Vec<String>,
+    to_recycle_bin: bool,
+) -> Result<crate::junk::cleaner::JunkCleanResult, String> {
+    crate::junk::cleaner::clean_junk_paths(paths, to_recycle_bin)
+        .await
+        .map_err(|e| e.to_string())
 }

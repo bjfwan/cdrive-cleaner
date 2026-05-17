@@ -8,6 +8,7 @@ import { IconDeepScan, IconHistory, IconSettings } from './components/icons';
 import Toast from './components/Toast.vue';
 import Cart from './components/Cart.vue';
 import Workspace from './components/Workspace.vue';
+import JunkCleanView from './components/JunkCleanView.vue';
 import { TOAST_KEY } from './composables/useToast';
 import { useCart } from './composables/useCart';
 import type { AppSettings, DeleteMode, DeleteResult, DiskInfo, ScanCapabilities, ScanResult, ToastType } from './types';
@@ -42,7 +43,7 @@ const showHistory = ref(false);
 const showWelcome = ref(false);
 const showCommandPalette = ref(false);
 const showMigrateDialog = ref(false);
-const activeTab = ref<'workspace' | 'games'>('workspace');
+const activeTab = ref<'workspace' | 'games' | 'junk'>('workspace');
 const gameDetectionDone = ref(false);
 const migrateTargetItem = ref<{ path: string; name: string; size: number; file_count: number } | null>(null);
 const cartBusy = ref(false);
@@ -845,6 +846,11 @@ async function revealInExplorer(path: string) {
                 :class="{ active: activeTab === 'games' }"
                 @click="activeTab = 'games'"
               >游戏库</button>
+              <button
+                class="workspace-tab"
+                :class="{ active: activeTab === 'junk' }"
+                @click="activeTab = 'junk'"
+              >垃圾清理</button>
             </div>
             <div class="workspace-chip" :data-tone="scanCapabilityTone" :title="scanCapabilityLabel">
               <span>后端</span>
@@ -904,10 +910,12 @@ async function revealInExplorer(path: string) {
           />
 
           <GamesView
-            v-else
+            v-else-if="activeTab === 'games'"
             :available-disks="disks"
             :current-drive="selectedDisk"
           />
+
+          <JunkCleanView v-if="activeTab === 'junk'" />
 
           <div v-if="error" class="error">{{ error }}</div>
         </div>
