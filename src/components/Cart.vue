@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useCart } from '../composables/useCart';
 import { formatBytes } from '../utils/format';
-import type { DiskInfo } from '../types';
+import type { DeleteMode, DiskInfo } from '../types';
 import { useCountUp } from '../composables/useCountUp';
 
 interface CartProgress {
@@ -21,13 +21,18 @@ interface Props {
   busy?: boolean;
   progress?: CartProgress;
   results?: CartResult[];
+  defaultDeleteMode?: DeleteMode;
 }
 
 const props = defineProps<Props>();
-const emit = defineEmits<{ run: [targetDisk: string]; close: []; 'reset-results': [] }>();
+const emit = defineEmits<{
+  run: [payload: { targetDisk: string; deleteMode: DeleteMode }];
+  close: [];
+  'reset-results': [];
+}>();
 
 const cart = useCart();
-const { items, totalSize, count } = cart;
+const { items, totalSize, count, migrateItems, deleteItems, migrateSize, deleteSize } = cart;
 const open = ref(false);
 
 watch(
@@ -65,9 +70,33 @@ const failedItems = computed(
 );
 const hasResults = computed(() => (props.results?.length ?? 0) > 0);
 
+const hasMigrate = computed(() => migrateItems.value.length > 0);
+const hasDelete = computed(() => deleteItems.value.length > 0);
+const isMixed = computed(() => hasMigrate.value && hasDelete.value);
+const deleteMode = computed<DeleteMode>(() => props.defaultDeleteMode ?? 'recycle');
+const deleteTargetLabel = computed(() => (deleteMode.value === 'permanent' ? '永久删除' : '回收站'));
+
+const primaryLabel = computed(() => {
+  if (props.busy) return '处理中…';
+  if (isMixed.value) return `处理 ${count.value} 项（${formatBytes(totalSize.value)}）`;
+  if (hasMigrate.value) return `一键搬走 ${formatBytes(migrateSize.value)}`;
+  if (hasDelete.value) {
+    return deleteMode.value === 'permanent'
+      ? `永久删除 ${formatBytes(deleteSize.value)}`
+      : `清理 ${formatBytes(deleteSize.value)} → 回收站`;
+  }
+  return '搬运车为空';
+});
+
+const primaryDisabled = computed(() => {
+  if (props.busy || count.value === 0) return true;
+  if (hasMigrate.value && !targetDisk.value) return true;
+  return false;
+});
+
 function start() {
-  if (!targetDisk.value || count.value === 0) return;
-  emit('run', targetDisk.value);
+  if (primaryDisabled.value) return;
+  emit('run', { targetDisk: targetDisk.value, deleteMode: deleteMode.value });
 }
 
 function reveal(path: string) {
@@ -105,13 +134,30 @@ function dismissResults() {
         <div>
           <h3>搬运车</h3>
           <p>
-            <template v-if="busy">正在搬运 · {{ progressPercent }}%</template>
+            <template v-if="busy">正在处理 · {{ progressPercent }}%</template>
             <template v-else-if="hasResults">完成：成功 {{ successCount }} · 失败 {{ failedItems.length }}</template>
             <template v-else>{{ count }} 项 · 共 {{ formatBytes(totalSize) }}</template>
           </p>
         </div>
         <button class="icon-btn" @click="open = false" :disabled="busy" aria-label="关闭">✕</button>
       </header>
+
+      <div v-if="!busy && !hasResults && (hasMigrate || hasDelete)" class="segments">
+        <div v-if="hasMigrate" class="segment segment-migrate">
+          <span class="segment-icon">🚚</span>
+          <div class="segment-text">
+            <strong>搬走 {{ migrateItems.length }} 项</strong>
+            <small>{{ formatBytes(migrateSize) }} · 走 junction</small>
+          </div>
+        </div>
+        <div v-if="hasDelete" class="segment segment-delete" :class="{ permanent: deleteMode === 'permanent' }">
+          <span class="segment-icon">{{ deleteMode === 'permanent' ? '⚠️' : '🗑️' }}</span>
+          <div class="segment-text">
+            <strong>清理 {{ deleteItems.length }} 项</strong>
+            <small>{{ formatBytes(deleteSize) }} · {{ deleteTargetLabel }}</small>
+          </div>
+        </div>
+      </div>
 
       <div v-if="busy" class="busy-panel">
         <div class="progress-bar">
@@ -152,7 +198,13 @@ function dismissResults() {
       <ul v-else class="drawer-list">
         <li v-for="item in items" :key="item.path" class="drawer-item">
           <div class="drawer-item-main">
-            <div class="drawer-item-name" :title="item.path">{{ item.name }}</div>
+            <div class="drawer-item-name" :title="item.path">
+              <span
+                class="drawer-item-tag"
+                :class="`tag-${item.recommendation}`"
+              >{{ item.recommendation === 'migrate' ? '搬' : item.recommendation === 'delete' ? '删' : '查' }}</span>
+              {{ item.name }}
+            </div>
             <div class="drawer-item-path">{{ item.path }}</div>
           </div>
           <div class="drawer-item-size">{{ formatBytes(item.size) }}</div>
@@ -161,17 +213,29 @@ function dismissResults() {
       </ul>
 
       <footer v-if="!busy && !hasResults" class="drawer-foot">
-        <label class="label">目标磁盘</label>
-        <select v-model="targetDisk" :disabled="busy">
-          <option v-for="d in targetOptions" :key="d.drive_letter" :value="`${d.drive_letter}\\`">
-            {{ d.drive_letter }} · {{ d.label || 'Local Disk' }} (可用 {{ formatBytes(d.free_space) }})
-          </option>
-        </select>
+        <template v-if="hasMigrate">
+          <label class="label">目标磁盘</label>
+          <select v-model="targetDisk" :disabled="busy">
+            <option v-for="d in targetOptions" :key="d.drive_letter" :value="`${d.drive_letter}\\`">
+              {{ d.drive_letter }} · {{ d.label || 'Local Disk' }} (可用 {{ formatBytes(d.free_space) }})
+            </option>
+          </select>
+        </template>
+
+        <div v-if="hasDelete && !hasMigrate" class="delete-hint" :class="{ danger: deleteMode === 'permanent' }">
+          <strong>{{ deleteMode === 'permanent' ? '永久删除模式' : '清理走回收站' }}</strong>
+          <span>{{ deleteMode === 'permanent' ? '跳过回收站，删除后无法恢复' : '可在 Windows 回收站还原' }}</span>
+        </div>
 
         <div class="actions">
           <button class="ghost" @click="clearCart" :disabled="busy">全部清空</button>
-          <button class="primary" @click="start" :disabled="!targetDisk || busy || count === 0">
-            {{ busy ? '搬运中…' : `一键搬走 ${formatBytes(totalSize)}` }}
+          <button
+            class="primary"
+            :class="{ danger: hasDelete && deleteMode === 'permanent' && !hasMigrate }"
+            @click="start"
+            :disabled="primaryDisabled"
+          >
+            {{ primaryLabel }}
           </button>
         </div>
       </footer>
@@ -312,6 +376,79 @@ select {
 }
 .primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 16px 30px rgba(17, 24, 39, 0.28); }
 .primary:disabled, .ghost:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.primary.danger {
+  background: linear-gradient(135deg, var(--color-error, #ef4444) 0%, #dc2626 100%);
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(239, 68, 68, 0.3);
+}
+.primary.danger:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 30px rgba(239, 68, 68, 0.4);
+}
+
+.segments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.85rem 1.4rem;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-surface);
+}
+.segment {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 12px;
+  border: 1px solid var(--color-border-light);
+  background: var(--color-bg-secondary);
+}
+.segment-migrate {
+  background: rgba(59, 130, 246, 0.06);
+  border-color: rgba(59, 130, 246, 0.18);
+}
+.segment-delete {
+  background: rgba(245, 158, 11, 0.06);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+.segment-delete.permanent {
+  background: rgba(239, 68, 68, 0.06);
+  border-color: rgba(239, 68, 68, 0.22);
+}
+.segment-icon { font-size: 1.05rem; line-height: 1; }
+.segment-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.segment-text strong { font-size: 0.88rem; font-weight: 700; color: var(--color-text-primary); }
+.segment-text small { font-size: 0.74rem; color: var(--color-text-tertiary); margin-top: 0.18rem; }
+
+.delete-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+.delete-hint.danger {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.24);
+}
+.delete-hint strong { font-size: 0.86rem; font-weight: 700; color: var(--color-text-primary); }
+.delete-hint span { font-size: 0.76rem; color: var(--color-text-tertiary); }
+
+.drawer-item-tag {
+  display: inline-block;
+  margin-right: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+.tag-migrate { background: rgba(59, 130, 246, 0.14); color: #1d4ed8; }
+.tag-delete { background: rgba(245, 158, 11, 0.18); color: #b45309; }
+.tag-review { background: rgba(107, 114, 128, 0.14); color: #4b5563; }
 
 .busy-panel {
   padding: 1.4rem 1.4rem;

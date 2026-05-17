@@ -10,7 +10,7 @@ import Cart from './components/Cart.vue';
 import Workspace from './components/Workspace.vue';
 import { TOAST_KEY } from './composables/useToast';
 import { useCart } from './composables/useCart';
-import type { AppSettings, DiskInfo, ScanCapabilities, ScanResult, ToastType } from './types';
+import type { AppSettings, DeleteMode, DeleteResult, DiskInfo, ScanCapabilities, ScanResult, ToastType } from './types';
 import { formatBytes } from './utils/format';
 import { getSettings } from './utils/settings';
 
@@ -19,6 +19,7 @@ const History = defineAsyncComponent(() => import('./components/History.vue'));
 const Welcome = defineAsyncComponent(() => import('./components/Welcome.vue'));
 const MigrateDialog = defineAsyncComponent(() => import('./components/MigrateDialog.vue'));
 const CommandPalette = defineAsyncComponent(() => import('./components/CommandPalette.vue'));
+const GamesView = defineAsyncComponent(() => import('./components/GamesView.vue'));
 
 const disks = ref<DiskInfo[]>([]);
 const selectedDisk = ref<string>('');
@@ -41,10 +42,20 @@ const showHistory = ref(false);
 const showWelcome = ref(false);
 const showCommandPalette = ref(false);
 const showMigrateDialog = ref(false);
+const activeTab = ref<'workspace' | 'games'>('workspace');
+const gameDetectionDone = ref(false);
 const migrateTargetItem = ref<{ path: string; name: string; size: number; file_count: number } | null>(null);
 const cartBusy = ref(false);
 const cartProgress = ref<{ current: number; total: number; currentItem: string }>({ current: 0, total: 0, currentItem: '' });
 const cartResults = ref<Array<{ path: string; ok: true } | { path: string; ok: false; name: string; error: string }>>([]);
+const cartConfirm = ref<{ open: boolean; targetDisk: string; deleteMode: DeleteMode; migrateCount: number; deleteCount: number; type: 'danger' | 'warning' | 'info' }>({
+  open: false,
+  targetDisk: '',
+  deleteMode: 'recycle',
+  migrateCount: 0,
+  deleteCount: 0,
+  type: 'warning',
+});
 const appSettings = ref<AppSettings>(getSettings());
 
 const cart = useCart();
@@ -109,6 +120,7 @@ onMounted(async () => {
   loadUserSettings();
   checkFirstLaunch();
   window.addEventListener('keydown', onGlobalKey);
+  void notifyOnGameDetection();
 });
 
 onBeforeUnmount(() => {
@@ -120,6 +132,20 @@ function onGlobalKey(e: KeyboardEvent) {
   if (ctrlOrMeta && (e.key === 'k' || e.key === 'K')) {
     e.preventDefault();
     showCommandPalette.value = !showCommandPalette.value;
+    return;
+  }
+  if (e.key === 'Escape') {
+    if (showCommandPalette.value) {
+      showCommandPalette.value = false;
+    } else if (showSettings.value) {
+      closeSettings();
+    } else if (showHistory.value) {
+      closeHistory();
+    } else if (showMigrateDialog.value) {
+      closeMigrateDialog();
+    } else if (showAdminRestartConfirm.value) {
+      showAdminRestartConfirm.value = false;
+    }
   }
 }
 
@@ -164,8 +190,9 @@ watch(
 );
 
 function checkFirstLaunch() {
-  const hasShown = localStorage.getItem('cdrive-cleaner-welcome-shown');
-  if (!hasShown) {
+  const onboardingDone = localStorage.getItem('cdrive-cleaner-onboarding-completed');
+  const legacyShown = localStorage.getItem('cdrive-cleaner-welcome-shown');
+  if (!onboardingDone && !legacyShown) {
     showWelcome.value = true;
   }
 }
@@ -479,76 +506,213 @@ async function restartAsAdmin() {
   }
 }
 
-async function runCart(targetDisk: string) {
+async function runCart(payload: { targetDisk: string; deleteMode: DeleteMode }) {
   if (cart.count.value === 0) return;
+
+  const migrateCount = cart.migrateItems.value.length;
+  const deleteCount = cart.deleteItems.value.length + cart.reviewItems.value.length;
+  const isPermanent = payload.deleteMode === 'permanent';
+  const needsConfirm = deleteCount > 0 && (isPermanent || migrateCount > 0);
+
+  if (needsConfirm) {
+    cartConfirm.value = {
+      open: true,
+      targetDisk: payload.targetDisk,
+      deleteMode: payload.deleteMode,
+      migrateCount,
+      deleteCount,
+      type: isPermanent ? 'danger' : 'warning',
+    };
+    return;
+  }
+
+  await executeCart(payload.targetDisk, payload.deleteMode);
+}
+
+const cartConfirmTitle = computed(() => {
+  const c = cartConfirm.value;
+  if (c.deleteMode === 'permanent' && c.deleteCount > 0) {
+    return `永久删除 ${c.deleteCount} 项？此操作不可恢复`;
+  }
+  if (c.migrateCount > 0 && c.deleteCount > 0) {
+    return `处理 ${c.migrateCount + c.deleteCount} 项？`;
+  }
+  if (c.deleteCount > 0) {
+    return `清理 ${c.deleteCount} 项到回收站？`;
+  }
+  return '执行迁移？';
+});
+
+const cartConfirmMessage = computed(() => {
+  const c = cartConfirm.value;
+  const parts: string[] = [];
+  if (c.migrateCount > 0) {
+    parts.push(`${c.migrateCount} 项搬走到 ${c.targetDisk}`);
+  }
+  if (c.deleteCount > 0) {
+    if (c.deleteMode === 'permanent') {
+      parts.push(`${c.deleteCount} 项将从硬盘永久删除（跳过回收站）`);
+    } else {
+      parts.push(`${c.deleteCount} 项移入 Windows 回收站`);
+    }
+  }
+  return parts.join('，') + '。';
+});
+
+async function confirmCart() {
+  const c = cartConfirm.value;
+  cartConfirm.value = { ...c, open: false };
+  await executeCart(c.targetDisk, c.deleteMode);
+}
+
+function cancelCartConfirm() {
+  cartConfirm.value = { ...cartConfirm.value, open: false };
+}
+
+async function executeCart(targetDisk: string, deleteMode: DeleteMode) {
   cartBusy.value = true;
-  cartProgress.value = { current: 0, total: cart.count.value, currentItem: '' };
   cartResults.value = [];
-  const succeeded: string[] = [];
+  const succeededPaths: string[] = [];
+  const succeeded: Array<{ path: string; ok: true }> = [];
   const failed: Array<{ path: string; name: string; error: string }> = [];
-  const total = cart.count.value;
+
+  const deleteOnlyItems = [...cart.deleteItems.value];
+  const migrateOnlyItems = [...cart.migrateItems.value];
+  const total = deleteOnlyItems.length + migrateOnlyItems.length;
+  cartProgress.value = { current: 0, total, currentItem: '' };
+  let processed = 0;
 
   try {
-    const itemsSnapshot = [...cart.items.value];
-    for (let i = 0; i < itemsSnapshot.length; i++) {
-      const item = itemsSnapshot[i];
-      cartProgress.value = { current: i, total, currentItem: item.name };
-      try {
-        const safety = await invoke<{ can_migrate: boolean; findings: Array<{ severity: string; message: string }> }>(
-          'analyze_migration_safety',
-          {
-            path: item.path,
-            size: item.size,
-            linkType: appSettings.value.createSymlink ? null : 'none',
-            targetDisk,
-          },
-        );
-        if (!safety.can_migrate) {
-          const reason = safety.findings.filter((f) => f.severity === 'blocker').map((f) => f.message).join('；') || '安全检测未通过';
-          failed.push({ path: item.path, name: item.name, error: humanizeError(reason) });
-          continue;
-        }
-
-        const result = await invoke<{ success: boolean; error?: string | null }>('migrate_file', {
-          source: item.path,
-          targetDisk,
-          linkType: appSettings.value.createSymlink ? null : 'none',
-          knownSize: item.size,
-          knownFiles: item.file_count,
-        });
-        if (!result.success) {
-          failed.push({ path: item.path, name: item.name, error: humanizeError(result.error || '迁移失败') });
-          continue;
-        }
-        succeeded.push(item.path);
+    for (const item of deleteOnlyItems) {
+      cartProgress.value = { current: processed, total, currentItem: item.name };
+      const ok = await runCartDelete(item, deleteMode, failed);
+      if (ok) {
+        succeeded.push({ path: item.path, ok: true });
+        succeededPaths.push(item.path);
         cart.remove(item.path);
-      } catch (err) {
-        failed.push({ path: item.path, name: item.name, error: humanizeError(String(err)) });
       }
+      processed += 1;
+    }
+
+    for (const item of migrateOnlyItems) {
+      cartProgress.value = { current: processed, total, currentItem: item.name };
+      const ok = await runCartMigrate(item, targetDisk, failed);
+      if (ok) {
+        succeeded.push({ path: item.path, ok: true });
+        succeededPaths.push(item.path);
+        cart.remove(item.path);
+      }
+      processed += 1;
     }
   } finally {
     cartBusy.value = false;
     cartProgress.value = { current: total, total, currentItem: '' };
     cartResults.value = [
-      ...succeeded.map((p) => ({ path: p, ok: true as const })),
+      ...succeeded,
       ...failed.map((f) => ({ path: f.path, ok: false as const, name: f.name, error: f.error })),
     ];
   }
 
-  if (succeeded.length > 0) {
-    await refreshAfterMigration(succeeded);
+  if (succeededPaths.length > 0) {
+    await refreshAfterMigration(succeededPaths);
+  }
+}
+
+async function runCartMigrate(
+  item: { path: string; name: string; size: number; file_count: number; source?: string; game?: { platform: string; app_id: string } },
+  targetDisk: string,
+  failed: Array<{ path: string; name: string; error: string }>,
+): Promise<boolean> {
+  try {
+    if (item.source === 'game' && item.game) {
+      const result = await invoke<{ success: boolean; error?: string | null }>('migrate_game', {
+        platform: item.game.platform,
+        appId: item.game.app_id,
+        sourcePath: item.path,
+        targetDisk,
+        knownSize: item.size,
+        knownFiles: item.file_count,
+      });
+      if (!result.success) {
+        failed.push({ path: item.path, name: item.name, error: humanizeError(result.error || '游戏迁移失败') });
+        return false;
+      }
+      return true;
+    }
+
+    const safety = await invoke<{ can_migrate: boolean; findings: Array<{ severity: string; message: string }> }>(
+      'analyze_migration_safety',
+      {
+        path: item.path,
+        size: item.size,
+        linkType: appSettings.value.createSymlink ? null : 'none',
+        targetDisk,
+      },
+    );
+    if (!safety.can_migrate) {
+      const reason = safety.findings.filter((f) => f.severity === 'blocker').map((f) => f.message).join('；') || '安全检测未通过';
+      failed.push({ path: item.path, name: item.name, error: humanizeError(reason) });
+      return false;
+    }
+
+    const result = await invoke<{ success: boolean; error?: string | null }>('migrate_file', {
+      source: item.path,
+      targetDisk,
+      linkType: appSettings.value.createSymlink ? null : 'none',
+      knownSize: item.size,
+      knownFiles: item.file_count,
+    });
+    if (!result.success) {
+      failed.push({ path: item.path, name: item.name, error: humanizeError(result.error || '迁移失败') });
+      return false;
+    }
+    return true;
+  } catch (err) {
+    failed.push({ path: item.path, name: item.name, error: humanizeError(String(err)) });
+    return false;
+  }
+}
+
+async function runCartDelete(
+  item: { path: string; name: string; size: number },
+  mode: DeleteMode,
+  failed: Array<{ path: string; name: string; error: string }>,
+): Promise<boolean> {
+  try {
+    const result = await invoke<DeleteResult>('delete_path', {
+      path: item.path,
+      mode,
+    });
+    if (!result.success) {
+      const firstError = result.errors[0]?.error ?? '清理失败';
+      failed.push({ path: item.path, name: item.name, error: humanizeError(firstError) });
+      return false;
+    }
+    return true;
+  } catch (err) {
+    failed.push({ path: item.path, name: item.name, error: humanizeError(String(err)) });
+    return false;
   }
 }
 
 function humanizeError(raw: string): string {
   const lower = raw.toLowerCase();
+  if (lower.includes('系统关键路径') || lower.includes('system_critical')) {
+    return '系统关键路径，禁止删除或迁移。';
+  }
+  if (lower.includes('移入回收站失败')) {
+    return '无法移入回收站，可能权限不足或目标在网络盘。可在设置里切换为永久删除。';
+  }
+  if (lower.includes('移除目录失败')) {
+    return '部分文件被进程占用，目录未能完全清空。请关闭相关应用后重试。';
+  }
   if (lower.includes('拒绝访问') || lower.includes('access') || lower.includes('error 5') || lower.includes('error 32')) {
     return '文件被进程占用。请关闭对应应用（如 Trae、Chrome、VSCode、Docker 等）后重试。';
   }
   if (lower.includes('disk full') || lower.includes('not enough space') || lower.includes('空间')) {
     return '目标磁盘空间不足。';
   }
-  if (lower.includes('not found') || lower.includes('找不到')) {
+  if (lower.includes('not found') || lower.includes('找不到') || lower.includes('路径不存在')) {
     return '源路径已不存在，可能在扫描后被删除。';
   }
   if (lower.includes('permission') || lower.includes('权限')) {
@@ -565,6 +729,38 @@ function openMigrateSingle(item: { path: string; name: string; size: number; fil
 function closeMigrateDialog() {
   showMigrateDialog.value = false;
   migrateTargetItem.value = null;
+}
+
+async function notifyOnGameDetection() {
+  if (gameDetectionDone.value) return;
+  gameDetectionDone.value = true;
+  if (localStorage.getItem('cdrive-cleaner-games-toast-shown')) return;
+  try {
+    const libs = await invoke<Array<{ platform: string; installed: boolean; games: unknown[] }>>('detect_game_libraries');
+    const installedNames = libs
+      .filter((l) => l.installed && l.games.length > 0)
+      .map((l) => {
+        switch (l.platform) {
+          case 'steam':
+            return 'Steam';
+          case 'epic':
+            return 'Epic';
+          case 'game_pass':
+            return 'Game Pass';
+          default:
+            return l.platform;
+        }
+      });
+    if (installedNames.length === 0) return;
+    showToastNotification(
+      '检测到游戏库',
+      `${installedNames.join(' / ')} · 切到「游戏库」标签可一键搬到其他盘`,
+      'info',
+    );
+    localStorage.setItem('cdrive-cleaner-games-toast-shown', '1');
+  } catch {
+    // 检测失败不打扰用户
+  }
 }
 
 async function revealInExplorer(path: string) {
@@ -638,6 +834,18 @@ async function revealInExplorer(path: string) {
           </div>
 
           <div class="workspace-chips">
+            <div class="workspace-tabs">
+              <button
+                class="workspace-tab"
+                :class="{ active: activeTab === 'workspace' }"
+                @click="activeTab = 'workspace'"
+              >磁盘</button>
+              <button
+                class="workspace-tab"
+                :class="{ active: activeTab === 'games' }"
+                @click="activeTab = 'games'"
+              >游戏库</button>
+            </div>
             <div class="workspace-chip" :data-tone="scanCapabilityTone" :title="scanCapabilityLabel">
               <span>后端</span>
               <strong>{{ scanCapabilityShortLabel }}</strong>
@@ -665,6 +873,7 @@ async function revealInExplorer(path: string) {
           </button>
 
           <button
+            v-if="activeTab === 'workspace'"
             class="topbar-cta topbar-cta--strong"
             @click="startDeepScan"
             :disabled="deepScanning || !selectedDisk"
@@ -680,6 +889,7 @@ async function revealInExplorer(path: string) {
           <DeepScanProgress v-show="deepScanning" :scanning="deepScanning" class="main-deep-progress" />
 
           <Workspace
+            v-if="activeTab === 'workspace'"
             :scan-result="scanResult"
             :selected-disk="selectedDisk"
             :selected-disk-info="selectedDiskInfo ?? null"
@@ -691,6 +901,12 @@ async function revealInExplorer(path: string) {
             @navigate="navigateToPath"
             @migrate-single="openMigrateSingle"
             @reveal="revealInExplorer"
+          />
+
+          <GamesView
+            v-else
+            :available-disks="disks"
+            :current-drive="selectedDisk"
           />
 
           <div v-if="error" class="error">{{ error }}</div>
@@ -728,6 +944,7 @@ async function revealInExplorer(path: string) {
       :busy="cartBusy"
       :progress="cartProgress"
       :results="cartResults"
+      :default-delete-mode="appSettings.defaultDeleteMode"
       @run="runCart"
       @reset-results="cartResults = []"
     />
@@ -758,6 +975,17 @@ async function revealInExplorer(path: string) {
       type="warning"
       @confirm="restartAsAdmin"
       @cancel="showAdminRestartConfirm = false"
+    />
+
+    <ConfirmDialog
+      :show="cartConfirm.open"
+      :title="cartConfirmTitle"
+      :message="cartConfirmMessage"
+      :confirm-text="cartConfirm.deleteMode === 'permanent' ? '我确认永久删除' : '继续执行'"
+      cancel-text="再想想"
+      :type="cartConfirm.type"
+      @confirm="confirmCart"
+      @cancel="cancelCartConfirm"
     />
   </div>
 </template>

@@ -69,6 +69,20 @@ impl MigrationDb {
         Ok(conn.last_insert_rowid())
     }
 
+    pub fn insert_delete_record(
+        &self,
+        source_path: &str,
+        target_label: &str,
+        file_size: u64,
+    ) -> Result<i64> {
+        let conn = self.lock_conn();
+        conn.execute(
+            "INSERT INTO migrations (source_path, target_path, link_type, file_size, status) VALUES (?1, ?2, ?3, ?4, ?5)",
+            [source_path, target_label, "Delete", &file_size.to_string(), "deleted"],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
     pub fn get_all_migrations(&self) -> Result<Vec<MigrationRecord>> {
         let conn = self.lock_conn();
         let mut stmt = conn.prepare(

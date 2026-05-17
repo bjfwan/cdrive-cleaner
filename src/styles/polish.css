@@ -1,0 +1,114 @@
+/* Global polish: focus, scrollbars, motion, modal sizing tokens. */
+
+:root {
+  --modal-overlay-bg: rgba(15, 23, 32, 0.42);
+  --modal-radius: var(--radius-lg);
+  --modal-easing: cubic-bezier(0.16, 1, 0.3, 1);
+  --modal-enter-duration: 0.3s;
+}
+
+button {
+  font-feature-settings: 'tnum';
+}
+
+button:focus-visible,
+a:focus-visible,
+[role='button']:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-highlight);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-highlight);
+  outline-offset: 2px;
+}
+
+.tnum,
+.num {
+  font-feature-settings: 'tnum';
+  font-variant-numeric: tabular-nums;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: var(--radius-pill);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.modal-overlay-base {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--modal-overlay-bg);
+  z-index: 2000;
+  animation: modal-overlay-in var(--modal-enter-duration) var(--modal-easing);
+}
+
+.modal-shell-base {
+  border-radius: var(--modal-radius);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  animation: modal-shell-in var(--modal-enter-duration) var(--modal-easing);
+}
+
+.modal-shell--small {
+  width: min(420px, 92vw);
+}
+
+.modal-shell--medium {
+  width: min(560px, 92vw);
+  max-height: min(640px, 88vh);
+}
+
+.modal-shell--large {
+  width: min(960px, 95vw);
+  max-height: 85vh;
+}
+
+@keyframes modal-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-shell-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+button[class*='primary']:active:not(:disabled),
+button[class*='accent']:active:not(:disabled),
+.dupe-btn:active:not(:disabled),
+.step-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}

@@ -1,6 +1,7 @@
 mod commands;
 pub mod database;
 pub mod diagnostics;
+pub mod games;
 pub mod migration;
 pub mod safety;
 pub mod scanner;
@@ -10,7 +11,7 @@ mod winfs;
 #[cfg(any(test, feature = "bench"))]
 pub mod bench;
 
-use database::{MigrationDb, ScanCacheDb};
+use database::{MigrationDb, ScanCacheDb, SpaceHistoryDb};
 use scanner::DiskScanner;
 
 fn init_tracing() {
@@ -39,11 +40,19 @@ pub fn run() {
         .and_then(|p| MigrationDb::new(p.to_string_lossy().as_ref()).map_err(Into::into))
         .expect("Failed to open migration database");
 
+    let space_history_db = utils::get_space_history_db_path()
+        .and_then(|p| SpaceHistoryDb::new(p.to_string_lossy().as_ref()).map_err(Into::into))
+        .expect("Failed to open space history database");
+    if let Err(err) = space_history_db.purge_old(90) {
+        tracing::warn!("[space-history] failed to purge old snapshots: {err}");
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(DiskScanner::new())
         .manage(scan_cache_db)
         .manage(migration_db)
+        .manage(space_history_db)
         .invoke_handler(tauri::generate_handler![
             commands::scan_disk_deep,
             commands::get_directory_snapshot,
@@ -52,6 +61,7 @@ pub fn run() {
             commands::cancel_scan,
             commands::scan_directory_files,
             commands::migrate_file,
+            commands::delete_path,
             commands::get_disk_info,
             commands::analyze_migration_safety,
             commands::get_migration_history,
@@ -66,6 +76,12 @@ pub fn run() {
             commands::is_elevated,
             commands::restart_as_admin,
             commands::exit_app,
+            commands::get_space_history,
+            commands::find_duplicates,
+            commands::delete_duplicate_files,
+            commands::detect_game_libraries,
+            commands::migrate_game,
+            commands::open_native_migration_ui,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

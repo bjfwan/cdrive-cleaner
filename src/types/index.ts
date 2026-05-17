@@ -31,6 +31,33 @@ export interface MigrationProgress {
   progress_percent: number;
 }
 
+export type DeleteMode = 'recycle' | 'permanent';
+
+export interface DeleteError {
+  path: string;
+  error: string;
+}
+
+export interface DeleteResult {
+  success: boolean;
+  source_path: string;
+  mode: DeleteMode;
+  deleted_size: number;
+  deleted_files: number;
+  errors: DeleteError[];
+  duration_ms: number;
+}
+
+export interface DeleteProgress {
+  current_file: string;
+  deleted_files: number;
+  total_files: number;
+  deleted_size: number;
+  total_size: number;
+  progress_percent: number;
+  error_count: number;
+}
+
 export interface FileInfo {
   path: string;
   name: string;
@@ -112,6 +139,7 @@ export interface AppSettings {
   defaultTargetDisk: string;
   largeFileThreshold: number;
   createSymlink: boolean;
+  defaultDeleteMode: DeleteMode;
   theme?: 'light' | 'dark' | 'auto';
 }
 
@@ -164,4 +192,25 @@ export interface SmartScanReport {
   default_savings: number;
   groups: SmartGroup[];
   analysis_duration_ms: number;
+}
+
+export type GamePlatform = 'steam' | 'epic' | 'game_pass' | 'microsoft_store';
+
+export interface GameInfo {
+  platform: GamePlatform;
+  app_id: string;
+  name: string;
+  install_path: string;
+  install_size: number;
+  drive_letter: string;
+  last_played?: string | null;
+  can_migrate: boolean;
+  migration_hint: string;
+}
+
+export interface GameLibraryInfo {
+  platform: GamePlatform;
+  library_paths: string[];
+  games: GameInfo[];
+  installed: boolean;
 }

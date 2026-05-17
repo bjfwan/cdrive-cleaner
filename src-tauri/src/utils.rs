@@ -25,3 +25,8 @@ pub fn get_scan_cache_db_path() -> Result<PathBuf> {
 pub fn get_migrations_db_path() -> Result<PathBuf> {
     Ok(get_app_data_dir()?.join("migrations.db"))
 }
+
+/// 获取磁盘空间历史数据库路径
+pub fn get_space_history_db_path() -> Result<PathBuf> {
+    Ok(get_app_data_dir()?.join("space_history.db"))
+}

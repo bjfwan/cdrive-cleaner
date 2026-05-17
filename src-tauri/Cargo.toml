@@ -1,6 +1,6 @@
 [package]
 name = "cdrive-cleaner"
-version = "0.1.1"
+version = "0.1.2"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -53,3 +53,5 @@ winreg = "0.55.0"
 sysinfo = "0.38.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+trash = "5"
+twox-hash = "2"

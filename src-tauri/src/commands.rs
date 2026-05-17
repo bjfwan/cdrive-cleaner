@@ -1,9 +1,11 @@
-﻿use crate::database::{MigrationDb, ScanCacheDb};
+﻿use crate::database::{MigrationDb, ScanCacheDb, SpaceHistoryDb};
 use crate::migration::{
+    delete::{DeleteMode, DeleteProgress, DeleteProgressCallback, DeleteResult},
     file_migrator::{MigrationProgress, MigrationProgressCallback, MigrationResult},
     FileMigrator, LinkType,
 };
 use crate::scanner::{
+    duplicates::{find_duplicates_blocking, DuplicateGroup},
     file_info::{FileInfo, ScanResult},
     timing::StageTimer,
     DiskScanner,
@@ -94,6 +96,7 @@ pub async fn scan_disk_deep(
     estimated_files: Option<usize>,
     scanner: tauri::State<'_, DiskScanner>,
     cache_db: tauri::State<'_, ScanCacheDb>,
+    space_history: tauri::State<'_, SpaceHistoryDb>,
 ) -> Result<ScanResult, String> {
     use crate::scanner::incremental;
 
@@ -300,6 +303,17 @@ pub async fn scan_disk_deep(
         full_result.total_size,
         full_result.scan_duration_ms
     ));
+
+    if let Some(drive) = drive_letter_from_path(&path) {
+        let (total, used) = disk_total_used(&path).unwrap_or((0, 0));
+        if let Err(err) = space_history.record_snapshot(&drive, total, used, full_result.total_size)
+        {
+            tracing::warn!(
+                "[space-history] failed to record snapshot drive={drive} error={err}"
+            );
+        }
+    }
+
     Ok(snapshot)
 }
 
@@ -488,6 +502,84 @@ pub async fn migrate_file(
         result.duration_ms,
         result.migration_id
     );
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn delete_path(
+    path: String,
+    mode: DeleteMode,
+    app: AppHandle,
+    migration_db: tauri::State<'_, MigrationDb>,
+) -> Result<DeleteResult, String> {
+    tracing::info!("[delete] request path={} mode={:?}", path, mode);
+
+    let safety_path = std::path::PathBuf::from(&path);
+    let safety = tokio::task::spawn_blocking({
+        let path_buf = safety_path.clone();
+        move || crate::safety::analyze(&path_buf, LinkType::None, None, 0)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    if matches!(safety.verdict, crate::safety::Verdict::SystemCritical) {
+        tracing::warn!(
+            "[delete] blocked by safety verdict=SystemCritical path={}",
+            path
+        );
+        return Err(format!(
+            "系统关键路径不允许删除：{}",
+            safety
+                .findings
+                .iter()
+                .filter(|f| f.gate == "system_critical")
+                .map(|f| f.message.clone())
+                .next()
+                .unwrap_or_else(|| "命中 system_critical 规则".to_string())
+        ));
+    }
+
+    let progress_callback: DeleteProgressCallback = std::sync::Arc::new({
+        let app = app.clone();
+        move |progress: DeleteProgress| {
+            let _ = app.emit("delete-progress", progress);
+        }
+    });
+
+    let result = crate::migration::delete::delete_path(&path, mode, Some(progress_callback))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if result.deleted_size > 0 || result.deleted_files > 0 {
+        let target_label = match mode {
+            DeleteMode::Recycle => "recycle_bin",
+            DeleteMode::Permanent => "permanent",
+        };
+        if let Err(err) = migration_db.insert_delete_record(
+            &result.source_path,
+            target_label,
+            result.deleted_size,
+        ) {
+            tracing::warn!(
+                "[delete] failed to insert history record path={} error={err}",
+                result.source_path
+            );
+        }
+    }
+
+    crate::safety::invalidate_safety_cache();
+
+    tracing::info!(
+        "[delete] completed path={} mode={:?} success={} size={} files={} errors={} duration_ms={}",
+        result.source_path,
+        result.mode,
+        result.success,
+        result.deleted_size,
+        result.deleted_files,
+        result.errors.len(),
+        result.duration_ms
+    );
+
     Ok(result)
 }
 
@@ -878,4 +970,305 @@ pub fn get_scan_capabilities(path: String) -> Result<ScanCapabilities, String> {
         admin_recommended: !mft_available && !elevated,
         reason,
     })
+}
+
+fn drive_letter_from_path(path: &str) -> Option<String> {
+    let trimmed = path.trim();
+    let mut chars = trimmed.chars();
+    let letter = chars.next()?;
+    if !letter.is_ascii_alphabetic() {
+        return None;
+    }
+    let colon = chars.next()?;
+    if colon != ':' {
+        return None;
+    }
+    Some(format!("{}:\\", letter.to_ascii_uppercase()))
+}
+
+#[cfg(target_os = "windows")]
+fn disk_total_used(path: &str) -> Option<(u64, u64)> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+
+    let drive = drive_letter_from_path(path)?;
+    let path_wide: Vec<u16> = drive.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut total = 0u64;
+    let mut free = 0u64;
+    unsafe {
+        if GetDiskFreeSpaceExW(
+            PCWSTR(path_wide.as_ptr()),
+            None,
+            Some(&mut total),
+            Some(&mut free),
+        )
+        .is_ok()
+        {
+            return Some((total, total.saturating_sub(free)));
+        }
+    }
+    None
+}
+
+#[cfg(not(target_os = "windows"))]
+fn disk_total_used(_path: &str) -> Option<(u64, u64)> {
+    None
+}
+
+#[tauri::command]
+pub async fn get_space_history(
+    drive: String,
+    days: u32,
+    space_history: tauri::State<'_, SpaceHistoryDb>,
+) -> Result<Vec<crate::database::space_history::DiskSnapshot>, String> {
+    space_history.get_history(&drive, days).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn find_duplicates(
+    root_path: String,
+    app: AppHandle,
+    scanner: tauri::State<'_, DiskScanner>,
+) -> Result<Vec<DuplicateGroup>, String> {
+    let candidates = scanner
+        .with_indexed(&root_path, |indexed| {
+            indexed.large_files_iter().cloned().collect::<Vec<FileInfo>>()
+        })
+        .ok_or_else(|| "尚未扫描，请先执行深度扫描".to_string())?;
+
+    tracing::info!(
+        "[duplicates] start root={} candidates={}",
+        root_path,
+        candidates.len()
+    );
+
+    let app_handle = app.clone();
+    tokio::task::spawn_blocking(move || find_duplicates_blocking(candidates, Some(app_handle)))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn delete_duplicate_files(
+    paths: Vec<String>,
+    mode: String,
+    app: AppHandle,
+) -> Result<DeleteResult, String> {
+    let delete_mode = match mode.as_str() {
+        "recycle" => DeleteMode::Recycle,
+        _ => DeleteMode::Permanent,
+    };
+
+    let progress_callback: DeleteProgressCallback = std::sync::Arc::new({
+        let app = app.clone();
+        move |progress: DeleteProgress| {
+            let _ = app.emit("delete-progress", progress);
+        }
+    });
+
+    let mut total_deleted_size: u64 = 0;
+    let mut total_deleted_files: usize = 0;
+    let mut errors: Vec<crate::migration::delete::DeleteError> = Vec::new();
+    let mut total_duration: u64 = 0;
+    let mut last_path = String::new();
+    let mut overall_success = true;
+
+    for path in &paths {
+        last_path = path.clone();
+        match crate::migration::delete::delete_path(
+            path,
+            delete_mode,
+            Some(progress_callback.clone()),
+        )
+        .await
+        {
+            Ok(result) => {
+                total_deleted_size = total_deleted_size.saturating_add(result.deleted_size);
+                total_deleted_files = total_deleted_files.saturating_add(result.deleted_files);
+                total_duration = total_duration.saturating_add(result.duration_ms);
+                if !result.success {
+                    overall_success = false;
+                }
+                errors.extend(result.errors);
+            }
+            Err(err) => {
+                overall_success = false;
+                errors.push(crate::migration::delete::DeleteError {
+                    path: path.clone(),
+                    error: err.to_string(),
+                });
+            }
+        }
+    }
+
+    Ok(DeleteResult {
+        success: overall_success,
+        source_path: last_path,
+        mode: delete_mode,
+        deleted_size: total_deleted_size,
+        deleted_files: total_deleted_files,
+        errors,
+        duration_ms: total_duration,
+    })
+}
+
+#[tauri::command]
+pub async fn detect_game_libraries() -> Result<Vec<crate::games::GameLibraryInfo>, String> {
+    tokio::task::spawn_blocking(|| {
+        let mut libraries = Vec::new();
+
+        match crate::games::steam::detect() {
+            Ok(Some(info)) => libraries.push(info),
+            Ok(None) => libraries.push(crate::games::GameLibraryInfo {
+                platform: crate::games::GamePlatform::Steam,
+                library_paths: vec![],
+                games: vec![],
+                installed: false,
+            }),
+            Err(err) => tracing::warn!("[games] steam detection failed: {err}"),
+        }
+
+        match crate::games::epic::detect() {
+            Ok(Some(info)) => libraries.push(info),
+            Ok(None) => libraries.push(crate::games::GameLibraryInfo {
+                platform: crate::games::GamePlatform::Epic,
+                library_paths: vec![],
+                games: vec![],
+                installed: false,
+            }),
+            Err(err) => tracing::warn!("[games] epic detection failed: {err}"),
+        }
+
+        match crate::games::gamepass::detect() {
+            Ok(Some(info)) => libraries.push(info),
+            Ok(None) => libraries.push(crate::games::GameLibraryInfo {
+                platform: crate::games::GamePlatform::GamePass,
+                library_paths: vec![],
+                games: vec![],
+                installed: false,
+            }),
+            Err(err) => tracing::warn!("[games] gamepass detection failed: {err}"),
+        }
+
+        tracing::info!(
+            "[games] detection complete platforms={} games={}",
+            libraries.len(),
+            libraries.iter().map(|l| l.games.len()).sum::<usize>()
+        );
+
+        Ok::<Vec<crate::games::GameLibraryInfo>, String>(libraries)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn migrate_game(
+    platform: crate::games::GamePlatform,
+    app_id: String,
+    source_path: String,
+    target_disk: String,
+    known_size: Option<u64>,
+    known_files: Option<usize>,
+    app: AppHandle,
+    migration_db: tauri::State<'_, MigrationDb>,
+) -> Result<MigrationResult, String> {
+    if matches!(platform, crate::games::GamePlatform::MicrosoftStore) {
+        return Err(
+            "Microsoft Store / WindowsApps 游戏请用「在系统设置中迁移」按钮".to_string(),
+        );
+    }
+
+    tracing::info!(
+        "[games-migrate] platform={} app_id={} source={} target_disk={}",
+        platform.label(),
+        app_id,
+        source_path,
+        target_disk
+    );
+
+    let migrator = FileMigrator::new();
+    let known_stats = match (known_size, known_files) {
+        (Some(size), Some(files)) => Some((size, files)),
+        _ => None,
+    };
+    let progress_callback: MigrationProgressCallback = std::sync::Arc::new({
+        let app = app.clone();
+        move |progress: MigrationProgress| {
+            let _ = app.emit("migration-progress", progress);
+        }
+    });
+
+    let mut result = migrator
+        .migrate(
+            &source_path,
+            &target_disk,
+            LinkType::Junction,
+            known_stats,
+            Some(progress_callback),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !result.success {
+        tracing::warn!(
+            "[games-migrate] failed platform={} app_id={} error={:?}",
+            platform.label(),
+            app_id,
+            result.error
+        );
+        return Err(result
+            .error
+            .take()
+            .unwrap_or_else(|| "游戏迁移失败".to_string()));
+    }
+
+    let lt_str = format!("game:{}:{}", platform.label(), app_id);
+    if let Ok(id) = migration_db.insert_migration(
+        &result.source_path,
+        &result.target_path,
+        &lt_str,
+        result.file_size,
+    ) {
+        result.migration_id = id;
+    }
+    crate::safety::invalidate_safety_cache();
+    tracing::info!(
+        "[games-migrate] completed platform={} app_id={} source={} target={} size={} duration_ms={} history_id={}",
+        platform.label(),
+        app_id,
+        result.source_path,
+        result.target_path,
+        result.file_size,
+        result.duration_ms,
+        result.migration_id
+    );
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn open_native_migration_ui(
+    platform: crate::games::GamePlatform,
+) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        let target = match platform {
+            crate::games::GamePlatform::MicrosoftStore | crate::games::GamePlatform::GamePass => {
+                "ms-settings:appsfeatures"
+            }
+            crate::games::GamePlatform::Steam => "ms-settings:appsfeatures",
+            crate::games::GamePlatform::Epic => "ms-settings:appsfeatures",
+        };
+        Command::new("explorer.exe")
+            .arg(target)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = platform;
+    }
+    Ok(())
 }

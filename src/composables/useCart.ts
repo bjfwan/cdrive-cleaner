@@ -1,12 +1,18 @@
 import { computed, reactive, readonly } from 'vue';
 
+import type { GamePlatform } from '../types';
+
 export interface CartEntry {
   path: string;
   name: string;
   size: number;
   file_count: number;
   recommendation: 'migrate' | 'delete' | 'review';
-  source: 'smart_scan' | 'browse' | 'large_file';
+  source: 'smart_scan' | 'browse' | 'large_file' | 'game';
+  game?: {
+    platform: GamePlatform;
+    app_id: string;
+  };
 }
 
 interface CartState {
@@ -20,6 +26,14 @@ const state = reactive<CartState>({
 const items = computed(() => Array.from(state.items.values()));
 const totalSize = computed(() => items.value.reduce((sum, it) => sum + it.size, 0));
 const count = computed(() => state.items.size);
+
+const migrateItems = computed(() => items.value.filter((it) => it.recommendation === 'migrate'));
+const deleteItems = computed(() => items.value.filter((it) => it.recommendation === 'delete'));
+const reviewItems = computed(() => items.value.filter((it) => it.recommendation === 'review'));
+
+const migrateSize = computed(() => migrateItems.value.reduce((s, it) => s + it.size, 0));
+const deleteSize = computed(() => deleteItems.value.reduce((s, it) => s + it.size, 0));
+const reviewSize = computed(() => reviewItems.value.reduce((s, it) => s + it.size, 0));
 
 function add(entry: CartEntry) {
   state.items.set(entry.path.toLowerCase(), entry);
@@ -71,6 +85,12 @@ export function useCart() {
     items: readonly(items),
     totalSize: readonly(totalSize),
     count: readonly(count),
+    migrateItems: readonly(migrateItems),
+    deleteItems: readonly(deleteItems),
+    reviewItems: readonly(reviewItems),
+    migrateSize: readonly(migrateSize),
+    deleteSize: readonly(deleteSize),
+    reviewSize: readonly(reviewSize),
     add,
     remove,
     toggle,

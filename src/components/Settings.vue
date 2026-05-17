@@ -25,6 +25,7 @@ const settings = ref<AppSettings>({
   defaultTargetDisk: '',
   largeFileThreshold: 100,
   createSymlink: true,
+  defaultDeleteMode: 'recycle',
 });
 
 const showRestartConfirm = ref(false);
@@ -173,6 +174,11 @@ function confirmDeleteCache(entry: CacheEntry) {
 function getScanTypeLabel(scanType: string): string {
   return scanType === 'deep' ? '深度扫描' : scanType;
 }
+
+function onDeleteModeToggle(event: Event) {
+  const target = event.target as HTMLInputElement;
+  settings.value.defaultDeleteMode = target.checked ? 'permanent' : 'recycle';
+}
 </script>
 
 <template>
@@ -292,6 +298,61 @@ function getScanTypeLabel(scanType: string): string {
                 <li>文件将被完全移动，原路径将不再存在</li>
                 <li>依赖此路径的程序可能无法正常运行</li>
                 <li>需要手动更新应用程序的配置路径</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="setting-section">
+          <div class="section-header">
+            <h3>清理设置</h3>
+            <p>设置删除推荐项目时的默认行为</p>
+          </div>
+
+          <div class="setting-item delete-mode-setting">
+            <div class="setting-label">
+              <div class="label-with-icon">
+                <IconWarning :size="20" />
+                <label for="delete-mode">默认永久删除（跳过回收站）</label>
+              </div>
+              <span class="setting-description">开启后清理操作将直接删除文件，无法通过回收站恢复</span>
+            </div>
+            <label class="toggle-switch">
+              <input
+                id="delete-mode"
+                type="checkbox"
+                :checked="settings.defaultDeleteMode === 'permanent'"
+                @change="onDeleteModeToggle"
+                @click.stop
+              />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div v-if="settings.defaultDeleteMode === 'permanent'" class="info-card info-card-danger">
+            <div class="info-icon danger">
+              <IconWarning :size="20" />
+            </div>
+            <div class="info-content">
+              <div class="info-title">永久删除已开启</div>
+              <ul class="info-list">
+                <li>清理推荐项时将直接调用文件系统删除，跳过回收站</li>
+                <li>删除后无法回滚或恢复，请谨慎勾选</li>
+                <li>每次清理仍会弹出红色警告确认对话框</li>
+              </ul>
+            </div>
+          </div>
+
+          <div v-else class="info-card info-card-enabled">
+            <div class="info-icon">
+              <IconInfo :size="20" />
+            </div>
+            <div class="info-content">
+              <div class="info-title">默认走回收站</div>
+              <ul class="info-list">
+                <li>清理推荐项时会移入 Windows 回收站</li>
+                <li>误删后可从回收站还原</li>
+                <li>只有开启永久删除才会绕过回收站</li>
               </ul>
             </div>
           </div>
@@ -858,6 +919,16 @@ function getScanTypeLabel(scanType: string): string {
   border-color: rgba(139, 115, 85, 0.2);
 }
 
+.delete-mode-setting {
+  background: rgba(245, 158, 11, 0.04);
+  border-color: rgba(245, 158, 11, 0.16);
+}
+
+.delete-mode-setting:hover {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.24);
+}
+
 .label-with-icon {
   display: flex;
   align-items: center;
@@ -979,6 +1050,19 @@ function getScanTypeLabel(scanType: string): string {
   background: var(--color-warning);
 }
 
+.info-card-danger {
+  background: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.18);
+}
+
+.info-card-danger::before {
+  background: var(--color-error);
+}
+
+.info-card-danger .info-list li::before {
+  background: var(--color-error);
+}
+
 .info-icon {
   flex-shrink: 0;
   width: 36px;
@@ -996,6 +1080,12 @@ function getScanTypeLabel(scanType: string): string {
   background: rgba(245, 158, 11, 0.1);
   color: var(--color-warning);
   border-color: rgba(245, 158, 11, 0.15);
+}
+
+.info-icon.danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-error);
+  border-color: rgba(239, 68, 68, 0.18);
 }
 
 .info-content {

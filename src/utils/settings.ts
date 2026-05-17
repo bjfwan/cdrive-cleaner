@@ -1,4 +1,4 @@
-import type { AppSettings } from '../types';
+import type { AppSettings, DeleteMode } from '../types';
 
 const SETTINGS_KEY = 'cdrive-cleaner-settings';
 
@@ -6,7 +6,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultTargetDisk: '',
   largeFileThreshold: 100,
   createSymlink: true,
+  defaultDeleteMode: 'recycle',
 };
+
+function normalizeDeleteMode(value: unknown): DeleteMode {
+  return value === 'permanent' ? 'permanent' : 'recycle';
+}
 
 function normalizeSettings(value: Partial<AppSettings>): AppSettings {
   const threshold = Number(value.largeFileThreshold);
@@ -16,6 +21,7 @@ function normalizeSettings(value: Partial<AppSettings>): AppSettings {
     defaultTargetDisk: typeof value.defaultTargetDisk === 'string' ? value.defaultTargetDisk : '',
     largeFileThreshold: Number.isFinite(threshold) ? Math.min(Math.max(Math.round(threshold), 1), 10000) : DEFAULT_SETTINGS.largeFileThreshold,
     createSymlink: typeof value.createSymlink === 'boolean' ? value.createSymlink : DEFAULT_SETTINGS.createSymlink,
+    defaultDeleteMode: normalizeDeleteMode(value.defaultDeleteMode),
     theme,
   };
 }

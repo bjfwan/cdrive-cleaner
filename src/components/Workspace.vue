@@ -7,9 +7,11 @@ import { useCart } from '../composables/useCart';
 import { useCountUp } from '../composables/useCountUp';
 import { useToast } from '../composables/useToast';
 import SmartGroupCard from './SmartGroupCard.vue';
+import SpaceTrend from './SpaceTrend.vue';
 
 const ListView = defineAsyncComponent(() => import('./ListView.vue'));
 const LargeFilesView = defineAsyncComponent(() => import('./LargeFilesView.vue'));
+const DuplicatesView = defineAsyncComponent(() => import('./DuplicatesView.vue'));
 
 interface Props {
   scanResult: ScanResult | null;
@@ -36,7 +38,8 @@ const showToast = useToast();
 const smartReport = ref<SmartScanReport | null>(null);
 const loadingSmart = ref(false);
 const browseOpen = ref(false);
-const browseTab = ref<'list' | 'large_files'>('list');
+const browseTab = ref<'list' | 'large_files' | 'duplicates'>('list');
+const trendRefreshKey = ref(0);
 
 const smartGroups = computed(() => smartReport.value?.groups ?? []);
 const totalSavings = useCountUp(() => smartReport.value?.default_savings ?? 0, 700);
@@ -50,6 +53,7 @@ watch(
   async (next) => {
     if (next && props.hasDeepScanned) {
       await loadSmart();
+      trendRefreshKey.value += 1;
     } else {
       smartReport.value = null;
     }
@@ -78,7 +82,7 @@ function handleMigrate(item: SmartItem) {
   emit('migrate-single', item);
 }
 
-function openBrowse(tab: 'list' | 'large_files' = 'list') {
+function openBrowse(tab: 'list' | 'large_files' | 'duplicates' = 'list') {
   browseTab.value = tab;
   browseOpen.value = true;
 }
@@ -145,12 +149,15 @@ const heroSubtitle = computed(() => {
         <div class="hero-actions">
           <button class="hero-btn ghost" @click="openBrowse('list')" :disabled="!hasDeepScanned">浏览全部</button>
           <button class="hero-btn ghost" @click="openBrowse('large_files')" :disabled="!hasDeepScanned">大文件</button>
+          <button class="hero-btn ghost" @click="openBrowse('duplicates')" :disabled="!hasDeepScanned">重复文件</button>
           <button class="hero-btn refresh" @click="loadSmart" :disabled="!hasDeepScanned || loadingSmart">
             {{ loadingSmart ? '分析中…' : '重新分析' }}
           </button>
         </div>
       </div>
     </section>
+
+    <SpaceTrend :drive="selectedDisk" :refresh-key="trendRefreshKey" />
 
     <div v-if="!hasDeepScanned" class="empty-state">
       <div class="empty-card">
@@ -194,6 +201,7 @@ const heroSubtitle = computed(() => {
             <div class="browse-tabs">
               <button :class="{ active: browseTab === 'list' }" @click="browseTab = 'list'">列表浏览</button>
               <button :class="{ active: browseTab === 'large_files' }" @click="browseTab = 'large_files'">大文件雷达</button>
+              <button :class="{ active: browseTab === 'duplicates' }" @click="browseTab = 'duplicates'">重复文件</button>
             </div>
             <button class="icon-btn" @click="closeBrowse" aria-label="关闭">✕</button>
           </header>
@@ -218,6 +226,11 @@ const heroSubtitle = computed(() => {
               :has-deep-scanned="hasDeepScanned"
               :large-file-threshold="largeFileThreshold"
               @migrate-file="onListMigrateFile"
+            />
+            <DuplicatesView
+              v-else-if="browseTab === 'duplicates'"
+              :root-path="selectedDisk"
+              :has-deep-scanned="hasDeepScanned"
             />
           </div>
         </div>
