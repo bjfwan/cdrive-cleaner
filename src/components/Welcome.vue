@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import appIcon from '../assets/app-icon.svg';
+import appIcon from '../assets/app-icon.png';
 
 const emit = defineEmits<{ close: [] }>();
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import appIcon from './assets/app-icon.svg';
+import appIcon from './assets/app-icon.png';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import DeepScanProgress from './components/DeepScanProgress.vue';
 import { IconDeepScan, IconHistory, IconSettings } from './components/icons';
