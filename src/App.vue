@@ -17,6 +17,7 @@ import { getSettings } from './utils/settings';
 const Settings = defineAsyncComponent(() => import('./components/Settings.vue'));
 const History = defineAsyncComponent(() => import('./components/History.vue'));
 const Welcome = defineAsyncComponent(() => import('./components/Welcome.vue'));
+const Onboarding = defineAsyncComponent(() => import('./components/Onboarding.vue'));
 const MigrateDialog = defineAsyncComponent(() => import('./components/MigrateDialog.vue'));
 const CommandPalette = defineAsyncComponent(() => import('./components/CommandPalette.vue'));
 const GamesView = defineAsyncComponent(() => import('./components/GamesView.vue'));
@@ -44,6 +45,7 @@ const toastType = ref<ToastType>('success');
 const showSettings = ref(false);
 const showHistory = ref(false);
 const showWelcome = ref(false);
+const showOnboarding = ref(false);
 const showCommandPalette = ref(false);
 const showMigrateDialog = ref(false);
 const activeTab = ref<'workspace' | 'games' | 'junk'>('workspace');
@@ -212,12 +214,16 @@ function checkFirstLaunch() {
   const onboardingDone = localStorage.getItem('cdrive-cleaner-onboarding-completed');
   const legacyShown = localStorage.getItem('cdrive-cleaner-welcome-shown');
   if (!onboardingDone && !legacyShown) {
-    showWelcome.value = true;
+    showOnboarding.value = true;
   }
 }
 
 function closeWelcome() {
   showWelcome.value = false;
+}
+
+function closeOnboarding() {
+  showOnboarding.value = false;
 }
 
 async function loadDisks() {
@@ -998,6 +1004,7 @@ async function resumePendingScanIntent() {
       :available-disks="disks"
       @close="closeSettings"
       @save="onSettingsSaved"
+      @restart-onboarding="showOnboarding = true"
     />
 
     <div v-if="showHistory" class="modal-overlay" @click="closeHistory">
@@ -1008,6 +1015,8 @@ async function resumePendingScanIntent() {
     </div>
 
     <Welcome v-if="showWelcome" @close="closeWelcome" />
+
+    <Onboarding v-if="showOnboarding" @close="closeOnboarding" />
 
     <Cart
       :available-disks="disks"

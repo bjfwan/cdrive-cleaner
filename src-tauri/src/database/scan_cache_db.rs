@@ -255,7 +255,7 @@ impl ScanCacheDb {
     pub fn get_all_entries(&self) -> Result<Vec<(String, String, i64, i64, String, i64)>> {
         let conn = self.lock_conn();
         let mut stmt = conn.prepare(
-            "SELECT disk_path, scan_type, file_count, total_size, datetime(created_at, 'localtime'), LENGTH(result_json)
+            "SELECT disk_path, scan_type, file_count, total_size, datetime(created_at, 'localtime'), COALESCE(LENGTH(result_blob), LENGTH(result_json))
              FROM scan_cache
              WHERE scan_type = 'deep'
              ORDER BY created_at DESC"

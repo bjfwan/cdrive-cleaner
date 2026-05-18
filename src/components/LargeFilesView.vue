@@ -122,6 +122,7 @@ const filteredFiles = computed(() => filteredCache.value);
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  height: 100%;
 }
 
 .summary-bar {

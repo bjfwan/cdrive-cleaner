@@ -964,6 +964,7 @@ function isGroupActive(category: JunkCategory): boolean {
   align-items: center;
   gap: 1rem;
   padding: 0.85rem 1rem;
+  padding-right: 6rem;
   border-radius: var(--radius-md);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), var(--color-surface-strong));
   border: 1px solid var(--color-border-light);

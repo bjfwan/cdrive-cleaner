@@ -3,6 +3,7 @@ import { onMounted, ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import ConfirmDialog from './ConfirmDialog.vue';
 import { IconClose, IconRefresh, IconLink, IconInfo, IconWarning } from './icons';
+import appIcon from '../assets/app-icon.png';
 import type { DiskInfo, CacheEntry, CacheInfo, AppSettings } from '../types';
 import { formatBytes, formatDate } from '../utils/format';
 import { getSettings, saveSettings as persistSettings } from '../utils/settings';
@@ -19,6 +20,7 @@ const props = defineProps<Props>();
 const emit = defineEmits<{
   'close': [];
   'save': [settings: AppSettings];
+  'restart-onboarding': [];
 }>();
 
 const settings = ref<AppSettings>({
@@ -32,6 +34,7 @@ const showRestartConfirm = ref(false);
 const showDisableAdminConfirm = ref(false);
 const showClearCacheConfirm = ref(false);
 const showDeleteCacheConfirm = ref(false);
+const showAbout = ref(false);
 const deletingCacheEntry = ref<CacheEntry | null>(null);
 const isElevated = ref(false);
 const isCheckingElevation = ref(true);
@@ -121,6 +124,13 @@ async function confirmRestartAsStandard() {
 }
 
 function close() {
+  emit('close');
+}
+
+function restartOnboarding() {
+  localStorage.removeItem('cdrive-cleaner-onboarding-completed');
+  localStorage.removeItem('cdrive-cleaner-welcome-shown');
+  emit('restart-onboarding');
   emit('close');
 }
 
@@ -419,6 +429,29 @@ function onDeleteModeToggle(event: Event) {
             </div>
           </div>
         </div>
+
+        <div class="setting-section">
+          <div class="section-header">
+            <h3>其他</h3>
+            <p>引导与关于信息</p>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label">
+              <label>重新引导</label>
+              <span class="setting-description">再次显示新手引导流程</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" @click="restartOnboarding">重新引导</button>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label">
+              <label>关于</label>
+              <span class="setting-description">查看应用信息</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" @click="showAbout = true">关于</button>
+          </div>
+        </div>
         </div>
 
         <div v-show="activeTab === 'cache'" class="tab-content">
@@ -549,6 +582,40 @@ function onDeleteModeToggle(event: Event) {
       @confirm="deleteSelectedCacheEntry"
       @cancel="showDeleteCacheConfirm = false; deletingCacheEntry = null"
     />
+
+    <!-- About dialog -->
+    <div v-if="showAbout" class="about-overlay" @click.self="showAbout = false">
+      <div class="about-panel" @click.stop>
+        <button class="close-btn about-close" @click="showAbout = false">
+          <IconClose :size="18" />
+        </button>
+        <img :src="appIcon" alt="应用图标" class="about-icon" />
+        <h3 class="about-title">CDrive Cleaner</h3>
+        <p class="about-version">v0.1.4</p>
+        <p class="about-desc">
+          一键扫描、智能搬运、安全回滚——为 C 盘瘦身的桌面工具。
+        </p>
+
+        <div class="about-section">
+          <h4>联系方式</h4>
+          <ul>
+            <li>QQ 邮箱：2632507193@qq.com</li>
+            <li>Gmail：bajianfeng302@gmail.com</li>
+          </ul>
+        </div>
+
+        <div class="about-section">
+          <h4>隐私政策</h4>
+          <p>
+            CDrive Cleaner 仅在本地运行，不收集、不上传任何用户数据。
+            扫描结果和迁移记录均存储在本机，应用不包含任何遥测或分析功能。
+            我们不会将您的文件信息发送到任何服务器。
+          </p>
+        </div>
+
+        <p class="about-footer">© 2024–2026 CDrive Cleaner · MIT License</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1428,4 +1495,113 @@ function onDeleteModeToggle(event: Event) {
 .clear-all-cache-btn:hover svg {
   transform: rotate(180deg);
 }
+
+.btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.82rem;
+}
+
+.about-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 32, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2100;
+  animation: settingsOverlayIn 0.2s ease;
+}
+
+.about-panel {
+  position: relative;
+  width: min(400px, 90vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 2rem;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-xl);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.about-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+.about-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.about-title {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-top: 0.4rem;
+}
+
+.about-version {
+  font-size: 0.78rem;
+  color: var(--color-text-tertiary);
+  font-feature-settings: 'tnum';
+}
+
+.about-desc {
+  font-size: 0.88rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-top: 0.3rem;
+}
+
+.about-section {
+  width: 100%;
+  text-align: left;
+  margin-top: 0.8rem;
+  padding: 0.8rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+}
+
+.about-section h4 {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: 0.4rem;
+}
+
+.about-section p {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.about-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.about-section ul li {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  line-height: 1.8;
+}
+
+.about-footer {
+  font-size: 0.72rem;
+  color: var(--color-text-tertiary);
+  margin-top: 1rem;
+}
 </style>
+

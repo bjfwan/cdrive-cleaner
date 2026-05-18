@@ -463,6 +463,7 @@ function pctWidth(size: number): string {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  height: 100%;
 }
 
 .batch-toolbar {

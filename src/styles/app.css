@@ -967,6 +967,7 @@
   min-height: 0;
   overflow-y: auto;
   padding: 1rem;
+  padding-bottom: var(--cart-fab-clearance, 5rem);
   scrollbar-gutter: stable;
 }
 

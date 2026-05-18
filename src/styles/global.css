@@ -1,6 +1,9 @@
 :root {
   color-scheme: light;
 
+  /* Cart FAB clearance: enough padding for content to not be hidden behind FAB */
+  --cart-fab-clearance: 5rem;
+
   --color-bg-primary: #eef3f7;
   --color-bg-secondary: #f8fafc;
   --color-bg-tertiary: #e4ebf1;
