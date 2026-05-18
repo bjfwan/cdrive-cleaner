@@ -104,7 +104,7 @@ onUnmounted(() => {
   position: fixed;
   top: 1.4rem;
   right: 1.4rem;
-  z-index: 9999;
+  z-index: 2500;
   cursor: pointer;
 }
 

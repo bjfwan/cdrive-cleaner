@@ -1,8 +1,10 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
 use super::scan_index::IndexedScanResult;
 use crate::commands::DiskInfo;
+
+use aho_corasick::{AhoCorasick, MatchKind};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SpaceBreakdown {
@@ -83,111 +85,130 @@ pub struct BalanceItem {
     pub priority: u8,
 }
 
+
+#[derive(Deserialize)]
 struct ExplainRule {
-    pattern: &'static str,
+    pattern: String,
+    #[serde(rename = "mode")]
     match_mode: MatchMode,
-    explanation: &'static str,
-    app_name: Option<&'static str>,
+    explanation: String,
+    app_name: Option<String>,
     safe_to_delete: bool,
     will_regenerate: bool,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
 enum MatchMode {
     Contains,
     EndsWith,
+    StartsWith,
 }
 
-fn explain_rules() -> &'static [ExplainRule] {
-    static RULES: OnceLock<Vec<ExplainRule>> = OnceLock::new();
-    RULES.get_or_init(|| vec![
-        ExplainRule { pattern: "\\google\\chrome\\user data\\default\\cache", match_mode: MatchMode::Contains, explanation: "Chrome 浏览器缓存，删了会自动重建", app_name: Some("Google Chrome"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\google\\chrome\\user data\\default\\code cache", match_mode: MatchMode::Contains, explanation: "Chrome 编译后的 JS 缓存", app_name: Some("Google Chrome"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\google\\chrome\\user data\\default\\gpucache", match_mode: MatchMode::Contains, explanation: "Chrome GPU 着色器缓存", app_name: Some("Google Chrome"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\google\\chrome\\user data\\default\\service worker", match_mode: MatchMode::Contains, explanation: "Chrome Service Worker 缓存", app_name: Some("Google Chrome"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\google\\chrome\\user data\\default\\indexeddb", match_mode: MatchMode::Contains, explanation: "Chrome 网站本地数据库，删了可能丢网站离线数据", app_name: Some("Google Chrome"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: "\\google\\chrome\\user data\\default\\local storage", match_mode: MatchMode::Contains, explanation: "Chrome 网站本地存储", app_name: Some("Google Chrome"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: "\\google\\chrome\\user data\\crashpad", match_mode: MatchMode::Contains, explanation: "Chrome 崩溃转储报告", app_name: Some("Google Chrome"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\google\\chrome\\user data\\default\\blob_storage", match_mode: MatchMode::Contains, explanation: "Chrome Blob 临时存储", app_name: Some("Google Chrome"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\google\\chrome\\user data\\swreporter", match_mode: MatchMode::Contains, explanation: "Chrome 软件清理工具报告", app_name: Some("Google Chrome"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\microsoft\\edge\\user data\\default\\cache", match_mode: MatchMode::Contains, explanation: "Edge 浏览器缓存，删了会自动重建", app_name: Some("Microsoft Edge"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\microsoft\\edge\\user data\\default\\code cache", match_mode: MatchMode::Contains, explanation: "Edge 编译后的 JS 缓存", app_name: Some("Microsoft Edge"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\microsoft\\edge\\user data\\default\\gpucache", match_mode: MatchMode::Contains, explanation: "Edge GPU 着色器缓存", app_name: Some("Microsoft Edge"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\microsoft\\edge\\user data\\default\\service worker", match_mode: MatchMode::Contains, explanation: "Edge Service Worker 缓存", app_name: Some("Microsoft Edge"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\microsoft\\edge\\user data\\default\\indexeddb", match_mode: MatchMode::Contains, explanation: "Edge 网站本地数据库", app_name: Some("Microsoft Edge"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: "\\microsoft\\edge\\user data\\crashpad", match_mode: MatchMode::Contains, explanation: "Edge 崩溃转储报告", app_name: Some("Microsoft Edge"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\mozilla\\firefox\\profiles", match_mode: MatchMode::Contains, explanation: "Firefox 用户配置文件", app_name: Some("Firefox"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: "\\mozilla\\firefox\\crash reports", match_mode: MatchMode::Contains, explanation: "Firefox 崩溃转储报告", app_name: Some("Firefox"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\cache2\\entries", match_mode: MatchMode::Contains, explanation: "Firefox 浏览器磁盘缓存", app_name: Some("Firefox"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\code\\cachedextensionvsixs", match_mode: MatchMode::Contains, explanation: "VS Code 扩展安装包缓存，删了重装扩展时会重新下载", app_name: Some("VS Code"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\code\\user\\globalstorage", match_mode: MatchMode::Contains, explanation: "VS Code 扩展全局数据", app_name: Some("VS Code"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: "\\code\\logs", match_mode: MatchMode::Contains, explanation: "VS Code 日志文件", app_name: Some("VS Code"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\code\\cacheddata", match_mode: MatchMode::Contains, explanation: "VS Code 编译缓存", app_name: Some("VS Code"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\code\\cache", match_mode: MatchMode::Contains, explanation: "VS Code 通用缓存", app_name: Some("VS Code"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\trae\\cachedextensionvsixs", match_mode: MatchMode::Contains, explanation: "Trae 扩展安装包缓存", app_name: Some("Trae"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\trae\\logs", match_mode: MatchMode::Contains, explanation: "Trae 日志文件", app_name: Some("Trae"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\trae\\cacheddata", match_mode: MatchMode::Contains, explanation: "Trae 编译缓存", app_name: Some("Trae"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\cursor\\cachedextensionvsixs", match_mode: MatchMode::Contains, explanation: "Cursor 扩展安装包缓存", app_name: Some("Cursor"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\cursor\\logs", match_mode: MatchMode::Contains, explanation: "Cursor 日志文件", app_name: Some("Cursor"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\cursor\\cacheddata", match_mode: MatchMode::Contains, explanation: "Cursor 编译缓存", app_name: Some("Cursor"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\cursor\\user\\globalstorage", match_mode: MatchMode::Contains, explanation: "Cursor 扩展全局数据", app_name: Some("Cursor"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: "node_modules", match_mode: MatchMode::Contains, explanation: "Node.js 项目依赖，删了用 npm install 重建", app_name: Some("Node.js"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\.npm\\_cacache", match_mode: MatchMode::Contains, explanation: "npm 全局包缓存", app_name: Some("npm"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\.npm", match_mode: MatchMode::Contains, explanation: "npm 缓存目录", app_name: Some("npm"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\.yarn\\cache", match_mode: MatchMode::Contains, explanation: "Yarn 包缓存", app_name: Some("Yarn"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\.pnpm-store", match_mode: MatchMode::Contains, explanation: "pnpm 全局包存储，删了需要重新下载依赖", app_name: Some("pnpm"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "__pycache__", match_mode: MatchMode::Contains, explanation: "Python 字节码缓存，删了运行时会自动重建", app_name: Some("Python"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\pip\\cache", match_mode: MatchMode::Contains, explanation: "pip 下载缓存", app_name: Some("Python pip"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\.cargo\\registry", match_mode: MatchMode::Contains, explanation: "Rust crate 源码缓存，删了 cargo build 会重新下载", app_name: Some("Rust Cargo"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\target\\debug", match_mode: MatchMode::Contains, explanation: "Rust debug 编译产物", app_name: Some("Rust Cargo"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\target\\release", match_mode: MatchMode::Contains, explanation: "Rust release 编译产物", app_name: Some("Rust Cargo"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\.gradle\\caches", match_mode: MatchMode::Contains, explanation: "Gradle 构建缓存", app_name: Some("Gradle"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\.m2\\repository", match_mode: MatchMode::Contains, explanation: "Maven 本地仓库缓存", app_name: Some("Maven"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\docker\\overlay2", match_mode: MatchMode::Contains, explanation: "Docker 镜像层存储", app_name: Some("Docker"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: "\\docker\\volumes", match_mode: MatchMode::Contains, explanation: "Docker 数据卷", app_name: Some("Docker"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: "\\docker\\tmp", match_mode: MatchMode::Contains, explanation: "Docker 临时文件", app_name: Some("Docker"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "pagefile.sys", match_mode: MatchMode::EndsWith, explanation: "Windows 虚拟内存页面文件，系统管理不可删", app_name: Some("Windows"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: "hiberfil.sys", match_mode: MatchMode::EndsWith, explanation: "Windows 休眠文件，可通过 powercfg /h off 关闭", app_name: Some("Windows"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: "swapfile.sys", match_mode: MatchMode::EndsWith, explanation: "Windows UWP 应用交换文件，系统管理不可删", app_name: Some("Windows"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: "\\windows\\winsxs", match_mode: MatchMode::Contains, explanation: "Windows 组件存储，系统关键目录不可删", app_name: Some("Windows"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: "\\windows\\installer", match_mode: MatchMode::Contains, explanation: "Windows Installer 补丁缓存，可用 DISM 清理", app_name: Some("Windows"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: "\\windows\\softwaredistribution", match_mode: MatchMode::Contains, explanation: "Windows Update 下载缓存，可安全清理", app_name: Some("Windows Update"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\windows\\temp", match_mode: MatchMode::Contains, explanation: "Windows 系统临时文件", app_name: Some("Windows"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\local\\temp", match_mode: MatchMode::Contains, explanation: "用户临时文件夹", app_name: None, safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\crashdumps", match_mode: MatchMode::Contains, explanation: "应用崩溃转储文件", app_name: None, safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\nvidia corporation\\nv_cache", match_mode: MatchMode::Contains, explanation: "NVIDIA 着色器缓存", app_name: Some("NVIDIA"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\nvidia corporation\\downloader", match_mode: MatchMode::Contains, explanation: "NVIDIA 驱动下载缓存", app_name: Some("NVIDIA"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\amd\\dxcache", match_mode: MatchMode::Contains, explanation: "AMD DirectX 着色器缓存", app_name: Some("AMD"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\steam\\steamapps\\common", match_mode: MatchMode::Contains, explanation: "Steam 游戏安装目录", app_name: Some("Steam"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: "\\steam\\steamapps\\workshop", match_mode: MatchMode::Contains, explanation: "Steam 创意工坊内容", app_name: Some("Steam"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: "\\epic games", match_mode: MatchMode::Contains, explanation: "Epic Games 游戏安装目录", app_name: Some("Epic Games"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: ".vhdx", match_mode: MatchMode::EndsWith, explanation: "Hyper-V 虚拟硬盘文件", app_name: Some("Hyper-V"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: ".iso", match_mode: MatchMode::EndsWith, explanation: "光盘镜像文件", app_name: None, safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: ".vmdk", match_mode: MatchMode::EndsWith, explanation: "VMware 虚拟磁盘文件", app_name: Some("VMware"), safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: ".bak", match_mode: MatchMode::EndsWith, explanation: "备份文件，确认不需要后可删", app_name: None, safe_to_delete: false, will_regenerate: false },
-        ExplainRule { pattern: ".tmp", match_mode: MatchMode::EndsWith, explanation: "临时文件", app_name: None, safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: ".dmp", match_mode: MatchMode::EndsWith, explanation: "内存转储文件，调试用", app_name: None, safe_to_delete: true, will_regenerate: false },
-        ExplainRule { pattern: ".log", match_mode: MatchMode::EndsWith, explanation: "日志文件", app_name: None, safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\windows\\logs", match_mode: MatchMode::Contains, explanation: "Windows 系统日志", app_name: Some("Windows"), safe_to_delete: true, will_regenerate: true },
-        ExplainRule { pattern: "\\windows\\prefetch", match_mode: MatchMode::Contains, explanation: "Windows 预读取缓存，加速应用启动", app_name: Some("Windows"), safe_to_delete: true, will_regenerate: true },
-    ])
+static RULES_JSON: &str = include_str!("../../rules/explain_rules.json");
+
+/// Parsed explain rules, partitioned by match mode for the AC engine.
+struct ExplainEngine {
+    /// All rules in original order (for starts_with / ends_with fallback).
+    all_rules: Vec<ExplainRule>,
+    /// Aho-Corasick automaton built from `contains` patterns only.
+    ac: AhoCorasick,
+    /// Index mapping: ac pattern index → position in `all_rules`.
+    ac_to_rule: Vec<usize>,
+    /// Indices of `starts_with` rules in `all_rules`.
+    starts_with_indices: Vec<usize>,
+    /// Indices of `ends_with` rules in `all_rules`.
+    ends_with_indices: Vec<usize>,
 }
+
+fn explain_engine() -> &'static ExplainEngine {
+    static ENGINE: OnceLock<ExplainEngine> = OnceLock::new();
+    ENGINE.get_or_init(|| {
+        let all_rules: Vec<ExplainRule> =
+            serde_json::from_str(RULES_JSON).expect("invalid explain_rules.json");
+
+        let mut ac_patterns: Vec<&str> = Vec::new();
+        let mut ac_to_rule: Vec<usize> = Vec::new();
+        let mut starts_with_indices: Vec<usize> = Vec::new();
+        let mut ends_with_indices: Vec<usize> = Vec::new();
+
+        for (i, rule) in all_rules.iter().enumerate() {
+            match rule.match_mode {
+                MatchMode::Contains => {
+                    ac_patterns.push(&rule.pattern);
+                    ac_to_rule.push(i);
+                }
+                MatchMode::StartsWith => starts_with_indices.push(i),
+                MatchMode::EndsWith => ends_with_indices.push(i),
+            }
+        }
+
+        let ac = AhoCorasick::builder()
+            .match_kind(MatchKind::Standard)
+            .build(&ac_patterns)
+            .expect("failed to build AhoCorasick automaton");
+
+        ExplainEngine {
+            all_rules,
+            ac,
+            ac_to_rule,
+            starts_with_indices,
+            ends_with_indices,
+        }
+    })
+}
+
 
 /// 给任意路径生成一句话解释。
 pub fn explain_path(path: &str) -> FileExplanation {
     let path_lower = path.to_ascii_lowercase().replace('/', "\\");
-    let rules = explain_rules();
+    let engine = explain_engine();
 
-    for rule in rules.iter() {
-        let matched = match rule.match_mode {
-            MatchMode::Contains => path_lower.contains(rule.pattern),
-            MatchMode::EndsWith => path_lower.ends_with(rule.pattern),
+    // 1) AC automaton: O(path_length) for all `contains` rules
+    //    We find ALL matches and pick the one with the lowest original rule index
+    //    to preserve "first rule wins" priority semantics from the linear scan.
+    let mut best_ac: Option<usize> = None;
+    for mat in engine.ac.find_overlapping_iter(&path_lower) {
+        let rule_idx = engine.ac_to_rule[mat.pattern().as_usize()];
+        match best_ac {
+            None => best_ac = Some(rule_idx),
+            Some(current) if rule_idx < current => best_ac = Some(rule_idx),
+            _ => {}
+        }
+    }
+    if let Some(rule_idx) = best_ac {
+        let rule = &engine.all_rules[rule_idx];
+        return FileExplanation {
+            path: path.to_string(),
+            explanation: rule.explanation.clone(),
+            app_name: rule.app_name.clone(),
+            safe_to_delete: rule.safe_to_delete,
+            will_regenerate: rule.will_regenerate,
         };
-        if matched {
+    }
+
+    // 2) Fallback: startsWith linear scan (typically few rules)
+    for &idx in &engine.starts_with_indices {
+        let rule = &engine.all_rules[idx];
+        if path_lower.starts_with(&rule.pattern) {
             return FileExplanation {
                 path: path.to_string(),
-                explanation: rule.explanation.to_string(),
-                app_name: rule.app_name.map(|s| s.to_string()),
+                explanation: rule.explanation.clone(),
+                app_name: rule.app_name.clone(),
+                safe_to_delete: rule.safe_to_delete,
+                will_regenerate: rule.will_regenerate,
+            };
+        }
+    }
+
+    // 3) Fallback: endsWith linear scan (typically few rules)
+    for &idx in &engine.ends_with_indices {
+        let rule = &engine.all_rules[idx];
+        if path_lower.ends_with(&rule.pattern) {
+            return FileExplanation {
+                path: path.to_string(),
+                explanation: rule.explanation.clone(),
+                app_name: rule.app_name.clone(),
                 safe_to_delete: rule.safe_to_delete,
                 will_regenerate: rule.will_regenerate,
             };
@@ -234,23 +255,52 @@ fn get_user_profile_lower() -> &'static str {
 }
 
 fn classify_path(path_lower: &str) -> &'static str {
-    let system_prefixes = [
-        "c:\\windows\\",
-        "c:\\$recycle.bin",
-        "c:\\system volume information",
-        "c:\\recovery",
-        "c:\\boot",
-        "c:\\efi",
-    ];
-    for prefix in &system_prefixes {
-        if path_lower.starts_with(prefix) {
-            return "system";
-        }
+    if path_lower == "c:\\windows"
+        || path_lower.starts_with("c:\\windows\\")
+        || path_lower == "c:\\$recycle.bin"
+        || path_lower.starts_with("c:\\$recycle.bin\\")
+        || path_lower == "c:\\system volume information"
+        || path_lower.starts_with("c:\\system volume information\\")
+        || path_lower == "c:\\recovery"
+        || path_lower.starts_with("c:\\recovery\\")
+        || path_lower == "c:\\boot"
+        || path_lower.starts_with("c:\\boot\\")
+        || path_lower == "c:\\efi"
+        || path_lower.starts_with("c:\\efi\\")
+        || path_lower == "c:\\$windows.~bt"
+        || path_lower.starts_with("c:\\$windows.~bt\\")
+        || path_lower == "c:\\$windows.~ws"
+        || path_lower.starts_with("c:\\$windows.~ws\\")
+        || path_lower == "c:\\$winreagent"
+        || path_lower.starts_with("c:\\$winreagent\\")
+        || path_lower == "c:\\$sysreset"
+        || path_lower.starts_with("c:\\$sysreset\\")
+        || path_lower == "c:\\windows.old"
+        || path_lower.starts_with("c:\\windows.old\\")
+        || path_lower == "c:\\msocache"
+        || path_lower.starts_with("c:\\msocache\\")
+    {
+        return "system";
     }
 
-    if (path_lower.starts_with("c:\\program files\\") || path_lower.starts_with("c:\\program files (x86)\\"))
-        && !path_lower.contains("\\windowsapps\\")
+    if path_lower.starts_with("c:\\programdata\\microsoft\\windows\\")
     {
+        return "system";
+    }
+
+    if path_lower.ends_with("\\pagefile.sys")
+        || path_lower.ends_with("\\hiberfil.sys")
+        || path_lower.ends_with("\\swapfile.sys")
+    {
+        return "system";
+    }
+
+    if path_lower.starts_with("c:\\program files\\") || path_lower.starts_with("c:\\program files (x86)\\")
+        || path_lower == "c:\\program files" || path_lower == "c:\\program files (x86)"
+    {
+        if path_lower.contains("\\windowsapps") {
+            return "system";
+        }
         if path_lower.contains("\\steam\\steamapps\\")
             || path_lower.contains("\\epic games\\")
             || path_lower.contains("\\xbox games\\")
@@ -260,11 +310,22 @@ fn classify_path(path_lower: &str) -> &'static str {
         return "programs";
     }
 
+    if path_lower.starts_with("c:\\programdata\\package cache")
+        || path_lower == "c:\\programdata\\package cache"
+    {
+        return "programs";
+    }
+
     let user_profile = get_user_profile_lower();
-    let user_data_dirs = ["\\documents", "\\desktop", "\\downloads", "\\pictures", "\\videos", "\\music", "\\onedrive"];
+
+    let user_data_dirs = [
+        "\\documents", "\\desktop", "\\downloads", "\\pictures",
+        "\\videos", "\\music", "\\onedrive", "\\contacts",
+        "\\favorites", "\\links", "\\saved games", "\\searches",
+    ];
     for dir in &user_data_dirs {
         let prefix = format!("{}{}", user_profile, dir);
-        if path_lower.starts_with(&prefix) {
+        if path_lower == prefix || path_lower.starts_with(&format!("{}\\", prefix)) {
             return "user_data";
         }
     }
@@ -273,6 +334,12 @@ fn classify_path(path_lower: &str) -> &'static str {
         || path_lower.contains("\\epic games\\")
         || path_lower.contains("\\xboxgames\\")
         || path_lower.contains("\\xbox games\\")
+        || path_lower.contains("\\gog games\\")
+        || path_lower.contains("\\riot games\\")
+        || path_lower.contains("\\ubisoft\\ubisoft game launcher\\games\\")
+        || path_lower.contains("\\origin games\\")
+        || path_lower.contains("\\ea games\\")
+        || path_lower.contains("\\battle.net\\games\\")
     {
         return "games";
     }
@@ -281,6 +348,7 @@ fn classify_path(path_lower: &str) -> &'static str {
         "\\local\\temp\\", "\\local\\temp",
         "\\windows\\temp\\", "\\windows\\temp",
         "\\crashdumps\\", "\\crashdumps",
+        "\\crash\\", "\\logs\\", "\\log\\",
     ];
     for indicator in &temp_indicators {
         if path_lower.contains(indicator) || path_lower.ends_with(indicator.trim_end_matches('\\')) {
@@ -288,17 +356,35 @@ fn classify_path(path_lower: &str) -> &'static str {
         }
     }
 
+    // Root-level driver/OEM installation residue -> temp
+    if path_lower == "c:\\intel" || path_lower.starts_with("c:\\intel\\")
+        || path_lower == "c:\\amd" || path_lower.starts_with("c:\\amd\\")
+        || path_lower == "c:\\nvidia" || path_lower.starts_with("c:\\nvidia\\")
+        || path_lower == "c:\\dell" || path_lower.starts_with("c:\\dell\\")
+        || path_lower == "c:\\hp" || path_lower.starts_with("c:\\hp\\")
+        || path_lower == "c:\\swsetup" || path_lower.starts_with("c:\\swsetup\\")
+        || path_lower == "c:\\drivers" || path_lower.starts_with("c:\\drivers\\")
+        || path_lower == "c:\\perflogs" || path_lower.starts_with("c:\\perflogs\\")
+    {
+        return "temp";
+    }
+
     let cache_indicators = [
         "\\cache\\", "\\cache2\\", "\\gpucache\\", "\\code cache\\",
         "\\cacheddata\\", "\\cachedextensionvsixs\\", "\\shader cache\\",
-        "\\nv_cache\\", "\\dxcache\\",
+        "\\nv_cache\\", "\\dxcache\\", "\\deliveryoptimization\\",
+        "\\inetcache\\", "\\webcache\\", "\\browsercache\\",
+        "\\httpcache\\", "\\shadercache\\",
     ];
     for indicator in &cache_indicators {
         if path_lower.contains(indicator) {
             return "app_cache";
         }
     }
-    if path_lower.ends_with("\\cache") || path_lower.ends_with("\\gpucache") || path_lower.ends_with("\\code cache") {
+    if path_lower.ends_with("\\cache") || path_lower.ends_with("\\gpucache")
+        || path_lower.ends_with("\\code cache") || path_lower.ends_with("\\deliveryoptimization")
+        || path_lower.ends_with("\\inetcache") || path_lower.ends_with("\\webcache")
+    {
         return "app_cache";
     }
 
@@ -312,6 +398,16 @@ fn classify_path(path_lower: &str) -> &'static str {
         "\\.gradle\\caches\\", "\\.gradle\\caches",
         "\\.m2\\repository\\", "\\.m2\\repository",
         "__pycache__",
+        "\\.rustup\\",
+        "\\.nuget\\",
+        "\\.conda\\",
+        "\\.virtualenvs\\",
+        "\\.bun\\", "\\.deno\\",
+        "\\go\\pkg\\",
+        "\\.jdks\\", "\\.sdkman\\",
+        "\\.docker\\", "\\.kube\\",
+        "\\android\\sdk\\",
+        "\\.pyenv\\", "\\.nvm\\", "\\.fnm\\",
     ];
     for indicator in &dev_indicators {
         if path_lower.contains(indicator) || path_lower.ends_with(indicator.trim_end_matches('\\')) {
@@ -326,7 +422,44 @@ fn classify_path(path_lower: &str) -> &'static str {
         return "app_data";
     }
 
+    let dotdirs = ["\\.vscode\\", "\\.vscode", "\\.kiro\\", "\\.kiro", "\\.trae\\", "\\.trae"];
+    for d in &dotdirs {
+        let check = format!("{}{}", user_profile, d);
+        if path_lower.starts_with(&check) || path_lower == check.trim_end_matches('\\') {
+            return "app_data";
+        }
+    }
+
+    if path_lower.starts_with("c:\\programdata\\") || path_lower == "c:\\programdata" {
+        return "app_data";
+    }
+
+    if path_lower.starts_with("c:\\users\\") {
+        return "app_data";
+    }
+
     "other"
+}
+
+fn add_to_buckets(
+    path: &str,
+    name: &str,
+    size: u64,
+    is_dir: bool,
+    bucket_sizes: &mut std::collections::HashMap<&'static str, u64>,
+    buckets: &mut std::collections::HashMap<&'static str, Vec<(String, String, u64, bool)>>,
+) {
+    let path_lower = path.to_ascii_lowercase().replace('/', "\\");
+    let category = classify_path(&path_lower);
+    *bucket_sizes.entry(category).or_insert(0) += size;
+    let items = buckets.entry(category).or_default();
+    if items.len() < 10 || size > items.last().map(|i| i.2).unwrap_or(0) {
+        items.push((path.to_string(), name.to_string(), size, is_dir));
+        items.sort_by(|a, b| b.2.cmp(&a.2));
+        if items.len() > 10 {
+            items.truncate(10);
+        }
+    }
 }
 
 /// 把整棵目录树按"归属"分成 7~9 个大桶。
@@ -334,35 +467,63 @@ pub fn analyze_space_breakdown(indexed: &IndexedScanResult, disk_total: u64, dis
     let started = std::time::Instant::now();
     let disk_path = indexed.root_path().to_string();
 
-    let mut buckets: std::collections::HashMap<&'static str, Vec<(&str, &str, u64, bool)>> =
+    let mut buckets: std::collections::HashMap<&'static str, Vec<(String, String, u64, bool)>> =
         std::collections::HashMap::new();
     let mut bucket_sizes: std::collections::HashMap<&'static str, u64> =
         std::collections::HashMap::new();
 
-    for node in indexed.iter_nodes() {
-        let path_lower = node.path.to_ascii_lowercase().replace('/', "\\");
-        let category = classify_path(&path_lower);
-        *bucket_sizes.entry(category).or_insert(0) += node.size;
-        let items = buckets.entry(category).or_default();
-        if items.len() < 10 || node.size > items.last().map(|i| i.2).unwrap_or(0) {
-            items.push((&node.path, &node.name, node.size, true));
-            items.sort_by(|a, b| b.2.cmp(&a.2));
-            if items.len() > 10 {
-                items.truncate(10);
+    for child in indexed.root_children() {
+        if child.name == "根目录文件" {
+            for file in indexed.large_files_iter() {
+                let file_path = std::path::Path::new(&file.path);
+                if let Some(parent) = file_path.parent() {
+                    if parent.to_string_lossy().to_ascii_lowercase().replace('/', "\\").trim_end_matches('\\') == disk_path.to_ascii_lowercase().trim_end_matches('\\') {
+                        add_to_buckets(&file.path, &file.name, file.size, false, &mut bucket_sizes, &mut buckets);
+                    }
+                }
             }
+            let accounted: u64 = indexed.large_files_iter()
+                .filter(|f| {
+                    if let Some(parent) = std::path::Path::new(&f.path).parent() {
+                        parent.to_string_lossy().to_ascii_lowercase().replace('/', "\\").trim_end_matches('\\') == disk_path.to_ascii_lowercase().trim_end_matches('\\')
+                    } else {
+                        false
+                    }
+                })
+                .map(|f| f.size)
+                .sum();
+            let remaining = child.size.saturating_sub(accounted);
+            if remaining > 0 {
+                add_to_buckets(&child.path, "根目录其他文件", remaining, false, &mut bucket_sizes, &mut buckets);
+            }
+            continue;
         }
-    }
 
-    for file in indexed.large_files_iter() {
-        let path_lower = file.path.to_ascii_lowercase().replace('/', "\\");
-        let category = classify_path(&path_lower);
-        let items = buckets.entry(category).or_default();
-        if items.len() < 10 || file.size > items.last().map(|i| i.2).unwrap_or(0) {
-            items.push((&file.path, &file.name, file.size, false));
-            items.sort_by(|a, b| b.2.cmp(&a.2));
-            if items.len() > 10 {
-                items.truncate(10);
+        let name_lower = child.name.to_ascii_lowercase();
+        if name_lower == "users" {
+            if let Some(user_dirs) = indexed.children_of(&child.path) {
+                for user_dir in user_dirs {
+                    if let Some(sub_dirs) = indexed.children_of(&user_dir.path) {
+                        for sub in sub_dirs {
+                            add_to_buckets(&sub.path, &sub.name, sub.size, true, &mut bucket_sizes, &mut buckets);
+                        }
+                    } else {
+                        add_to_buckets(&user_dir.path, &user_dir.name, user_dir.size, true, &mut bucket_sizes, &mut buckets);
+                    }
+                }
+            } else {
+                add_to_buckets(&child.path, &child.name, child.size, true, &mut bucket_sizes, &mut buckets);
             }
+        } else if name_lower == "programdata" {
+            if let Some(pd_dirs) = indexed.children_of(&child.path) {
+                for sub in pd_dirs {
+                    add_to_buckets(&sub.path, &sub.name, sub.size, true, &mut bucket_sizes, &mut buckets);
+                }
+            } else {
+                add_to_buckets(&child.path, &child.name, child.size, true, &mut bucket_sizes, &mut buckets);
+            }
+        } else {
+            add_to_buckets(&child.path, &child.name, child.size, true, &mut bucket_sizes, &mut buckets);
         }
     }
 
@@ -541,6 +702,22 @@ pub fn suggest_balance(disks: &[DiskInfo], breakdown: &SpaceBreakdown) -> Balanc
             if !item.can_migrate {
                 continue;
             }
+
+            let path = std::path::Path::new(&item.path);
+            let safety = crate::safety::detector::analyze(
+                path,
+                crate::migration::LinkType::Junction,
+                None,
+                item.size,
+            );
+            match safety.verdict {
+                crate::safety::Verdict::Blocked | crate::safety::Verdict::SystemCritical => continue,
+                _ => {}
+            }
+            if !safety.can_migrate {
+                continue;
+            }
+
             let action = if cat.id == "temp" || cat.id == "app_cache" {
                 "redirect"
             } else {
@@ -580,5 +757,101 @@ pub fn suggest_balance(disks: &[DiskInfo], breakdown: &SpaceBreakdown) -> Balanc
         projected_target_used,
         total_movable: capped_movable,
         suggested_items,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper: linear scan implementation (old behavior) for comparison.
+    fn explain_path_linear(path: &str) -> FileExplanation {
+        let path_lower = path.to_ascii_lowercase().replace('/', "\\");
+        let all_rules: Vec<ExplainRule> =
+            serde_json::from_str(RULES_JSON).expect("invalid explain_rules.json");
+
+        for rule in all_rules.iter() {
+            let matched = match rule.match_mode {
+                MatchMode::Contains => path_lower.contains(rule.pattern.as_str()),
+                MatchMode::EndsWith => path_lower.ends_with(rule.pattern.as_str()),
+                MatchMode::StartsWith => path_lower.starts_with(rule.pattern.as_str()),
+            };
+            if matched {
+                return FileExplanation {
+                    path: path.to_string(),
+                    explanation: rule.explanation.clone(),
+                    app_name: rule.app_name.clone(),
+                    safe_to_delete: rule.safe_to_delete,
+                    will_regenerate: rule.will_regenerate,
+                };
+            }
+        }
+
+        FileExplanation {
+            path: path.to_string(),
+            explanation: "未识别的文件或目录".to_string(),
+            app_name: None,
+            safe_to_delete: false,
+            will_regenerate: false,
+        }
+    }
+
+    /// Verify that the AC engine produces the same results as old linear scan
+    /// for 20 representative paths.
+    #[test]
+    fn ac_engine_matches_linear_scan() {
+        let test_paths = [
+            "C:\\Users\\Test\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Cache\\data_0",
+            "C:\\Users\\Test\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Code Cache\\js\\abcdef",
+            "C:\\Users\\Test\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Cache\\index",
+            "C:\\Users\\Test\\AppData\\Roaming\\discord\\Cache\\data_1",
+            "C:\\Users\\Test\\AppData\\Local\\Temp\\installer.tmp",
+            "C:\\Windows\\Temp\\setup12345.log",
+            "C:\\Users\\Test\\AppData\\Roaming\\Code\\Cache\\data_2",
+            "C:\\Users\\Test\\AppData\\Local\\NVIDIA\\DXCache\\shader.bin",
+            "C:\\Users\\Test\\AppData\\Roaming\\npm-cache\\_cacache\\content.txt",
+            "C:\\Windows\\SoftwareDistribution\\Download\\abc123.cab",
+            "C:\\Users\\Test\\AppData\\Local\\CrashDumps\\app.exe.1234.dmp",
+            "C:\\Users\\Test\\AppData\\Local\\Microsoft\\Windows\\Explorer\\thumbcache_256.db",
+            "C:\\Users\\Test\\AppData\\Roaming\\Slack\\Cache\\data_3",
+            "C:\\Users\\Test\\AppData\\Roaming\\Telegram Desktop\\tdata\\user_data\\cache\\0\\file.dat",
+            "C:\\Users\\Test\\AppData\\Local\\pip\\Cache\\wheels\\abc.whl",
+            "C:\\Users\\Test\\AppData\\Local\\JetBrains\\IntelliJIdea2024.1\\caches\\index.dat",
+            "C:\\Users\\Test\\AppData\\Local\\Steam\\htmlcache\\page.html",
+            "C:\\Windows\\Prefetch\\CHROME.EXE-ABCDEF12.pf",
+            "C:\\some\\completely\\unknown\\path\\file.xyz",
+            "C:\\Users\\Test\\AppData\\Local\\D3DSCache\\shader.bin",
+        ];
+
+        for path in &test_paths {
+            let ac_result = explain_path(path);
+            let linear_result = explain_path_linear(path);
+            assert_eq!(
+                ac_result.explanation, linear_result.explanation,
+                "mismatch for path: {}\n  AC: {}\n  Linear: {}",
+                path, ac_result.explanation, linear_result.explanation
+            );
+            assert_eq!(
+                ac_result.safe_to_delete, linear_result.safe_to_delete,
+                "safe_to_delete mismatch for path: {}",
+                path
+            );
+        }
+    }
+
+    #[test]
+    fn explain_path_returns_known_chrome_cache() {
+        let result = explain_path(
+            "C:\\Users\\Test\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Cache\\data_0",
+        );
+        assert!(result.explanation.contains("Chrome"));
+        assert!(result.safe_to_delete);
+    }
+
+    #[test]
+    fn explain_path_returns_unknown_for_random_path() {
+        let result = explain_path("D:\\SomeRandomFolder\\nothing_here.bin");
+        assert_eq!(result.explanation, "未识别的文件或目录");
+        assert!(!result.safe_to_delete);
     }
 }

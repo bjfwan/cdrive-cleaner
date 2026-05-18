@@ -256,6 +256,7 @@ onMounted(() => {
   flex-direction: column;
   background: transparent;
   font-family: var(--font-sans);
+  padding-bottom: 5rem;
 }
 
 .history-header {
@@ -599,7 +600,7 @@ onMounted(() => {
   padding: 1rem;
   background: rgba(18, 18, 18, 0.34);
   backdrop-filter: blur(18px);
-  z-index: 3000;
+  z-index: 2000;
 }
 
 .modal-dialog {

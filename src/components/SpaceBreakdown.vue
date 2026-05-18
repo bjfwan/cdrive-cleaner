@@ -17,8 +17,12 @@ const emit = defineEmits<{
 
 const expandedId = ref<string | null>(null);
 const hoveredId = ref<string | null>(null);
+const showAllCategories = ref(false);
 
 const categories = computed(() => props.breakdown?.categories ?? []);
+const visibleCategories = computed(() =>
+  showAllCategories.value ? categories.value : categories.value.slice(0, 5)
+);
 const actionableTotal = computed(() => props.breakdown?.actionable_total ?? 0);
 const actionablePercent = computed(() => {
   if (!props.breakdown || props.breakdown.disk_used === 0) return 0;
@@ -75,7 +79,7 @@ function barOpacity(actionable: BreakdownCategory['actionable']) {
 
       <ul class="breakdown-list">
         <li
-          v-for="cat in categories"
+          v-for="cat in visibleCategories"
           :key="cat.id"
           class="breakdown-item"
           :class="{ expanded: expandedId === cat.id }"
@@ -128,6 +132,14 @@ function barOpacity(actionable: BreakdownCategory['actionable']) {
           </div>
         </li>
       </ul>
+
+      <button
+        v-if="categories.length > 5 && !showAllCategories"
+        class="breakdown-expand-btn"
+        @click="showAllCategories = true"
+      >
+        展开全部 {{ categories.length }} 项
+      </button>
 
       <div class="breakdown-footer">
         <span>可操作空间: <strong>{{ formatBytes(actionableTotal) }}</strong> ({{ actionablePercent }}%)</span>
@@ -433,6 +445,25 @@ function barOpacity(actionable: BreakdownCategory['actionable']) {
   border: 1px solid rgba(15, 118, 110, 0.1);
   font-size: 0.8rem;
   color: var(--color-text-secondary);
+}
+
+.breakdown-expand-btn {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-xs);
+  border: 1px dashed var(--color-border-medium);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.breakdown-expand-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
 }
 
 .breakdown-footer strong {

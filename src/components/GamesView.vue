@@ -62,7 +62,17 @@ function resetCheckedCounters() {
   checkedSize.value = 0;
 }
 
+let cachedLibraries: GameLibraryInfo[] | null = null;
+
 onMounted(() => {
+  if (cachedLibraries) {
+    libraries.value = cachedLibraries;
+    const firstInstalled = cachedLibraries.find((lib) => lib.installed);
+    if (firstInstalled) {
+      activePlatform.value = firstInstalled.platform;
+    }
+    return;
+  }
   void load();
 });
 
@@ -71,6 +81,7 @@ async function load() {
   try {
     const result = await invoke<GameLibraryInfo[]>('detect_game_libraries');
     libraries.value = result;
+    cachedLibraries = result;
     const firstInstalled = result.find((lib) => lib.installed);
     if (firstInstalled) {
       activePlatform.value = firstInstalled.platform;
@@ -326,7 +337,7 @@ defineExpose({ reload: load });
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding: 0.85rem 1rem 2rem;
+  padding: 0.85rem 1rem 5rem;
 }
 
 .games-head {

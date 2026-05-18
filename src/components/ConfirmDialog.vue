@@ -47,7 +47,7 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10001;
+  z-index: 2200;
   animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   font-family: var(--font-sans);
 }

@@ -445,6 +445,7 @@ dependencies = [
 name = "cdrive-cleaner"
 version = "0.1.4"
 dependencies = [
+ "aho-corasick",
  "anyhow",
  "bincode",
  "chrono",

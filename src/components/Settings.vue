@@ -11,6 +11,27 @@ import { useToast } from '../composables/useToast';
 
 const showToast = useToast();
 
+type ThemeMode = 'light' | 'dark' | 'system';
+const themeMode = ref<ThemeMode>((localStorage.getItem('cdrive-cleaner-theme') as ThemeMode) || 'system');
+
+function applyTheme(mode: ThemeMode) {
+  let effective = mode;
+  if (mode === 'system') {
+    effective = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', effective);
+}
+
+function setTheme(mode: ThemeMode) {
+  themeMode.value = mode;
+  localStorage.setItem('cdrive-cleaner-theme', mode);
+  applyTheme(mode);
+}
+
+onMounted(() => {
+  applyTheme(themeMode.value);
+});
+
 interface Props {
   show: boolean;
   availableDisks: DiskInfo[];
@@ -222,6 +243,34 @@ function onDeleteModeToggle(event: Event) {
 
       <div class="panel-body">
         <div v-show="activeTab === 'general'" class="tab-content">
+        <div class="setting-section">
+          <div class="section-header">
+            <h3>外观</h3>
+            <p>设置应用的颜色主题</p>
+          </div>
+
+          <div class="setting-item theme-setting">
+            <div class="setting-label">
+              <label>主题模式</label>
+              <span class="setting-description">选择亮色、暗色或跟随系统</span>
+            </div>
+            <div class="theme-options">
+              <button
+                :class="['theme-btn', { active: themeMode === 'light' }]"
+                @click="setTheme('light')"
+              >亮色</button>
+              <button
+                :class="['theme-btn', { active: themeMode === 'dark' }]"
+                @click="setTheme('dark')"
+              >暗色</button>
+              <button
+                :class="['theme-btn', { active: themeMode === 'system' }]"
+                @click="setTheme('system')"
+              >跟随系统</button>
+            </div>
+          </div>
+        </div>
+
         <div class="setting-section">
           <div class="section-header">
             <h3>迁移设置</h3>
@@ -628,7 +677,7 @@ function onDeleteModeToggle(event: Event) {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 2000;
   animation: settingsOverlayIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: auto;
 }
@@ -654,7 +703,7 @@ function onDeleteModeToggle(event: Event) {
   animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   font-family: var(--font-sans);
   position: relative;
-  z-index: 1001;
+  z-index: 2001;
   pointer-events: auto;
 }
 
@@ -1500,6 +1549,44 @@ function onDeleteModeToggle(event: Event) {
 .btn-sm {
   padding: 0.5rem 1rem;
   font-size: 0.82rem;
+}
+
+.theme-setting {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.theme-options {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.theme-btn {
+  flex: 1;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-border-medium);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.theme-btn:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-strong);
+  color: var(--color-text-primary);
+}
+
+.theme-btn.active {
+  background: linear-gradient(135deg, var(--color-accent-primary) 0%, var(--color-accent-secondary) 100%);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(139, 115, 85, 0.25);
 }
 
 .about-overlay {

@@ -329,6 +329,12 @@ function riskIconFor(risk: JunkItem['risk_level']) {
   return IconRiskDanger;
 }
 
+function categoryRiskColor(category: JunkCategory): string {
+  const cautionCategories: JunkCategory[] = ['app_logs' as JunkCategory, 'windows_update' as JunkCategory];
+  if (cautionCategories.includes(category)) return 'var(--color-warning)';
+  return 'var(--color-success)';
+}
+
 const confirmOpen = ref(false);
 const confirmMode = ref<'recycle' | 'permanent'>('recycle');
 
@@ -527,8 +533,12 @@ function isGroupActive(category: JunkCategory): boolean {
                 @update:model-value="(v) => toggleGroup(g, v)"
                 @click.stop
               />
+              <span class="junk-group-dot" :style="{ backgroundColor: categoryRiskColor(g.category) }"></span>
               <strong>{{ g.label }}</strong>
               <span class="junk-group-meta">{{ g.items.length }} 项 · {{ formatBytes(g.totalSize) }}</span>
+              <span class="junk-group-bar">
+                <span class="junk-group-bar-fill" :style="{ width: ((g.totalSize / (result?.total_size || 1)) * 100) + '%', backgroundColor: categoryRiskColor(g.category) }"></span>
+              </span>
             </div>
           </template>
 
@@ -543,7 +553,7 @@ function isGroupActive(category: JunkCategory): boolean {
               :buffer="6"
               v-slot="{ item }"
             >
-              <div :key="(item as JunkItem).path" class="junk-row">
+              <div :key="(item as JunkItem).path" class="junk-row" :class="{ 'junk-row--checked': isChecked((item as JunkItem).path) }">
                 <ElCheckbox
                   class="junk-row-check"
                   :model-value="isChecked((item as JunkItem).path)"
@@ -835,6 +845,13 @@ function isGroupActive(category: JunkCategory): boolean {
   width: 100%;
 }
 
+.junk-group-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 .junk-group-title strong {
   color: var(--color-text-primary);
   font-weight: 700;
@@ -842,9 +859,26 @@ function isGroupActive(category: JunkCategory): boolean {
 }
 
 .junk-group-meta {
-  font-size: 0.78rem;
+  font-size: 0.84rem;
   color: var(--color-text-tertiary);
   font-feature-settings: 'tnum';
+}
+
+.junk-group-bar {
+  width: 60px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(15, 23, 32, 0.06);
+  overflow: hidden;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.junk-group-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width var(--transition-fast);
 }
 
 .junk-list-shell {
@@ -861,6 +895,11 @@ function isGroupActive(category: JunkCategory): boolean {
   border-top: 1px solid var(--color-border-light);
   height: 64px;
   box-sizing: border-box;
+  transition: background var(--transition-fast);
+}
+
+.junk-row--checked {
+  background: rgba(16, 185, 129, 0.04);
 }
 
 .junk-row-check {

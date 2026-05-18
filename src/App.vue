@@ -136,6 +136,13 @@ const scanCapabilityShortLabel = computed(() => {
 provide(TOAST_KEY, showToastNotification);
 
 onMounted(async () => {
+  const savedTheme = localStorage.getItem('cdrive-cleaner-theme') || 'system';
+  let effective = savedTheme;
+  if (savedTheme === 'system') {
+    effective = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', effective);
+
   await loadDisks();
   loadUserSettings();
   checkFirstLaunch();

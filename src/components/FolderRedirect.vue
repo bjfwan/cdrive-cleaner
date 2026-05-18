@@ -5,7 +5,7 @@ import type { KnownFolderInfo, RedirectResult } from '../types/breakdown';
 import type { DiskInfo } from '../types';
 import { formatBytes } from '../utils/format';
 import { useToast } from '../composables/useToast';
-import { IconSpinner } from './icons';
+import { IconSpinner, IconFolder } from './icons';
 
 interface Props {
   folders: KnownFolderInfo[];
@@ -91,8 +91,8 @@ async function redirectAll() {
   <div class="redirect-panel">
     <header class="redirect-head">
       <div>
-        <h3>路径重定向</h3>
-        <p>把用户文件夹从 C 盘迁移到其他磁盘</p>
+        <h3>默认存储位置</h3>
+        <p>把下载、文档等文件夹的默认位置改到其他盘</p>
       </div>
       <button class="redirect-close" @click="emit('close')" aria-label="关闭">✕</button>
     </header>
@@ -131,10 +131,10 @@ async function redirectAll() {
             :key="folder.id"
             class="redirect-row done"
           >
-            <span class="redirect-cell name">📁 {{ folder.display_name }}</span>
+            <span class="redirect-cell name"><IconFolder :size="16" class="redirect-folder-icon" /> {{ folder.display_name }}</span>
             <span class="redirect-cell path">{{ folder.current_path }}</span>
             <span class="redirect-cell size">{{ formatBytes(folder.size_bytes) }}</span>
-            <span class="redirect-cell status done-badge">✅ 已重定向</span>
+            <span class="redirect-cell status done-badge">✓ 已重定向</span>
             <span class="redirect-cell"></span>
           </div>
 
@@ -147,7 +147,7 @@ async function redirectAll() {
               success: completedIds.get(folder.id)?.success,
             }"
           >
-            <span class="redirect-cell name">📁 {{ folder.display_name }}</span>
+            <span class="redirect-cell name"><IconFolder :size="16" class="redirect-folder-icon" /> {{ folder.display_name }}</span>
             <span class="redirect-cell path">{{ folder.current_path }}</span>
             <span class="redirect-cell size">{{ formatBytes(folder.size_bytes) }}</span>
             <span class="redirect-cell status">
@@ -358,6 +358,14 @@ async function redirectAll() {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.redirect-folder-icon {
+  flex-shrink: 0;
+  color: var(--color-highlight);
 }
 
 .redirect-cell.path {

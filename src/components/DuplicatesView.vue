@@ -394,6 +394,7 @@ function formatModified(value: string) {
   gap: 1rem;
   height: 100%;
   min-height: 0;
+  padding-bottom: 5rem;
 }
 
 .dupe-head {

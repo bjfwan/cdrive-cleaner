@@ -59,6 +59,7 @@ twox-hash = "2"
 thiserror = "2"
 dashmap = "6"
 bincode = "1"
+aho-corasick = "1"
 
 [dev-dependencies]
 serial_test = "3"

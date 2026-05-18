@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { ReclaimOpportunity, ReclaimResult } from '../types/breakdown';
 import { formatBytes } from '../utils/format';
 import { useToast } from '../composables/useToast';
-import { IconSpinner } from './icons';
+import { IconSpinner, IconRefresh, IconDisk, IconSpeed, IconHistory, IconRollback, IconMigrate, IconDelete, IconShield } from './icons';
 import ConfirmDialog from './ConfirmDialog.vue';
 
 interface Props {
@@ -25,18 +25,18 @@ const completedIds = ref<Map<string, { freed: number; success: boolean }>>(new M
 const confirmTarget = ref<ReclaimOpportunity | null>(null);
 const confirmType = ref<'danger' | 'warning'>('warning');
 
-function reclaimIcon(id: string): string {
-  const map: Record<string, string> = {
-    hibernation: '💤',
-    page_file: '📄',
-    windows_update: '🔄',
-    temp_files: '🗑️',
-    recycle_bin: '♻️',
-    delivery_optimization: '📦',
-    system_restore: '⏪',
-    winsxs: '🧹',
+function reclaimIcon(id: string) {
+  const map: Record<string, any> = {
+    hibernation: IconSpeed,
+    page_file: IconMigrate,
+    windows_update: IconRefresh,
+    temp_files: IconDelete,
+    recycle_bin: IconDelete,
+    delivery_optimization: IconDisk,
+    system_restore: IconRollback,
+    winsxs: IconShield,
   };
-  return map[id] ?? '🔧';
+  return map[id] ?? IconHistory;
 }
 
 async function executeReclaim(opportunity: ReclaimOpportunity) {
@@ -118,7 +118,7 @@ async function doExecute(opportunity: ReclaimOpportunity) {
           }"
         >
           <div class="reclaim-card-left">
-            <span class="reclaim-card-icon">{{ reclaimIcon(op.id) }}</span>
+            <span class="reclaim-card-icon"><component :is="reclaimIcon(op.id)" :size="20" /></span>
             <div class="reclaim-card-info">
               <strong>{{ op.label }}</strong>
               <span>{{ op.description }}</span>
@@ -142,10 +142,11 @@ async function doExecute(opportunity: ReclaimOpportunity) {
             <button
               v-else
               class="reclaim-btn"
-              :disabled="executingId !== null || (op.requires_admin && !isElevated)"
+              :disabled="executingId !== null"
               @click="executeReclaim(op)"
             >
               <IconSpinner v-if="executingId === op.id" :size="14" />
+              <span v-else-if="op.requires_admin && !isElevated">需管理员</span>
               <span v-else>执行</span>
             </button>
           </div>
@@ -293,13 +294,15 @@ async function doExecute(opportunity: ReclaimOpportunity) {
 }
 
 .reclaim-card-icon {
-  font-size: 1.5rem;
   flex-shrink: 0;
   width: 36px;
   height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 10px;
+  background: var(--color-highlight-soft);
+  color: var(--color-highlight);
 }
 
 .reclaim-card-info {

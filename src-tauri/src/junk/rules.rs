@@ -65,6 +65,9 @@ mod rules_browsers;
 #[path = "rules_apps.rs"]
 mod rules_apps;
 
+#[path = "rule_loader.rs"]
+pub mod rule_loader;
+
 fn os_layer_rules() -> Vec<JunkRule> {
     let mut rules: Vec<JunkRule> = Vec::new();
 
@@ -446,9 +449,22 @@ fn os_layer_rules() -> Vec<JunkRule> {
 }
 
 pub fn all_rules() -> Vec<JunkRule> {
-    let mut rules = os_layer_rules();
-    rules.extend(rules_browsers::extra_rules());
-    rules.extend(rules_apps::extra_rules());
+    // Load JSON-based rules first (new system)
+    let mut rules = rule_loader::load_json_rules();
+
+    // Append legacy hardcoded rules, deduplicating by id
+    let json_ids: std::collections::HashSet<&str> = rules.iter().map(|r| r.id).collect();
+
+    let mut legacy = os_layer_rules();
+    legacy.extend(rules_browsers::extra_rules());
+    legacy.extend(rules_apps::extra_rules());
+
+    for rule in legacy {
+        if !json_ids.contains(rule.id) {
+            rules.push(rule);
+        }
+    }
+
     rules
 }
 

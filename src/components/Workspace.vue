@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, ref, watch, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { DiskInfo, ScanResult, SmartItem, SmartScanReport } from '../types';
 import type { SpaceBreakdown, BalanceSuggestion, BreakdownItem, BalanceItem, ReclaimOpportunity, KnownFolderInfo, RedirectResult } from '../types/breakdown';
@@ -229,8 +229,15 @@ function onRedirected(result: RedirectResult) {
   cleanupResultVisible.value = true;
 }
 
-const isElevated = computed(() => false);
+const isElevated = ref(false);
 const hasOtherDisks = computed(() => props.availableDisks.length > 1);
+
+onMounted(async () => {
+  try {
+    isElevated.value = await invoke<boolean>('is_elevated');
+  } catch {}
+});
+
 
 function handleMigrate(item: SmartItem) {
   emit('migrate-single', item);
@@ -311,7 +318,7 @@ const heroSubtitle = computed(() => {
           <button class="hero-btn ghost" @click="openBrowse('large_files')" :disabled="!hasDeepScanned">大文件</button>
           <button class="hero-btn ghost" @click="openBrowse('duplicates')" :disabled="!hasDeepScanned">重复文件</button>
           <button class="hero-btn ghost" @click="openReclaimPanel">系统回收</button>
-          <button class="hero-btn ghost" @click="openRedirectPanel">路径重定向</button>
+          <button class="hero-btn ghost" @click="openRedirectPanel">默认存储位置</button>
           <button class="hero-btn refresh" @click="loadSmart" :disabled="!hasDeepScanned || loadingSmart">
             {{ loadingSmart ? '分析中…' : '重新分析' }}
           </button>
@@ -417,7 +424,7 @@ const heroSubtitle = computed(() => {
     </Teleport>
 
     <Teleport to="body">
-      <div v-if="showReclaimPanel" class="browse-overlay" @click="showReclaimPanel = false">
+      <div v-if="showReclaimPanel" class="browse-overlay reclaim-overlay" @click="showReclaimPanel = false">
         <div class="browse-panel" @click.stop>
           <SystemReclaim
             :opportunities="reclaimOpportunities"
@@ -431,7 +438,7 @@ const heroSubtitle = computed(() => {
     </Teleport>
 
     <Teleport to="body">
-      <div v-if="showRedirectPanel" class="browse-overlay" @click="showRedirectPanel = false">
+      <div v-if="showRedirectPanel" class="browse-overlay reclaim-overlay" @click="showRedirectPanel = false">
         <div class="browse-panel" @click.stop>
           <FolderRedirect
             :folders="knownFolders"
@@ -462,7 +469,7 @@ const heroSubtitle = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-  padding: 0.85rem 1rem 1.5rem;
+  padding: 0.85rem 1rem 5rem;
 }
 
 .hero {
@@ -681,8 +688,12 @@ const heroSubtitle = computed(() => {
 
 .browse-body {
   flex: 1; min-height: 0; overflow: auto;
-  padding: 1rem 1.2rem 1.5rem;
+  padding: 1rem 1.2rem 5rem;
 }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.reclaim-overlay {
+  z-index: 1900;
+}
 </style>

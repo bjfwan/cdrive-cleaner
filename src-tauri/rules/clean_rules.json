@@ -1,0 +1,177 @@
+[
+  {
+    "id": "json_chrome_cache",
+    "app_id": "chrome",
+    "detect": ["%LOCALAPPDATA%\\Google\\Chrome\\User Data"],
+    "category": "browser_cache",
+    "name": "Chrome 网页缓存",
+    "description": "Chrome 所有配置的网页缓存，删除后首次访问会重新下载",
+    "targets": [
+      {
+        "base": "%LOCALAPPDATA%\\Google\\Chrome\\User Data",
+        "subdirs": ["Default\\Cache", "Default\\Code Cache", "Default\\GPUCache"]
+      }
+    ],
+    "risk": "safe",
+    "requires_admin": false,
+    "default_selected": true,
+    "clean_subdirs_only": false
+  },
+  {
+    "id": "json_edge_cache",
+    "app_id": "edge",
+    "detect": ["%LOCALAPPDATA%\\Microsoft\\Edge\\User Data"],
+    "category": "browser_cache",
+    "name": "Edge 网页缓存",
+    "description": "Edge 所有配置的网页缓存，删除后首次访问会重新下载",
+    "targets": [
+      {
+        "base": "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data",
+        "subdirs": ["Default\\Cache", "Default\\Code Cache", "Default\\GPUCache"]
+      }
+    ],
+    "risk": "safe",
+    "requires_admin": false,
+    "default_selected": true,
+    "clean_subdirs_only": false
+  },
+  {
+    "id": "json_discord_cache",
+    "app_id": "discord",
+    "detect": ["%APPDATA%\\discord"],
+    "category": "app_cache",
+    "name": "Discord 缓存",
+    "description": "Discord 桌面端 Electron 缓存，可安全删除",
+    "targets": [
+      {
+        "base": "%APPDATA%\\discord",
+        "subdirs": ["Cache", "Code Cache", "GPUCache"]
+      }
+    ],
+    "risk": "safe",
+    "requires_admin": false,
+    "default_selected": true,
+    "clean_subdirs_only": false
+  },
+  {
+    "id": "json_npm_cache",
+    "app_id": "npm",
+    "detect": ["%APPDATA%\\npm-cache"],
+    "category": "dev_cache",
+    "name": "npm 全局缓存",
+    "description": "npm 下载缓存，删除后下次构建需重新下载",
+    "targets": [
+      {
+        "base": "%APPDATA%\\npm-cache"
+      }
+    ],
+    "risk": "risky",
+    "requires_admin": false,
+    "default_selected": false,
+    "clean_subdirs_only": false
+  },
+  {
+    "id": "json_pip_cache",
+    "app_id": "pip",
+    "detect": ["%LOCALAPPDATA%\\pip\\Cache"],
+    "category": "dev_cache",
+    "name": "pip wheel 缓存",
+    "description": "pip 已下载 wheel 缓存，删除后 pip install 需重新下载",
+    "targets": [
+      {
+        "base": "%LOCALAPPDATA%\\pip\\Cache"
+      }
+    ],
+    "risk": "risky",
+    "requires_admin": false,
+    "default_selected": false,
+    "clean_subdirs_only": false
+  },
+  {
+    "id": "json_windows_temp",
+    "app_id": "windows_system",
+    "detect": ["%WINDIR%\\Temp"],
+    "category": "system_temp",
+    "name": "Windows 系统临时文件",
+    "description": "系统 Temp 目录，安装/更新中产生的中转文件",
+    "targets": [
+      {
+        "base": "%WINDIR%\\Temp"
+      }
+    ],
+    "risk": "caution",
+    "requires_admin": false,
+    "default_selected": true,
+    "clean_subdirs_only": true
+  },
+  {
+    "id": "json_vscode_cache",
+    "app_id": "vscode",
+    "detect": ["%APPDATA%\\Code"],
+    "category": "app_cache",
+    "name": "VSCode 缓存",
+    "description": "VSCode 网络与资源缓存，删除后会自动重建",
+    "targets": [
+      {
+        "base": "%APPDATA%\\Code",
+        "subdirs": ["Cache", "CachedData", "CachedExtensions", "GPUCache"]
+      }
+    ],
+    "risk": "safe",
+    "requires_admin": false,
+    "default_selected": true,
+    "clean_subdirs_only": false
+  },
+  {
+    "id": "json_windows_update_download",
+    "app_id": "windows_system",
+    "detect": ["%WINDIR%\\SoftwareDistribution\\Download"],
+    "category": "windows_update",
+    "name": "Windows 更新下载缓存",
+    "description": "已安装的更新包残留，可释放数 GB",
+    "targets": [
+      {
+        "base": "%WINDIR%\\SoftwareDistribution\\Download"
+      }
+    ],
+    "risk": "caution",
+    "requires_admin": true,
+    "default_selected": true,
+    "clean_subdirs_only": true
+  },
+  {
+    "id": "json_crash_dumps",
+    "app_id": "windows_system",
+    "detect": ["%LOCALAPPDATA%\\CrashDumps"],
+    "category": "crash_dump",
+    "name": "应用崩溃转储",
+    "description": "应用崩溃时生成的内存快照，体积常达数百 MB",
+    "targets": [
+      {
+        "base": "%LOCALAPPDATA%\\CrashDumps"
+      }
+    ],
+    "risk": "safe",
+    "requires_admin": false,
+    "default_selected": true,
+    "clean_subdirs_only": true
+  },
+  {
+    "id": "json_nvidia_shader_cache",
+    "app_id": "nvidia",
+    "detect": ["%LOCALAPPDATA%\\NVIDIA\\DXCache", "%LOCALAPPDATA%\\NVIDIA\\GLCache"],
+    "category": "installer_cache",
+    "name": "NVIDIA 着色器缓存",
+    "description": "NVIDIA DX/GL/Compute 着色器缓存，删除后会自动重建",
+    "targets": [
+      {
+        "base": "%LOCALAPPDATA%\\NVIDIA",
+        "subdirs": ["DXCache", "GLCache", "ComputeCache"]
+      }
+    ],
+    "risk": "safe",
+    "requires_admin": false,
+    "default_selected": true,
+    "clean_subdirs_only": false
+  }
+]

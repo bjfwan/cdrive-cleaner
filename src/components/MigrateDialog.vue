@@ -687,7 +687,7 @@ async function startBatchMigration() {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 2100;
   animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: auto;
 }
