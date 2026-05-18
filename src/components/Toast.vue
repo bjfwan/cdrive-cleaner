@@ -272,4 +272,20 @@ onUnmounted(() => {
     max-width: none;
   }
 }
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .toast {
+  background: var(--color-surface-strong);
+  border-color: var(--color-border-medium);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+[data-theme="dark"] .toast-icon {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .toast-progress {
+  background: rgba(255, 255, 255, 0.08);
+}
 </style>

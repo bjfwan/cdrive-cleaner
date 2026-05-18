@@ -1423,17 +1423,69 @@ pub async fn scan_junk_files(
     app: tauri::AppHandle,
     categories: Option<Vec<crate::junk::rules::JunkCategory>>,
 ) -> Result<crate::junk::scanner::JunkScanResult, String> {
+    let t_cmd_start = std::time::Instant::now();
+    tracing::info!(target: "junk_perf", "[scan_junk_files] T0 enter");
+
+    let t_admin = std::time::Instant::now();
     let is_admin = is_elevated();
+    tracing::info!(
+        target: "junk_perf",
+        "[scan_junk_files] T1 is_elevated took {}ms result={}",
+        t_admin.elapsed().as_millis(),
+        is_admin,
+    );
+
     let app_handle = app.clone();
     let cb: crate::junk::scanner::JunkScanProgressCallback = std::sync::Arc::new(move |p| {
         let _ = tauri::Emitter::emit(&app_handle, "junk-scan-progress", p);
     });
-    tokio::task::spawn_blocking(move || {
-        crate::junk::scanner::scan_junk_blocking(categories, is_admin, Some(cb))
+    tracing::info!(
+        target: "junk_perf",
+        "[scan_junk_files] T2 about to spawn_blocking categories={:?}",
+        categories.as_ref().map(|v| v.len()),
+    );
+
+    let t_spawn = std::time::Instant::now();
+    let result = tokio::task::spawn_blocking(move || {
+        let t_inside = std::time::Instant::now();
+        tracing::info!(
+            target: "junk_perf",
+            "[scan_junk_files] T3 inside spawn_blocking, dispatch took {}ms",
+            t_spawn.elapsed().as_millis(),
+        );
+        let r = crate::junk::scanner::scan_junk_blocking(categories, is_admin, Some(cb));
+        tracing::info!(
+            target: "junk_perf",
+            "[scan_junk_files] T4 spawn_blocking body finished, internal_total={}ms",
+            t_inside.elapsed().as_millis(),
+        );
+        r
     })
     .await
     .map_err(|e| format!("join: {e}"))?
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    let blocking_ms = t_spawn.elapsed().as_millis();
+
+    // Estimate serialization cost separately from IPC. Tauri serializes the
+    // command return value before posting it to the webview; if `items` is
+    // huge this can be a non-trivial slice of total command latency.
+    let t_ser = std::time::Instant::now();
+    let json_size = serde_json::to_vec(&result).map(|v| v.len()).unwrap_or(0);
+    let ser_ms = t_ser.elapsed().as_millis();
+
+    tracing::info!(
+        target: "junk_perf",
+        "[scan_junk_files] T5 exit cmd_total={}ms blocking={}ms items={} total_size={} reported_scan_ms={} estimate_serialize_ms={} json_bytes={}",
+        t_cmd_start.elapsed().as_millis(),
+        blocking_ms,
+        result.items.len(),
+        result.total_size,
+        result.scan_duration_ms,
+        ser_ms,
+        json_size,
+    );
+
+    Ok(result)
 }
 
 #[tauri::command]

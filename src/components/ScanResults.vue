@@ -561,4 +561,77 @@ function closeMigrateDialog() {
     justify-content: center;
   }
 }
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .header {
+  background: linear-gradient(180deg, var(--color-surface-strong), var(--color-surface));
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .back-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .back-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .path-badge {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .path-badge-live {
+  background: rgba(20, 184, 166, 0.16);
+  color: var(--color-highlight);
+}
+
+[data-theme="dark"] .view-switcher {
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .view-btn.active {
+  background: rgba(94, 234, 212, 0.14);
+  color: #5eead4;
+  box-shadow: none;
+}
+
+[data-theme="dark"] .metric-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .deep-scan-notice {
+  background:
+    radial-gradient(circle at top right, rgba(20, 184, 166, 0.16), transparent 32%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+  border-color: rgba(20, 184, 166, 0.22);
+}
+
+[data-theme="dark"] .notice-icon-wrapper {
+  background: rgba(20, 184, 166, 0.16);
+}
+
+[data-theme="dark"] .notice {
+  background: rgba(251, 191, 36, 0.08);
+  border-color: rgba(251, 191, 36, 0.25);
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .notice-action {
+  background: linear-gradient(135deg, var(--color-highlight), var(--color-accent-secondary));
+  color: var(--color-bg-primary);
+  border-color: rgba(20, 184, 166, 0.32);
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .back-btn,
+[data-theme="dark"] .metric-card {
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .header-main {
+  color: var(--color-text-primary);
+}
 </style>

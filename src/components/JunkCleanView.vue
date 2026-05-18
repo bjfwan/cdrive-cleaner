@@ -217,13 +217,26 @@ async function startScan(categories: JunkCategory[] | null = lastCategories.valu
   }
 
   try {
+    const t_invoke_start = performance.now();
     const r = await invoke<JunkScanResult>(CMD_SCAN_JUNK, { categories });
+    const invokeMs = performance.now() - t_invoke_start;
+
+    const t_index = performance.now();
     result.value = r;
     rebuildItemIndex(r.items);
+    const indexMs = performance.now() - t_index;
+
+    const t_select = performance.now();
     cache.set(categories, r);
     applyDefaultSelection(r.items);
     applyDefaultExpansion();
+    const selectMs = performance.now() - t_select;
+
     status.value = 'scanned';
+    // eslint-disable-next-line no-console
+    console.info(
+      `[junk-perf] invoke=${invokeMs.toFixed(0)}ms index=${indexMs.toFixed(0)}ms postprocess=${selectMs.toFixed(0)}ms items=${r.items.length} reported_scan=${r.scan_duration_ms}ms`,
+    );
     if (r.items.length === 0) {
       showToast('没有发现垃圾', '系统看起来很干净', 'success');
     } else {
@@ -494,10 +507,12 @@ function isGroupActive(category: JunkCategory): boolean {
         </small>
         <small v-else>正在初始化扫描…</small>
         <div class="junk-progress" v-if="scanProgress && scanProgress.total_rules > 0">
-          <div
-            class="junk-progress-bar"
-            :style="{ width: ((scanProgress.completed_rules / scanProgress.total_rules) * 100).toFixed(1) + '%' }"
-          ></div>
+          <div class="junk-progress-track">
+            <div
+              class="junk-progress-bar"
+              :style="{ width: ((scanProgress.completed_rules / scanProgress.total_rules) * 100).toFixed(1) + '%' }"
+            ></div>
+          </div>
           <span class="junk-progress-text">
             {{ scanProgress.completed_rules }} / {{ scanProgress.total_rules }}
           </span>
@@ -771,11 +786,23 @@ function isGroupActive(category: JunkCategory): boolean {
 
 .junk-progress {
   position: relative;
-  margin-top: 0.5rem;
+  margin-top: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.junk-progress-track {
+  position: relative;
+  flex: 1 1 auto;
   height: 6px;
   border-radius: 999px;
   background: rgba(15, 23, 32, 0.08);
   overflow: hidden;
+}
+
+[data-theme="dark"] .junk-progress-track {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .junk-progress-bar {
@@ -786,16 +813,14 @@ function isGroupActive(category: JunkCategory): boolean {
 }
 
 .junk-progress-text {
-  position: absolute;
-  top: 50%;
-  right: 0.4rem;
-  transform: translateY(-50%);
-  font-size: 0.7rem;
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  line-height: 1;
   color: var(--color-text-tertiary);
   font-feature-settings: 'tnum';
-  background: var(--color-bg-secondary, rgba(255, 255, 255, 0.7));
-  padding: 0 0.3rem;
-  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+  min-width: 4rem;
+  text-align: right;
 }
 
 .junk-toolbar {
@@ -1011,6 +1036,10 @@ function isGroupActive(category: JunkCategory): boolean {
   box-shadow: var(--shadow-sm);
 }
 
+[data-theme="dark"] .junk-foot {
+  background: linear-gradient(180deg, var(--color-surface), var(--color-surface-strong));
+}
+
 .junk-foot-stats {
   display: flex;
   flex-direction: column;
@@ -1034,5 +1063,102 @@ function isGroupActive(category: JunkCategory): boolean {
 .junk-foot-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+/* ===== Element Plus collapse / checkbox / tag dark-mode patch ===== */
+[data-theme="dark"] .junk-collapse {
+  background: var(--color-surface-strong);
+}
+
+[data-theme="dark"] .junk-collapse :deep(.el-collapse) {
+  --el-collapse-header-bg-color: transparent;
+  --el-collapse-content-bg-color: transparent;
+  --el-collapse-header-text-color: var(--color-text-primary);
+  --el-collapse-border-color: var(--color-border-light);
+  border-color: var(--color-border-light);
+  background: transparent;
+}
+
+[data-theme="dark"] .junk-collapse :deep(.el-collapse-item__header),
+[data-theme="dark"] .junk-collapse :deep(.el-collapse-item__wrap),
+[data-theme="dark"] .junk-collapse :deep(.el-collapse-item__content) {
+  background: transparent;
+  color: var(--color-text-primary);
+  border-color: var(--color-border-light);
+}
+
+[data-theme="dark"] .junk-collapse :deep(.el-collapse-item__arrow) {
+  color: var(--color-text-secondary);
+}
+
+[data-theme="dark"] .junk-collapse :deep(.el-collapse-item__header):hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] .junk-list-shell {
+  background: transparent;
+}
+
+[data-theme="dark"] .junk-row {
+  border-top-color: var(--color-border-light);
+}
+
+[data-theme="dark"] .junk-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] .junk-row--checked {
+  background: rgba(52, 211, 153, 0.06);
+}
+
+[data-theme="dark"] .junk-group-bar {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Checkbox tokens */
+[data-theme="dark"] :deep(.el-checkbox) {
+  --el-checkbox-bg-color: transparent;
+  --el-checkbox-input-background-color: transparent;
+  --el-checkbox-input-border-color: var(--color-border-strong);
+  --el-checkbox-input-border-color-hover: var(--color-highlight);
+  --el-checkbox-checked-bg-color: var(--color-highlight);
+  --el-checkbox-checked-input-border-color: var(--color-highlight);
+  --el-checkbox-text-color: var(--color-text-primary);
+}
+
+[data-theme="dark"] :deep(.el-checkbox__inner) {
+  background-color: transparent;
+  border-color: var(--color-border-strong);
+}
+
+/* Tag risk badges */
+[data-theme="dark"] :deep(.el-tag) {
+  --el-tag-bg-color: rgba(255, 255, 255, 0.06);
+  --el-tag-border-color: var(--color-border-medium);
+  --el-tag-text-color: var(--color-text-primary);
+}
+
+[data-theme="dark"] :deep(.el-tag--success) {
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.28);
+  color: var(--color-success);
+}
+
+[data-theme="dark"] :deep(.el-tag--warning) {
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.28);
+  color: var(--color-warning);
+}
+
+[data-theme="dark"] :deep(.el-tag--danger) {
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.28);
+  color: var(--color-error);
+}
+
+[data-theme="dark"] :deep(.el-tag--info) {
+  background: rgba(96, 165, 250, 0.12);
+  border-color: rgba(96, 165, 250, 0.28);
+  color: var(--color-info);
 }
 </style>

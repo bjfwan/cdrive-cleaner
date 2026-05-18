@@ -656,4 +656,48 @@ onUnmounted(() => {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .deep-scan-progress {
+  background:
+    radial-gradient(circle at top right, rgba(20, 184, 166, 0.18), transparent 36%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+  border-color: rgba(20, 184, 166, 0.2);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .spinner-shell {
+  background: rgba(20, 184, 166, 0.15);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .status-badge {
+  background: rgba(20, 184, 166, 0.15);
+}
+
+[data-theme="dark"] .progress-bar-track {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .progress-bar-fill {
+  background: linear-gradient(90deg, #0d9488 0%, #14b8a6 56%, #5eead4 100%);
+  box-shadow: 0 0 18px rgba(20, 184, 166, 0.3);
+}
+
+[data-theme="dark"] .cancel-btn {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.25);
+  color: var(--color-error);
+}
+
+[data-theme="dark"] .cancel-btn:hover {
+  background: rgba(248, 113, 113, 0.16);
+}
+
+[data-theme="dark"] .progress-context,
+[data-theme="dark"] .metric-tile {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--color-border-medium);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
 </style>

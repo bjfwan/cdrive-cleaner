@@ -732,4 +732,10 @@ function formatModified(value: string) {
   font-size: 0.78rem;
   color: var(--color-text-tertiary);
 }
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .dupe-foot {
+  background: linear-gradient(180deg, var(--color-surface-strong), var(--color-surface));
+  border-color: var(--color-border-medium);
+}
 </style>

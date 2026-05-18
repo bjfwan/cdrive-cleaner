@@ -93,6 +93,11 @@ const presets: readonly Preset[] = [
     border-color var(--transition-base), background var(--transition-base);
 }
 
+[data-theme="dark"] .preset-card {
+  background: linear-gradient(180deg, rgba(40, 45, 55, 0.85), rgba(30, 34, 42, 0.95));
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
 .preset-card:hover {
   transform: translateY(-2px);
   border-color: var(--color-border-medium);
@@ -110,8 +115,18 @@ const presets: readonly Preset[] = [
   box-shadow: 0 18px 36px rgba(15, 118, 110, 0.12);
 }
 
+[data-theme="dark"] .preset-card.recommended {
+  background: linear-gradient(180deg, rgba(20, 184, 166, 0.1), rgba(30, 34, 42, 0.95));
+  border-color: rgba(20, 184, 166, 0.25);
+  box-shadow: 0 18px 36px rgba(20, 184, 166, 0.08);
+}
+
 .preset-card.recommended:hover {
   box-shadow: 0 22px 44px rgba(15, 118, 110, 0.18);
+}
+
+[data-theme="dark"] .preset-card.recommended:hover {
+  box-shadow: 0 22px 44px rgba(20, 184, 166, 0.15);
 }
 
 .preset-glow {
@@ -171,6 +186,10 @@ const presets: readonly Preset[] = [
   font-size: 0.72rem;
   letter-spacing: 0.04em;
   color: var(--color-text-tertiary);
+}
+
+[data-theme="dark"] .preset-footer {
+  border-top-color: rgba(255, 255, 255, 0.08);
 }
 
 @media (max-width: 720px) {

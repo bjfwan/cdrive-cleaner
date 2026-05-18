@@ -200,6 +200,10 @@ function onItemLeave() {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0));
 }
 
+[data-theme="dark"] .group-head {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent);
+}
+
 .head-text { min-width: 0; }
 .head-title { display: flex; align-items: center; gap: 0.6rem; }
 .head-title h3 { font-size: 1rem; font-weight: 700; color: var(--color-text-primary); }
@@ -346,4 +350,17 @@ function onItemLeave() {
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 .expand:hover { background: rgba(255, 255, 255, 0.7); color: var(--color-text-primary); }
+
+[data-theme="dark"] .expand { background: rgba(255, 255, 255, 0.04); }
+[data-theme="dark"] .expand:hover { background: rgba(255, 255, 255, 0.08); }
+
+[data-theme="dark"] .item:hover { background: rgba(255, 255, 255, 0.04); }
+[data-theme="dark"] .item.checked { background: rgba(20, 184, 166, 0.1); }
+[data-theme="dark"] .item-rule { background: rgba(255, 255, 255, 0.06); }
+[data-theme="dark"] .reveal:hover { background: rgba(255, 255, 255, 0.06); }
+[data-theme="dark"] .risk[data-risk='safe'] { background: rgba(52, 211, 153, 0.14); color: #34d399; }
+[data-theme="dark"] .risk[data-risk='caution'] { background: rgba(251, 191, 36, 0.14); color: #fbbf24; }
+[data-theme="dark"] .risk[data-risk='blocked'] { background: rgba(248, 113, 113, 0.14); color: #fca5a5; }
+[data-theme="dark"] .risk[data-risk='unknown'] { background: rgba(156, 163, 175, 0.14); color: #d1d5db; }
+[data-theme="dark"] .head-action { background: rgba(20, 184, 166, 0.16); color: #5eead4; }
 </style>

@@ -871,4 +871,75 @@ function pctWidth(size: number): string {
     padding: 0.76rem 0.32rem;
   }
 }
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .batch-toolbar {
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.12), rgba(96, 165, 250, 0.1));
+  border-color: rgba(20, 184, 166, 0.22);
+}
+
+[data-theme="dark"] .batch-clear-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--color-border-medium);
+  color: var(--color-text-secondary);
+}
+
+[data-theme="dark"] .batch-clear-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .table-shell,
+[data-theme="dark"] .empty,
+[data-theme="dark"] .loading {
+  background: linear-gradient(180deg, var(--color-surface-strong), var(--color-surface));
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .table-header {
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .table-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .row-selected {
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.14), rgba(96, 165, 250, 0.1));
+  border-color: rgba(20, 184, 166, 0.28);
+}
+
+[data-theme="dark"] .percent-container {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .action-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .badge.readonly {
+  background: rgba(251, 191, 36, 0.16);
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .badge.symlink {
+  background: rgba(96, 165, 250, 0.18);
+  color: #93c5fd;
+}
+
+[data-theme="dark"] .risk-safe { color: #34d399; }
+[data-theme="dark"] .risk-warning { color: #fbbf24; }
+[data-theme="dark"] .risk-blocked { color: #fb923c; }
+[data-theme="dark"] .risk-danger { color: #f87171; }
+
+[data-theme="dark"] .empty-icon {
+  color: rgba(243, 244, 246, 0.32);
+}
+
+[data-theme="dark"] .spinner {
+  border-color: rgba(255, 255, 255, 0.12);
+  border-top-color: var(--color-highlight);
+}
 </style>

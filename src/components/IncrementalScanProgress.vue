@@ -347,4 +347,50 @@ onUnmounted(() => {
     font-size: 1.125rem;
   }
 }
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .progress-container {
+  background: var(--color-bg-secondary);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+}
+
+[data-theme="dark"] .progress-title h3 {
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .phase-text {
+  color: var(--color-text-tertiary);
+}
+
+[data-theme="dark"] .stat-card {
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.1) 0%, rgba(52, 211, 153, 0.04) 100%);
+  border-color: rgba(52, 211, 153, 0.2);
+}
+
+[data-theme="dark"] .stat-icon {
+  background: rgba(255, 255, 255, 0.06);
+  color: #34d399;
+}
+
+[data-theme="dark"] .stat-value {
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .stat-label {
+  color: var(--color-text-tertiary);
+}
+
+[data-theme="dark"] .progress-bar-section {
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.08) 0%, rgba(52, 211, 153, 0.04) 100%);
+  border-color: rgba(52, 211, 153, 0.18);
+}
+
+[data-theme="dark"] .progress-bar-track {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .progress-status,
+[data-theme="dark"] .progress-percent {
+  color: #34d399;
+}
 </style>

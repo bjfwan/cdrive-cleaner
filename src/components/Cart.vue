@@ -715,4 +715,22 @@ select {
   color: var(--color-highlight, #0f766e);
   line-height: 1;
 }
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .tag-migrate { background: rgba(96, 165, 250, 0.16); color: #93c5fd; }
+[data-theme="dark"] .tag-delete { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
+[data-theme="dark"] .tag-review { background: rgba(156, 163, 175, 0.16); color: #d1d5db; }
+
+[data-theme="dark"] .progress-bar {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .result-fail-item {
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.22);
+}
+
+[data-theme="dark"] .result-fail-error {
+  color: #fca5a5;
+}
 </style>

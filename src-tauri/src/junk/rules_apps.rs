@@ -17,6 +17,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -33,6 +34,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -49,6 +51,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -65,6 +68,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -81,6 +85,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -97,6 +102,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -113,6 +119,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: true,
+            max_depth: None,
         },
     );
 
@@ -129,6 +136,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: true,
+            max_depth: None,
         },
     );
 
@@ -145,6 +153,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -161,6 +170,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: true,
+            max_depth: None,
         },
     );
 
@@ -177,6 +187,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -193,6 +204,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -212,6 +224,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -228,6 +241,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: true,
+            max_depth: None,
         },
     );
 
@@ -247,6 +261,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: true,
+            max_depth: None,
         },
     );
 
@@ -263,6 +278,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -279,6 +295,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -295,6 +312,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -311,6 +329,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -327,6 +346,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -343,6 +363,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -359,6 +380,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: true,
+            max_depth: None,
         },
     );
 
@@ -375,6 +397,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -391,6 +414,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -407,6 +431,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -423,6 +448,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: true,
+            max_depth: None,
         },
     );
 
@@ -439,6 +465,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -455,6 +482,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -471,6 +499,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -487,6 +516,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -503,6 +533,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -519,6 +550,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -535,6 +567,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -551,6 +584,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -567,6 +601,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -583,6 +618,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -599,6 +635,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -615,6 +652,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -631,6 +669,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -647,6 +686,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: true,
+            max_depth: None,
         },
     );
 
@@ -663,6 +703,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -679,6 +720,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: true,
+            max_depth: None,
         },
     );
 
@@ -695,6 +737,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: true,
+            max_depth: None,
         },
     );
 
@@ -711,6 +754,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -727,6 +771,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: true,
+            max_depth: None,
         },
     );
 
@@ -743,6 +788,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -759,6 +805,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: false,
             clean_subdirs_only: true,
+            max_depth: None,
         },
     );
 
@@ -775,6 +822,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 
@@ -791,6 +839,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             requires_admin: false,
             default_selected: true,
             clean_subdirs_only: false,
+            max_depth: None,
         },
     );
 

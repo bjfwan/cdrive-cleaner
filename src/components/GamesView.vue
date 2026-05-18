@@ -5,6 +5,7 @@ import type { DiskInfo, GameInfo, GameLibraryInfo, GamePlatform } from '../types
 import { formatBytes } from '../utils/format';
 import { useCart } from '../composables/useCart';
 import { useToast } from '../composables/useToast';
+import { fetchGameLibraries, getCachedGameLibraries } from '../composables/useGameDetection';
 import VirtualList from './VirtualList.vue';
 import { IconScanEmpty } from './icons';
 
@@ -65,9 +66,13 @@ function resetCheckedCounters() {
 let cachedLibraries: GameLibraryInfo[] | null = null;
 
 onMounted(() => {
-  if (cachedLibraries) {
-    libraries.value = cachedLibraries;
-    const firstInstalled = cachedLibraries.find((lib) => lib.installed);
+  // Prefer the module-scoped cache so that switching away from the games tab
+  // and coming back doesn't trigger a fresh 1~2s Steam/Epic/Game Pass scan.
+  const cached = cachedLibraries ?? getCachedGameLibraries();
+  if (cached) {
+    cachedLibraries = cached;
+    libraries.value = cached;
+    const firstInstalled = cached.find((lib) => lib.installed);
     if (firstInstalled) {
       activePlatform.value = firstInstalled.platform;
     }
@@ -76,10 +81,10 @@ onMounted(() => {
   void load();
 });
 
-async function load() {
+async function load(forceRefresh = false) {
   loading.value = true;
   try {
-    const result = await invoke<GameLibraryInfo[]>('detect_game_libraries');
+    const result = await fetchGameLibraries({ forceRefresh });
     libraries.value = result;
     cachedLibraries = result;
     const firstInstalled = result.find((lib) => lib.installed);
@@ -205,7 +210,7 @@ defineExpose({ reload: load });
         <p>Steam / Epic 直接 junction，启动照旧。Game Pass 部分游戏需要走系统设置。</p>
       </div>
       <div class="games-actions">
-        <button class="ghost-btn" :disabled="loading" @click="load">{{ loading ? '检测中…' : '重新检测' }}</button>
+        <button class="ghost-btn" :disabled="loading" @click="load(true)">{{ loading ? '检测中…' : '重新检测' }}</button>
       </div>
     </header>
 
@@ -679,4 +684,13 @@ defineExpose({ reload: load });
 }
 .blocked-section header strong { font-size: 0.95rem; color: var(--color-text-primary); }
 .blocked-section header small { font-size: 0.78rem; color: var(--color-text-tertiary); }
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .game-tag {
+  background: rgba(255, 255, 255, 0.06);
+}
+[data-theme="dark"] .game-tag.warn {
+  background: rgba(248, 113, 113, 0.14);
+  color: #fca5a5;
+}
 </style>

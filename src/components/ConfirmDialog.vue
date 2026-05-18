@@ -148,7 +148,7 @@ const emit = defineEmits<{
 }
 
 .btn-secondary {
-  color: #1a1a1a;
+  color: var(--color-text-primary);
   background: rgba(139, 92, 46, 0.12);
   border: 1px solid var(--color-border-strong);
   font-weight: 600;
@@ -159,6 +159,16 @@ const emit = defineEmits<{
   border-color: var(--color-border-strong);
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
+}
+
+[data-theme="dark"] .btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--color-border-strong);
 }
 
 .btn-danger {

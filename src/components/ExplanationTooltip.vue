@@ -164,4 +164,15 @@ defineExpose({ show, hide });
   border-right: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.08));
   border-bottom: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.08));
 }
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .explain-tag.safe {
+  background: rgba(52, 211, 153, 0.14);
+  color: #34d399;
+}
+
+[data-theme="dark"] .explain-tag.caution {
+  background: rgba(251, 191, 36, 0.14);
+  color: #fbbf24;
+}
 </style>

@@ -1509,4 +1509,47 @@ async function startBatchMigration() {
     gap: 1rem;
   }
 }
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .warning {
+  background: rgba(251, 191, 36, 0.08);
+  border-color: rgba(251, 191, 36, 0.25);
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .error {
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.25);
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .finding-warning {
+  color: #fbbf24 !important;
+}
+
+[data-theme="dark"] .panel-header,
+[data-theme="dark"] .panel-footer {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] .form-select {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--color-border-medium);
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .form-select:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--color-border-strong);
+}
+
+[data-theme="dark"] .batch-result-item {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .batch-result-item.result-error {
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.25);
+}
 </style>

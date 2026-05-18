@@ -338,4 +338,29 @@ const usageDescription = computed(() => {
     text-align: left;
   }
 }
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .disk-card {
+  background: linear-gradient(180deg, var(--color-surface-strong), var(--color-surface));
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .disk-card.active {
+  background: linear-gradient(180deg, rgba(20, 184, 166, 0.12), rgba(20, 184, 166, 0.04));
+  border-color: rgba(20, 184, 166, 0.32);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .drive-symbol {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .fs-pill {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .usage-meter-track {
+  background: rgba(255, 255, 255, 0.08);
+}
 </style>

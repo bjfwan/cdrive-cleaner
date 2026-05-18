@@ -499,4 +499,21 @@ function actionLabel(action: BalanceItem['action']) {
     padding: 0.3rem 0;
   }
 }
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .balance-item-action[data-action='migrate'] {
+  background: rgba(52, 211, 153, 0.14);
+  color: #34d399;
+}
+
+[data-theme="dark"] .balance-item-action[data-action='redirect'] {
+  background: rgba(96, 165, 250, 0.14);
+  color: #93c5fd;
+}
+
+[data-theme="dark"] .balance-execute-btn {
+  background: var(--color-highlight);
+  color: var(--color-bg-primary);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+}
 </style>

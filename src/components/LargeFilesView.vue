@@ -376,4 +376,36 @@ const filteredFiles = computed(() => filteredCache.value);
     display: none;
   }
 }
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .summary-bar,
+[data-theme="dark"] .table-shell,
+[data-theme="dark"] .empty {
+  background: linear-gradient(180deg, var(--color-surface-strong), var(--color-surface));
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .summary-pill {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .table-header {
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .table-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .action-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .empty-icon {
+  color: rgba(243, 244, 246, 0.32);
+}
 </style>

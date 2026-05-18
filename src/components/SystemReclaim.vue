@@ -414,4 +414,26 @@ async function doExecute(opportunity: ReclaimOpportunity) {
   font-weight: 600;
   color: var(--color-error);
 }
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .reclaim-tag {
+  background: rgba(156, 163, 175, 0.14);
+  color: #d1d5db;
+}
+
+[data-theme="dark"] .reclaim-tag.admin {
+  background: rgba(96, 165, 250, 0.16);
+  color: #93c5fd;
+}
+
+[data-theme="dark"] .reclaim-tag.reboot,
+[data-theme="dark"] .reclaim-tag.caution {
+  background: rgba(251, 191, 36, 0.14);
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .reclaim-tag.danger {
+  background: rgba(248, 113, 113, 0.14);
+  color: #fca5a5;
+}
 </style>

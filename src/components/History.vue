@@ -706,13 +706,13 @@ onMounted(() => {
   margin-bottom: 0.2rem;
   font-size: 0.84rem;
   font-weight: 800;
-  color: #92400e;
+  color: var(--color-warning);
 }
 
 .warning-text {
   font-size: 0.8rem;
   line-height: 1.55;
-  color: #78350f;
+  color: var(--color-text-secondary);
 }
 
 .modal-actions {
@@ -784,5 +784,115 @@ onMounted(() => {
   .modal-actions {
     flex-direction: column;
   }
+}
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .history-header {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+[data-theme="dark"] .refresh-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .refresh-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .stat-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .stat-card.active {
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.1), rgba(52, 211, 153, 0.04));
+  border-color: rgba(52, 211, 153, 0.2);
+}
+
+[data-theme="dark"] .stat-card.rolled {
+  background: linear-gradient(135deg, rgba(248, 113, 113, 0.1), rgba(248, 113, 113, 0.04));
+  border-color: rgba(248, 113, 113, 0.2);
+}
+
+[data-theme="dark"] .stat-icon {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .loading-spinner {
+  border-color: rgba(255, 255, 255, 0.12);
+  border-top-color: var(--color-highlight);
+}
+
+[data-theme="dark"] .empty-icon {
+  color: rgba(255, 255, 255, 0.18);
+}
+
+[data-theme="dark"] .record-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .record-card:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
+  border-color: var(--color-border-strong);
+}
+
+[data-theme="dark"] .record-paths {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] .record-badge.active {
+  background: rgba(52, 211, 153, 0.15);
+}
+
+[data-theme="dark"] .record-badge.rolled_back {
+  background: rgba(248, 113, 113, 0.15);
+}
+
+[data-theme="dark"] .rollback-btn {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.25);
+}
+
+[data-theme="dark"] .rollback-btn:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.16);
+}
+
+[data-theme="dark"] .modal-overlay {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+[data-theme="dark"] .modal-dialog {
+  background: linear-gradient(180deg, var(--color-bg-secondary), var(--color-bg-primary));
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .modal-close {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .modal-icon {
+  background: rgba(248, 113, 113, 0.15);
+}
+
+[data-theme="dark"] .warning-box {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.22);
+}
+
+[data-theme="dark"] .btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 </style>

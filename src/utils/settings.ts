@@ -15,14 +15,17 @@ function normalizeDeleteMode(value: unknown): DeleteMode {
 
 function normalizeSettings(value: Partial<AppSettings>): AppSettings {
   const threshold = Number(value.largeFileThreshold);
-  const theme = value.theme === 'dark' || value.theme === 'auto' ? value.theme : 'light';
+  const theme: AppSettings['theme'] =
+    value.theme === 'dark' || value.theme === 'light' || value.theme === 'auto'
+      ? value.theme
+      : undefined;
 
   return {
     defaultTargetDisk: typeof value.defaultTargetDisk === 'string' ? value.defaultTargetDisk : '',
     largeFileThreshold: Number.isFinite(threshold) ? Math.min(Math.max(Math.round(threshold), 1), 10000) : DEFAULT_SETTINGS.largeFileThreshold,
     createSymlink: typeof value.createSymlink === 'boolean' ? value.createSymlink : DEFAULT_SETTINGS.createSymlink,
     defaultDeleteMode: normalizeDeleteMode(value.defaultDeleteMode),
-    theme,
+    ...(theme !== undefined ? { theme } : {}),
   };
 }
 

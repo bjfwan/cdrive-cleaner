@@ -136,10 +136,14 @@ const scanCapabilityShortLabel = computed(() => {
 provide(TOAST_KEY, showToastNotification);
 
 onMounted(async () => {
-  const savedTheme = localStorage.getItem('cdrive-cleaner-theme') || 'system';
-  let effective = savedTheme;
-  if (savedTheme === 'system') {
+  const saved = getSettings().theme || (localStorage.getItem('cdrive-cleaner-theme') ?? 'auto');
+  let effective: 'light' | 'dark';
+  if (saved === 'auto' || saved === 'system') {
     effective = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } else if (saved === 'dark') {
+    effective = 'dark';
+  } else {
+    effective = 'light';
   }
   document.documentElement.setAttribute('data-theme', effective);
 
@@ -650,6 +654,34 @@ async function executeCart(targetDisk: string, deleteMode: DeleteMode) {
     ];
   }
 
+  // Surface a clear toast so the user isn't left guessing when a migration
+  // silently rolled back. Without this, a 100%-failed batch only showed up
+  // inside the cart drawer and looked like "nothing happened".
+  if (total > 0) {
+    const successCount = succeeded.length;
+    const failCount = failed.length;
+    if (failCount === 0) {
+      showToastNotification(
+        '搬运车已处理完毕',
+        `${successCount} 项已完成`,
+        'success',
+      );
+    } else if (successCount === 0) {
+      const firstReason = failed[0]?.error ?? '操作失败';
+      showToastNotification(
+        '搬运车执行失败',
+        `${failCount} 项全部失败 · ${firstReason}`,
+        'error',
+      );
+    } else {
+      showToastNotification(
+        '搬运车部分完成',
+        `${successCount} 项成功 · ${failCount} 项失败，详情见搬运车`,
+        'warning',
+      );
+    }
+  }
+
   if (succeededPaths.length > 0) {
     await refreshAfterMigration(succeededPaths);
   }
@@ -773,7 +805,8 @@ async function notifyOnGameDetection() {
   gameDetectionDone.value = true;
   if (localStorage.getItem('cdrive-cleaner-games-toast-shown')) return;
   try {
-    const libs = await invoke<Array<{ platform: string; installed: boolean; games: unknown[] }>>('detect_game_libraries');
+    const { fetchGameLibraries } = await import('./composables/useGameDetection');
+    const libs = await fetchGameLibraries();
     const installedNames = libs
       .filter((l) => l.installed && l.games.length > 0)
       .map((l) => {

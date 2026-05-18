@@ -427,4 +427,32 @@ function handleItemClick(dir: DirectoryNode) {
     grid-column: 2;
   }
 }
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .treemap-card,
+[data-theme="dark"] .list-preview {
+  background: linear-gradient(180deg, var(--color-surface-strong), var(--color-surface));
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .panel-chip {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .preview-item {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .preview-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .preview-rank {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .preview-bar-container {
+  background: rgba(255, 255, 255, 0.08);
+}
 </style>

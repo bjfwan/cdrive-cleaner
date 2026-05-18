@@ -88,6 +88,13 @@ pub fn scan_junk_blocking(
 
     let scanned_rules = applicable.len();
 
+    tracing::info!(
+        target: "junk_perf",
+        "[scan_blocking] applicable_rules={} (filtered from {} total)",
+        scanned_rules,
+        scanned_rules + skipped_rules.len(),
+    );
+
     // Shared atomic counters keep cross-thread accumulation lock-free.
     let completed = Arc::new(AtomicUsize::new(0));
     let found_items = Arc::new(AtomicUsize::new(0));
@@ -113,10 +120,12 @@ pub fn scan_junk_blocking(
         }
     }
 
-    let results: Vec<(Vec<JunkItem>, Option<String>)> = applicable
+    let results: Vec<(Vec<JunkItem>, Option<String>, RulePerf)> = applicable
         .par_iter()
         .map(|rule| {
+            let t_rule = Instant::now();
             let outcome = process_rule(rule);
+            let rule_elapsed_ms = t_rule.elapsed().as_millis() as u64;
             let (rule_items, _) = &outcome;
 
             // Per-rule accumulation: do this regardless of whether a callback
@@ -160,20 +169,36 @@ pub fn scan_junk_blocking(
                 }
             }
 
-            outcome
+            let perf = RulePerf {
+                rule_id: rule.id,
+                rule_name: rule.name,
+                elapsed_ms: rule_elapsed_ms,
+                items: rule_count,
+                size: rule_size,
+                paths_count: rule.paths.len(),
+                patterns_count: rule.patterns.len(),
+                clean_subdirs_only: rule.clean_subdirs_only,
+            };
+
+            (outcome.0, outcome.1, perf)
         })
         .collect();
 
     let mut items: Vec<JunkItem> = Vec::new();
-    for (rule_items, missing) in results {
+    let mut perf_records: Vec<RulePerf> = Vec::with_capacity(results.len());
+    for (rule_items, missing, perf) in results {
         items.extend(rule_items);
         if let Some(id) = missing {
             skipped_rules.push(id);
         }
+        perf_records.push(perf);
     }
 
     let total_size: u64 = items.iter().map(|i| i.size).sum();
     let total_count = items.len();
+
+    // Emit a perf summary: top-15 slowest rules and aggregate stats.
+    log_rule_perf_summary(&perf_records, start.elapsed().as_millis() as u64);
 
     Ok(JunkScanResult {
         items,
@@ -183,6 +208,64 @@ pub fn scan_junk_blocking(
         skipped_rules,
         scan_duration_ms: start.elapsed().as_millis() as u64,
     })
+}
+
+/// Per-rule timing record collected during the scan; used only for diagnostics.
+struct RulePerf {
+    rule_id: &'static str,
+    rule_name: &'static str,
+    elapsed_ms: u64,
+    items: usize,
+    size: u64,
+    paths_count: usize,
+    patterns_count: usize,
+    clean_subdirs_only: bool,
+}
+
+fn log_rule_perf_summary(records: &[RulePerf], total_scan_ms: u64) {
+    if records.is_empty() {
+        return;
+    }
+    let mut sorted: Vec<&RulePerf> = records.iter().collect();
+    sorted.sort_by(|a, b| b.elapsed_ms.cmp(&a.elapsed_ms));
+
+    let total_rule_ms: u64 = records.iter().map(|r| r.elapsed_ms).sum();
+    let max_ms = sorted.first().map(|r| r.elapsed_ms).unwrap_or(0);
+    let p50 = sorted
+        .get(records.len() / 2)
+        .map(|r| r.elapsed_ms)
+        .unwrap_or(0);
+    let p95 = sorted
+        .get(records.len() * 5 / 100)
+        .map(|r| r.elapsed_ms)
+        .unwrap_or(0);
+
+    tracing::info!(
+        target: "junk_perf",
+        "[scan_blocking] done total={}ms sum_rule_time={}ms (parallelism_factor={:.2}) max_rule_ms={} p50={} p95={}",
+        total_scan_ms,
+        total_rule_ms,
+        if total_scan_ms > 0 { total_rule_ms as f64 / total_scan_ms as f64 } else { 0.0 },
+        max_ms,
+        p50,
+        p95,
+    );
+
+    for (i, r) in sorted.iter().take(15).enumerate() {
+        tracing::info!(
+            target: "junk_perf",
+            "[scan_blocking]  #{:02} {}ms id={} items={} size={} paths={} patterns={} subdirs_only={} name={}",
+            i + 1,
+            r.elapsed_ms,
+            r.rule_id,
+            r.items,
+            r.size,
+            r.paths_count,
+            r.patterns_count,
+            r.clean_subdirs_only,
+            r.rule_name,
+        );
+    }
 }
 
 fn process_rule(rule: &JunkRule) -> (Vec<JunkItem>, Option<String>) {
@@ -215,13 +298,24 @@ fn scan_path_for_rule(path: &Path, rule: &JunkRule, items: &mut Vec<JunkItem>) {
         // Recursive traversal using winfs::enumerate_directory for pattern matching.
         // Each entry already carries size from the native FindFirstFileEx call,
         // avoiding a separate stat() per file.
-        let mut pending = vec![path.to_path_buf()];
-        while let Some(dir) = pending.pop() {
+        //
+        // Depth tracking: pending stores (path, depth_below_root) where depth=0
+        // is the rule's base directory. When `rule.max_depth` is set we stop
+        // queuing children once the next level would exceed the cap. This is
+        // the primary defense against accidental full-drive walks.
+        let mut pending: Vec<(PathBuf, u32)> = vec![(path.to_path_buf(), 0)];
+        while let Some((dir, depth)) = pending.pop() {
             match winfs::enumerate_directory(&dir, false) {
                 Ok(entries) => {
+                    let can_descend = match rule.max_depth {
+                        Some(cap) => depth < cap,
+                        None => true,
+                    };
                     for entry in entries {
                         if entry.is_dir && !entry.is_symlink {
-                            pending.push(entry.path);
+                            if can_descend {
+                                pending.push((entry.path, depth + 1));
+                            }
                         } else if !entry.is_dir {
                             let matched = rule
                                 .patterns

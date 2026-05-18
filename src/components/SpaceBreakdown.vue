@@ -487,4 +487,55 @@ function barOpacity(actionable: BreakdownCategory['actionable']) {
     gap: 0.3rem;
   }
 }
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .breakdown-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .breakdown-item.expanded {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .breakdown-detail-row {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .breakdown-action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .breakdown-action-btn.ghost:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .breakdown-badge {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .breakdown-badge[data-actionable='full'] {
+  background: rgba(52, 211, 153, 0.14);
+  color: #34d399;
+}
+
+[data-theme="dark"] .breakdown-badge[data-actionable='partial'] {
+  background: rgba(251, 191, 36, 0.14);
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .breakdown-badge[data-actionable='none'] {
+  background: rgba(156, 163, 175, 0.14);
+  color: #d1d5db;
+}
+
+[data-theme="dark"] .breakdown-bar {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .breakdown-footer {
+  background: rgba(20, 184, 166, 0.08);
+  border-color: rgba(20, 184, 166, 0.18);
+}
 </style>

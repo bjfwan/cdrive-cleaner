@@ -193,17 +193,39 @@ impl FileMigrator {
         );
         let staging_path = self.create_staging_path(&target_path);
         let mut prepared_directory_plan = None;
-        let source_stats = match known_stats {
-            Some(stats) => stats,
-            None if is_directory => match self.build_directory_copy_plan(source, &staging_path) {
+        // For directories, caller-supplied stats (`known_stats`) cannot be trusted:
+        // the UI may legitimately pass `file_count = 1` for a directory entry that
+        // doesn't carry a per-tree file count (e.g. SpaceBreakdown items). Trusting
+        // it here would make the post-copy verification compare the real number of
+        // copied files against `1` and falsely abort an otherwise successful copy.
+        // Building the plan upfront also lets `copy_with_progress` skip rebuilding
+        // it, so this is essentially free.
+        let source_stats = if is_directory {
+            match self.build_directory_copy_plan(source, &staging_path) {
                 Ok(plan) => {
                     let stats = Self::stats_from_plan(&plan);
                     prepared_directory_plan = Some(plan);
+                    if let Some((known_size, known_files)) = known_stats {
+                        if known_size != stats.0 || known_files != stats.1 {
+                            tracing::debug!(
+                                "[migration-core] ignoring caller-supplied directory stats source={} caller=({}, {}) actual=({}, {})",
+                                source.display(),
+                                known_size,
+                                known_files,
+                                stats.0,
+                                stats.1
+                            );
+                        }
+                    }
                     stats
                 }
                 Err(err) => return Ok(make_err(format!("Prepare failed: {}", err))),
-            },
-            None => Self::calculate_stats(source)?,
+            }
+        } else {
+            match known_stats {
+                Some(stats) => stats,
+                None => Self::calculate_stats(source)?,
+            }
         };
         let (file_size, total_files) = source_stats;
         let available_space = self.get_available_space(target_disk)?;

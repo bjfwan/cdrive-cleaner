@@ -186,6 +186,7 @@ function onBreakdownMigrate(item: BreakdownItem) {
 
 function onBreakdownNavigate(path: string) {
   emit('navigate', path);
+  openBrowse('list');
 }
 
 function onBalanceExecute(items: BalanceItem[]) {

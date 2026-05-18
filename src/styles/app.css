@@ -1577,3 +1577,107 @@
   background: var(--color-text-primary);
   color: var(--color-text-inverse);
 }
+
+/* ==========================================================================
+   Dark mode polish — overrides for hardcoded warm/cream palettes in app.css.
+   These keep the global layout chrome readable on the dark background.
+   ========================================================================== */
+
+[data-theme="dark"] .scan-btn.primary {
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .scan-btn.primary::before {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%),
+    linear-gradient(135deg, #1a1d23 0%, #242830 54%, #1f3a35 100%);
+}
+
+[data-theme="dark"] .scan-btn.primary .btn-content {
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .scan-btn.primary .btn-icon-shell {
+  background: rgba(20, 184, 166, 0.16);
+  color: var(--color-highlight);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .scan-btn.primary .btn-tag {
+  background: rgba(20, 184, 166, 0.16);
+  color: var(--color-highlight);
+}
+
+[data-theme="dark"] .scan-btn.deep::before {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+    linear-gradient(135deg, #0d3a3e 0%, #135b56 58%, #1f7c70 100%);
+}
+
+[data-theme="dark"] .scan-btn:hover:not(:disabled) {
+  border-color: rgba(20, 184, 166, 0.32);
+  box-shadow: 0 22px 40px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .topbar-cta--strong {
+  background: linear-gradient(135deg, #14b8a6, #0d9488);
+  color: #0f1115;
+  border-color: rgba(20, 184, 166, 0.45);
+}
+
+[data-theme="dark"] .scan-capability-btn,
+[data-theme="dark"] .dashboard-inline-btn {
+  background: rgba(20, 184, 166, 0.14);
+  border-color: rgba(20, 184, 166, 0.32);
+  color: #5eead4;
+}
+
+[data-theme="dark"] .scan-capability-btn:hover,
+[data-theme="dark"] .dashboard-inline-btn:hover {
+  background: rgba(20, 184, 166, 0.22);
+  border-color: rgba(20, 184, 166, 0.5);
+}
+
+[data-theme="dark"] .action-badge {
+  background: rgba(20, 184, 166, 0.16);
+  border-color: rgba(20, 184, 166, 0.32);
+  color: #5eead4;
+}
+
+[data-theme="dark"] .scan-waiting-kicker {
+  background: rgba(20, 184, 166, 0.16);
+  color: #5eead4;
+}
+
+[data-theme="dark"] .error {
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.25);
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] .modal-shell-base {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .modal-close {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .summary-meter {
+  background:
+    radial-gradient(circle at center, var(--color-bg-secondary) 0 55%, transparent 56%),
+    conic-gradient(from -90deg, var(--color-highlight) 0deg, var(--color-highlight-soft) 250deg, var(--color-border-medium) 360deg);
+}
+
+[data-theme="dark"] .dashboard-meter {
+  background:
+    radial-gradient(circle at center, var(--color-bg-secondary) 0 55%, transparent 56%),
+    conic-gradient(from -90deg, var(--color-highlight) 0deg, var(--color-highlight-soft) 250deg, var(--color-border-medium) 360deg);
+}

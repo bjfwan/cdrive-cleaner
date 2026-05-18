@@ -11,19 +11,37 @@ import { useToast } from '../composables/useToast';
 
 const showToast = useToast();
 
-type ThemeMode = 'light' | 'dark' | 'system';
-const themeMode = ref<ThemeMode>((localStorage.getItem('cdrive-cleaner-theme') as ThemeMode) || 'system');
+type ThemeMode = 'light' | 'dark' | 'auto';
+
+function readInitialTheme(): ThemeMode {
+  // Prefer the unified AppSettings.theme, fall back to the legacy
+  // standalone key (where 'system' meant 'auto') so existing users keep their pick.
+  const fromSettings = getSettings().theme;
+  if (fromSettings === 'light' || fromSettings === 'dark' || fromSettings === 'auto') {
+    return fromSettings;
+  }
+  const legacy = localStorage.getItem('cdrive-cleaner-theme');
+  if (legacy === 'light' || legacy === 'dark') return legacy;
+  if (legacy === 'system' || legacy === 'auto') return 'auto';
+  return 'auto';
+}
+
+const themeMode = ref<ThemeMode>(readInitialTheme());
 
 function applyTheme(mode: ThemeMode) {
-  let effective = mode;
-  if (mode === 'system') {
+  let effective: 'light' | 'dark' = 'light';
+  if (mode === 'auto') {
     effective = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } else {
+    effective = mode;
   }
   document.documentElement.setAttribute('data-theme', effective);
 }
 
 function setTheme(mode: ThemeMode) {
   themeMode.value = mode;
+  // Keep the legacy key in sync for any old reader (App.vue onMounted),
+  // and persist the unified AppSettings.theme too so 保存设置 doesn't reset it.
   localStorage.setItem('cdrive-cleaner-theme', mode);
   applyTheme(mode);
 }
@@ -105,7 +123,9 @@ function loadSettings() {
 }
 
 function saveSettings() {
-  persistSettings(settings.value);
+  // Persist current theme alongside the rest of the settings so 保存设置 doesn't
+  // accidentally reset it (normalizeSettings used to default missing theme to 'light').
+  persistSettings({ ...settings.value, theme: themeMode.value });
   settings.value = getSettings();
   emit('save', settings.value);
   emit('close');
@@ -264,8 +284,8 @@ function onDeleteModeToggle(event: Event) {
                 @click="setTheme('dark')"
               >暗色</button>
               <button
-                :class="['theme-btn', { active: themeMode === 'system' }]"
-                @click="setTheme('system')"
+                :class="['theme-btn', { active: themeMode === 'auto' }]"
+                @click="setTheme('auto')"
               >跟随系统</button>
             </div>
           </div>
@@ -1690,6 +1710,203 @@ function onDeleteModeToggle(event: Event) {
   font-size: 0.72rem;
   color: var(--color-text-tertiary);
   margin-top: 1rem;
+}
+
+/* ===== Dark mode overrides ===== */
+[data-theme="dark"] .panel-header {
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.02) 100%);
+}
+
+[data-theme="dark"] .tabs-container {
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
+}
+
+[data-theme="dark"] .tab-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .tab-btn.active {
+  background: rgba(94, 234, 212, 0.08);
+}
+
+[data-theme="dark"] .close-btn {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .panel-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="dark"] .setting-select,
+[data-theme="dark"] .setting-input {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .setting-select {
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+}
+
+[data-theme="dark"] .setting-select:hover,
+[data-theme="dark"] .setting-input:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .setting-select option {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .panel-footer {
+  background: linear-gradient(to top, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
+}
+
+[data-theme="dark"] .btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--color-border-medium);
+  color: var(--color-text-secondary);
+}
+
+[data-theme="dark"] .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--color-border-strong);
+}
+
+[data-theme="dark"] .btn-primary {
+  color: var(--color-bg-primary);
+  background: linear-gradient(135deg, var(--color-accent-secondary) 0%, var(--color-highlight) 100%);
+  box-shadow:
+    0 0 0 1px rgba(94, 234, 212, 0.25),
+    0 4px 16px rgba(20, 184, 166, 0.25);
+}
+
+[data-theme="dark"] .btn-primary:hover {
+  box-shadow:
+    0 0 0 1px rgba(94, 234, 212, 0.35),
+    0 8px 24px rgba(20, 184, 166, 0.35);
+}
+
+[data-theme="dark"] .symlink-setting,
+[data-theme="dark"] .admin-setting {
+  background: rgba(94, 234, 212, 0.05);
+  border-color: rgba(94, 234, 212, 0.15);
+}
+
+[data-theme="dark"] .symlink-setting:hover,
+[data-theme="dark"] .admin-setting:hover {
+  background: rgba(94, 234, 212, 0.08);
+  border-color: rgba(94, 234, 212, 0.22);
+}
+
+[data-theme="dark"] .delete-mode-setting {
+  background: rgba(251, 191, 36, 0.06);
+  border-color: rgba(251, 191, 36, 0.2);
+}
+
+[data-theme="dark"] .delete-mode-setting:hover {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.28);
+}
+
+[data-theme="dark"] .toggle-slider {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .toggle-switch input:checked + .toggle-slider {
+  background: linear-gradient(135deg, var(--color-highlight) 0%, var(--color-accent-secondary) 100%);
+  border-color: rgba(94, 234, 212, 0.35);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2), 0 0 0 3px rgba(94, 234, 212, 0.1);
+}
+
+[data-theme="dark"] .info-card-enabled {
+  background: rgba(52, 211, 153, 0.06);
+  border-color: rgba(52, 211, 153, 0.2);
+}
+
+[data-theme="dark"] .info-card-warning {
+  background: rgba(251, 191, 36, 0.06);
+  border-color: rgba(251, 191, 36, 0.2);
+}
+
+[data-theme="dark"] .info-card-danger {
+  background: rgba(248, 113, 113, 0.07);
+  border-color: rgba(248, 113, 113, 0.22);
+}
+
+[data-theme="dark"] .info-icon {
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.22);
+}
+
+[data-theme="dark"] .info-icon.warning {
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.22);
+}
+
+[data-theme="dark"] .info-icon.danger {
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.22);
+}
+
+[data-theme="dark"] .status-badge.elevated {
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.25);
+}
+
+[data-theme="dark"] .status-badge.standard {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .loading-spinner {
+  border-color: rgba(255, 255, 255, 0.1);
+  border-top-color: var(--color-highlight);
+}
+
+[data-theme="dark"] .cache-type-badge--deep {
+  color: #c4b5fd;
+  background: rgba(167, 139, 250, 0.15);
+  border-color: rgba(167, 139, 250, 0.3);
+}
+
+[data-theme="dark"] .delete-cache-btn,
+[data-theme="dark"] .clear-all-cache-btn {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.25);
+  color: var(--color-error);
+}
+
+[data-theme="dark"] .delete-cache-btn:hover,
+[data-theme="dark"] .clear-all-cache-btn:hover {
+  background: rgba(248, 113, 113, 0.16);
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+[data-theme="dark"] .theme-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .theme-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--color-border-strong);
+}
+
+[data-theme="dark"] .theme-btn.active {
+  background: linear-gradient(135deg, var(--color-highlight) 0%, var(--color-accent-secondary) 100%);
+  color: var(--color-bg-primary);
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3);
+}
+
+[data-theme="dark"] .toggle-slider::before {
+  background: linear-gradient(to bottom, #e5e7eb 0%, #cbd5e1 100%);
 }
 </style>
 
