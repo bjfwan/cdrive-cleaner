@@ -850,7 +850,7 @@ mod tests {
 
     #[test]
     fn explain_path_returns_unknown_for_random_path() {
-        let result = explain_path("D:\\SomeRandomFolder\\nothing_here.bin");
+        let result = explain_path("D:\\SomeRandomFolder_XYZ123\\nothing_here.qzx");
         assert_eq!(result.explanation, "未识别的文件或目录");
         assert!(!result.safe_to_delete);
     }
