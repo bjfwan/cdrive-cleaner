@@ -24,6 +24,19 @@ pub struct UsnChangeSet {
     pub recursive_dirs: HashSet<String>,
     pub direct_file_dirs: HashSet<String>,
     pub root_files_changed: bool,
+    /// USN 路径上识别到的「老 path → 新 path」改名事件。增量合并阶段可用来
+    /// 把"删旧 + 建新"识别成 rename，复用旧子树。识别失败时为空。
+    pub renames: Vec<UsnRenameEvent>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UsnRenameEvent {
+    /// USN 给的 FileReferenceNumber，便于诊断；当前合并阶段只按 path 字符串匹配。
+    #[allow(dead_code)]
+    pub file_id: u64,
+    pub old_path: String,
+    pub new_path: String,
+    pub is_dir: bool,
 }
 
 impl UsnChangeSet {
@@ -32,6 +45,29 @@ impl UsnChangeSet {
         all.extend(self.direct_file_dirs.iter().cloned());
         all
     }
+}
+
+/// `collect_usn_changed_dirs` / `read_usn_journal_with_retry` 的结果。
+///
+/// - `Records`：拿到了一段完整的 USN 增量，里面已经按"递归重扫 / 直接文件重扫
+///   / 根文件变化 / rename"分好类。
+/// - `JournalReset`：FSCTL_QUERY_USN_JOURNAL 返回的 journal_id 跟 cache 里
+///   存的不一样，比如卷的 journal 被重建过；此时调用方应该走"全量重建"路径，
+///   不应再退化到 mtime 全量递归。
+/// - `StartUsnTooOld`：cache 的 next_usn 比卷的 first_usn 还小，说明记录已经
+///   被回卷丢了；处理方式同 `JournalReset`。
+/// - `HardError`：FSCTL 调用本身失败（卷句柄打不开、权限不够等），调用方
+///   可以视情况退化到 mtime。
+pub enum UsnReadOutcome {
+    Records(UsnChangeSet),
+    JournalReset {
+        new_journal_id: u64,
+        first_usn: i64,
+    },
+    StartUsnTooOld {
+        first_usn: i64,
+    },
+    HardError(std::io::Error),
 }
 
 pub fn resolve_link_target(path: &Path) -> Option<String> {
@@ -159,6 +195,19 @@ pub fn collect_usn_changed_dirs(
 }
 
 #[cfg(not(windows))]
+pub fn read_usn_journal_with_retry(
+    _root_path: &Path,
+    _checkpoint: UsnJournalCheckpoint,
+    _root_file_id: Option<u64>,
+    _frn_to_path: &HashMap<u64, String>,
+) -> UsnReadOutcome {
+    UsnReadOutcome::HardError(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "USN journal is only available on Windows NTFS volumes",
+    ))
+}
+
+#[cfg(not(windows))]
 pub fn query_volume_details(_path: &Path) -> Option<VolumeDetails> {
     None
 }
@@ -196,7 +245,8 @@ pub fn enable_best_effort_scan_privileges() -> Vec<String> {
 #[cfg(windows)]
 mod windows_impl {
     use super::{
-        FileIdMetadata, MftEntry, NativeDirEntry, UsnChangeSet, UsnJournalCheckpoint, VolumeDetails,
+        FileIdMetadata, MftEntry, NativeDirEntry, UsnChangeSet, UsnJournalCheckpoint,
+        UsnReadOutcome, UsnRenameEvent, VolumeDetails,
     };
     use std::collections::{HashMap, HashSet};
     use std::ffi::c_void;
@@ -231,6 +281,54 @@ mod windows_impl {
 
     const MFT_ENUM_BUFFER_SIZE: usize = 8 * 1024 * 1024;
     const USN_READ_BUFFER_SIZE: usize = 1024 * 1024;
+
+    /// USN_REASON_* 位定义集中点。Windows SDK 头文件里每个常量定义在不同的地方
+    /// （Ntifs.h / WinIoCtl.h），并不全部由 `windows` crate 暴露，且我们关心的
+    /// reason 都属于稳定 NTFS USN_RECORD_V2 公开字段，按数值定义即可。
+    ///
+    /// 文档：https://learn.microsoft.com/en-us/windows/win32/api/winioctl/ns-winioctl-usn_record_v2
+    #[allow(dead_code)]
+    pub(super) mod usn_reason {
+        pub const DATA_OVERWRITE: u32 = 0x0000_0001;
+        pub const DATA_EXTEND: u32 = 0x0000_0002;
+        pub const DATA_TRUNCATION: u32 = 0x0000_0004;
+        pub const NAMED_DATA_OVERWRITE: u32 = 0x0000_0010;
+        pub const NAMED_DATA_EXTEND: u32 = 0x0000_0020;
+        pub const NAMED_DATA_TRUNCATION: u32 = 0x0000_0040;
+        pub const FILE_CREATE: u32 = 0x0000_0100;
+        pub const FILE_DELETE: u32 = 0x0000_0200;
+        pub const EA_CHANGE: u32 = 0x0000_0400;
+        pub const SECURITY_CHANGE: u32 = 0x0000_0800;
+        pub const RENAME_OLD_NAME: u32 = 0x0000_1000;
+        pub const RENAME_NEW_NAME: u32 = 0x0000_2000;
+        pub const INDEXABLE_CHANGE: u32 = 0x0000_4000;
+        pub const BASIC_INFO_CHANGE: u32 = 0x0000_8000;
+        pub const HARD_LINK_CHANGE: u32 = 0x0001_0000;
+        pub const COMPRESSION_CHANGE: u32 = 0x0002_0000;
+        pub const ENCRYPTION_CHANGE: u32 = 0x0004_0000;
+        pub const OBJECT_ID_CHANGE: u32 = 0x0008_0000;
+        pub const REPARSE_POINT_CHANGE: u32 = 0x0010_0000;
+        pub const STREAM_CHANGE: u32 = 0x0020_0000;
+        pub const TRANSACTED_CHANGE: u32 = 0x0040_0000;
+        pub const CLOSE: u32 = 0x8000_0000;
+
+        /// 增量扫描真正关心的最小 reason 集：内容/创建/删除/改名/reparse。
+        /// 写入前 / 中间过程不一定会触发 CLOSE，必要时单独检查。
+        pub const TRACKED_MASK: u32 = DATA_OVERWRITE
+            | DATA_EXTEND
+            | DATA_TRUNCATION
+            | NAMED_DATA_OVERWRITE
+            | NAMED_DATA_EXTEND
+            | NAMED_DATA_TRUNCATION
+            | FILE_CREATE
+            | FILE_DELETE
+            | RENAME_OLD_NAME
+            | RENAME_NEW_NAME
+            | REPARSE_POINT_CHANGE
+            | HARD_LINK_CHANGE
+            | BASIC_INFO_CHANGE
+            | CLOSE;
+    }
 
     struct FindHandle(HANDLE);
 
@@ -606,6 +704,25 @@ mod windows_impl {
         root_file_id: Option<u64>,
         frn_to_path: &HashMap<u64, String>,
     ) -> std::io::Result<Option<UsnChangeSet>> {
+        match read_usn_journal_with_retry(root_path, checkpoint, root_file_id, frn_to_path) {
+            UsnReadOutcome::Records(set) => Ok(Some(set)),
+            UsnReadOutcome::JournalReset { .. } | UsnReadOutcome::StartUsnTooOld { .. } => Ok(None),
+            UsnReadOutcome::HardError(err) => Err(err),
+        }
+    }
+
+    /// 读 USN 日志的"权威"入口。相比 `collect_usn_changed_dirs`：
+    ///
+    /// - JournalReset / StartUsnTooOld 单独成枚举值，让上层有机会走"USN 全量重建"
+    ///   而不是直接退化到 mtime 全量递归；
+    /// - 顺手把 RENAME_OLD_NAME + RENAME_NEW_NAME 合并成单条 rename 事件，方便
+    ///   增量合并阶段把"删旧 + 建新"识别成 rename，复用旧子树。
+    pub fn read_usn_journal_with_retry(
+        root_path: &Path,
+        checkpoint: UsnJournalCheckpoint,
+        root_file_id: Option<u64>,
+        frn_to_path: &HashMap<u64, String>,
+    ) -> UsnReadOutcome {
         let started = std::time::Instant::now();
         let volume = match open_volume_handle(root_path) {
             Ok(handle) => handle,
@@ -615,14 +732,14 @@ mod windows_impl {
                     root_path.display(),
                     err
                 );
-                return Ok(None);
+                return UsnReadOutcome::HardError(err);
             }
         };
         let _guard = OwnedHandle(volume);
 
         let mut current = USN_JOURNAL_DATA_V0::default();
         let mut bytes_returned = 0u32;
-        if unsafe {
+        if let Err(err) = unsafe {
             DeviceIoControl(
                 volume,
                 FSCTL_QUERY_USN_JOURNAL,
@@ -633,32 +750,60 @@ mod windows_impl {
                 Some(&mut bytes_returned),
                 None,
             )
-        }
-        .is_err()
-        {
+        } {
             tracing::warn!(
-                "[winfs] FSCTL_QUERY_USN_JOURNAL failed before delta read for {}",
-                root_path.display()
+                "[winfs] FSCTL_QUERY_USN_JOURNAL failed before delta read for {}: {}",
+                root_path.display(),
+                err
             );
-            return Ok(None);
+            return UsnReadOutcome::HardError(to_io_error(err));
         }
 
-        if current.UsnJournalID != checkpoint.journal_id || current.NextUsn < checkpoint.next_usn {
-            tracing::debug!("[scan-timing][winfs-usn] collect_usn_changed_dirs path={} took {:.2}ms | status=checkpoint_invalid current_journal_id={} checkpoint_journal_id={} current_next_usn={} checkpoint_next_usn={}",
+        if current.UsnJournalID != checkpoint.journal_id {
+            tracing::info!(
+                "[winfs-usn] journal_id changed path={} cached_journal_id={} current_journal_id={} first_usn={}",
                 root_path.display(),
-                started.elapsed().as_secs_f64() * 1000.0,
-                current.UsnJournalID,
                 checkpoint.journal_id,
-                current.NextUsn,
-                checkpoint.next_usn
+                current.UsnJournalID,
+                current.FirstUsn
             );
-            return Ok(None);
+            return UsnReadOutcome::JournalReset {
+                new_journal_id: current.UsnJournalID,
+                first_usn: current.FirstUsn,
+            };
+        }
+
+        if checkpoint.next_usn < current.FirstUsn {
+            tracing::info!(
+                "[winfs-usn] checkpoint older than first_usn path={} cached_next_usn={} first_usn={} current_next_usn={}",
+                root_path.display(),
+                checkpoint.next_usn,
+                current.FirstUsn,
+                current.NextUsn
+            );
+            return UsnReadOutcome::StartUsnTooOld {
+                first_usn: current.FirstUsn,
+            };
+        }
+
+        if current.NextUsn < checkpoint.next_usn {
+            tracing::warn!(
+                "[winfs-usn] current_next_usn={} smaller than checkpoint.next_usn={} path={}; treating as journal reset",
+                current.NextUsn,
+                checkpoint.next_usn,
+                root_path.display()
+            );
+            return UsnReadOutcome::JournalReset {
+                new_journal_id: current.UsnJournalID,
+                first_usn: current.FirstUsn,
+            };
         }
 
         let root_path_str = root_path.to_string_lossy().to_string();
         let mut input = READ_USN_JOURNAL_DATA_V0 {
             StartUsn: checkpoint.next_usn,
-            ReasonMask: u32::MAX,
+            // 只关心 TRACKED_MASK 范围内的变化；NTFS 会在内核侧帮忙过滤。
+            ReasonMask: usn_reason::TRACKED_MASK,
             ReturnOnlyOnClose: 0,
             Timeout: 0,
             BytesToWaitFor: 0,
@@ -671,11 +816,13 @@ mod windows_impl {
         let mut buffer = vec![0u8; USN_READ_BUFFER_SIZE];
         let mut read_calls = 0usize;
         let mut records_seen = 0usize;
+        let mut rename_old: HashMap<u64, (String, bool)> = HashMap::new();
+        let mut renames: Vec<UsnRenameEvent> = Vec::new();
 
         while input.StartUsn < current.NextUsn {
             read_calls += 1;
             let mut output_bytes = 0u32;
-            if unsafe {
+            if let Err(err) = unsafe {
                 DeviceIoControl(
                     volume,
                     FSCTL_READ_USN_JOURNAL,
@@ -686,15 +833,42 @@ mod windows_impl {
                     Some(&mut output_bytes),
                     None,
                 )
-            }
-            .is_err()
-            {
+            } {
                 tracing::warn!(
-                    "[winfs] FSCTL_READ_USN_JOURNAL failed for {} at start_usn={}",
+                    "[winfs] FSCTL_READ_USN_JOURNAL failed for {} at start_usn={}: {}",
                     root_path.display(),
-                    input.StartUsn
+                    input.StartUsn,
+                    err
                 );
-                return Ok(None);
+                // 中途读失败：再 query 一次 journal，区分 reset / 真硬错。
+                let mut probe = USN_JOURNAL_DATA_V0::default();
+                let mut probe_bytes = 0u32;
+                let probe_ok = unsafe {
+                    DeviceIoControl(
+                        volume,
+                        FSCTL_QUERY_USN_JOURNAL,
+                        None,
+                        0,
+                        Some((&mut probe as *mut USN_JOURNAL_DATA_V0).cast::<c_void>()),
+                        size_of::<USN_JOURNAL_DATA_V0>() as u32,
+                        Some(&mut probe_bytes),
+                        None,
+                    )
+                };
+                if probe_ok.is_ok() {
+                    if probe.UsnJournalID != checkpoint.journal_id {
+                        return UsnReadOutcome::JournalReset {
+                            new_journal_id: probe.UsnJournalID,
+                            first_usn: probe.FirstUsn,
+                        };
+                    }
+                    if input.StartUsn < probe.FirstUsn {
+                        return UsnReadOutcome::StartUsnTooOld {
+                            first_usn: probe.FirstUsn,
+                        };
+                    }
+                }
+                return UsnReadOutcome::HardError(to_io_error(err));
             }
 
             if output_bytes <= size_of::<i64>() as u32 {
@@ -724,6 +898,32 @@ mod windows_impl {
                         .to_string()
                 });
 
+                // 识别 rename：RENAME_OLD_NAME + RENAME_NEW_NAME 是同一次重命名
+                // 触发的两条记录，pair-up 后视为 rename。
+                let reason = record.Reason;
+                if reason & usn_reason::RENAME_OLD_NAME != 0 {
+                    if let Some(old_path) =
+                        existing_path.clone().or_else(|| candidate_path.clone())
+                    {
+                        rename_old
+                            .insert(record.FileReferenceNumber, (old_path, is_dir));
+                    }
+                }
+                if reason & usn_reason::RENAME_NEW_NAME != 0 {
+                    if let Some(new_path) = candidate_path.clone() {
+                        if let Some((old_path, old_is_dir)) =
+                            rename_old.remove(&record.FileReferenceNumber)
+                        {
+                            renames.push(UsnRenameEvent {
+                                file_id: record.FileReferenceNumber,
+                                old_path,
+                                new_path,
+                                is_dir: is_dir || old_is_dir,
+                            });
+                        }
+                    }
+                }
+
                 if !is_dir {
                     if let Some(parent) = parent_path.as_ref() {
                         if parent == &root_path_str {
@@ -747,7 +947,7 @@ mod windows_impl {
             }
         }
 
-        tracing::debug!("[scan-timing][winfs-usn] collect_usn_changed_dirs path={} took {:.2}ms | read_calls={} records_seen={} recursive_dirs={} direct_file_dirs={} root_files_changed={} start_usn={} end_usn={}",
+        tracing::debug!("[scan-timing][winfs-usn] read_usn_journal_with_retry path={} took {:.2}ms | read_calls={} records_seen={} recursive_dirs={} direct_file_dirs={} root_files_changed={} renames={} start_usn={} end_usn={}",
             root_path.display(),
             started.elapsed().as_secs_f64() * 1000.0,
             read_calls,
@@ -755,15 +955,17 @@ mod windows_impl {
             recursive_dirs.len(),
             direct_file_dirs.len(),
             root_files_changed,
+            renames.len(),
             checkpoint.next_usn,
             current.NextUsn
         );
 
-        Ok(Some(UsnChangeSet {
+        UsnReadOutcome::Records(UsnChangeSet {
             recursive_dirs,
             direct_file_dirs,
             root_files_changed,
-        }))
+            renames,
+        })
     }
 
     fn read_record_name(record: &USN_RECORD_V2, record_bytes: &[u8]) -> String {
@@ -873,7 +1075,7 @@ mod windows_impl {
 pub use windows_impl::{
     collect_usn_changed_dirs, enable_best_effort_scan_privileges, enumerate_directory,
     enumerate_mft, get_path_file_id, query_file_metadata_by_id, query_usn_checkpoint,
-    query_volume_details, supports_mft_scan,
+    query_volume_details, read_usn_journal_with_retry, supports_mft_scan,
 };
 #[cfg(windows)]
 pub(crate) use windows_impl::{open_volume_handle, query_file_metadata_by_id_on_volume};

@@ -1,7 +1,8 @@
 /* Global polish: focus, scrollbars, motion, modal sizing tokens. */
 
 :root {
-  --modal-overlay-bg: rgba(15, 23, 32, 0.42);
+  /* Reuse the global modal backdrop so the overlay color stays in sync. */
+  --modal-overlay-bg: var(--modal-backdrop);
   --modal-radius: var(--radius-lg);
   --modal-easing: cubic-bezier(0.16, 1, 0.3, 1);
   --modal-enter-duration: 0.3s;
@@ -33,27 +34,38 @@ textarea:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-* {
+/* Scoped scrollbar-width hint only on actual scrolling containers,
+   not on every element in the document. */
+.main-scroll,
+.browse-body,
+.junk-collapse,
+.drawer-list,
+.table-body,
+.disks-container,
+.history-container,
+.records-list,
+.results-failed {
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Long-list virtualization-lite: skip rendering work when off-screen. */
+.junk-collapse,
+.table-body,
+.drawer-list,
+.browse-body {
+  content-visibility: auto;
+  contain-intrinsic-size: 800px 1px;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
-  border-radius: var(--radius-pill);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.25);
+/* Layout/paint isolation for heavy repeated rows. */
+.junk-row,
+.game-item,
+.blocked-item,
+.table-row,
+.drawer-item,
+.preview-item {
+  contain: content;
 }
 
 .modal-overlay-base {
@@ -65,6 +77,15 @@ textarea:focus-visible {
   background: var(--modal-overlay-bg);
   z-index: 2000;
   animation: modal-overlay-in var(--modal-enter-duration) var(--modal-easing);
+}
+
+/* Single, lightweight blur layer for the entire app.
+   No saturate(), no per-component blur stacking. */
+@supports (backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px)) {
+  .modal-overlay-base {
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
 }
 
 .modal-shell-base {

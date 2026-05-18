@@ -8,6 +8,7 @@ use rayon::prelude::*;
 use serde::Serialize;
 
 use crate::junk::rules::{all_rules, JunkCategory, JunkRiskLevel, JunkRule};
+use crate::winfs;
 
 /// Progress event emitted while scanning junk rules.
 ///
@@ -211,105 +212,78 @@ fn scan_path_for_rule(path: &Path, rule: &JunkRule, items: &mut Vec<JunkItem>) {
     let category_name = category_label(rule.category).to_string();
 
     if !rule.patterns.is_empty() {
-        for entry in walkdir::WalkDir::new(path)
-            .into_iter()
-            .filter_map(|e| match e {
-                Ok(e) => Some(e),
+        // Recursive traversal using winfs::enumerate_directory for pattern matching.
+        // Each entry already carries size from the native FindFirstFileEx call,
+        // avoiding a separate stat() per file.
+        let mut pending = vec![path.to_path_buf()];
+        while let Some(dir) = pending.pop() {
+            match winfs::enumerate_directory(&dir, false) {
+                Ok(entries) => {
+                    for entry in entries {
+                        if entry.is_dir && !entry.is_symlink {
+                            pending.push(entry.path);
+                        } else if !entry.is_dir {
+                            let matched = rule
+                                .patterns
+                                .iter()
+                                .any(|p| simple_glob(&entry.name, p));
+                            if matched {
+                                items.push(JunkItem {
+                                    rule_id: rule.id.to_string(),
+                                    category: rule.category,
+                                    category_name: category_name.clone(),
+                                    rule_name: rule.name.to_string(),
+                                    path: entry.path.to_string_lossy().to_string(),
+                                    size: entry.size,
+                                    file_count: 1,
+                                    is_directory: false,
+                                    risk_level: rule.risk_level,
+                                    default_selected: rule.default_selected,
+                                });
+                            }
+                        }
+                    }
+                }
                 Err(err) => {
                     tracing::debug!(
-                        "[junk-scan] walkdir entry error path={:?} err={}",
-                        path,
+                        "[junk-scan] enumerate_directory path={:?} err={}",
+                        dir,
                         err
                     );
-                    None
+                    continue;
                 }
-            })
-        {
-            if !entry.file_type().is_file() {
-                continue;
             }
-            let name = entry.file_name().to_string_lossy();
-            let matched = rule
-                .patterns
-                .iter()
-                .any(|p| simple_glob(&name, p));
-            if !matched {
-                continue;
-            }
-            let size = match entry.metadata() {
-                Ok(m) => m.len(),
-                Err(err) => {
-                    tracing::debug!(
-                        "[junk-scan] metadata path={:?} err={}",
-                        entry.path(),
-                        err
-                    );
-                    0
-                }
-            };
-            items.push(JunkItem {
-                rule_id: rule.id.to_string(),
-                category: rule.category,
-                category_name: category_name.clone(),
-                rule_name: rule.name.to_string(),
-                path: entry.path().to_string_lossy().to_string(),
-                size,
-                file_count: 1,
-                is_directory: false,
-                risk_level: rule.risk_level,
-                default_selected: rule.default_selected,
-            });
         }
         return;
     }
 
     if rule.clean_subdirs_only {
-        let read = match std::fs::read_dir(path) {
-            Ok(r) => r,
+        // Single-level enumeration: each top-level child becomes a JunkItem.
+        // Sub-directories are sized via dir_size_and_count (also winfs-based).
+        let entries = match winfs::enumerate_directory(path, false) {
+            Ok(e) => e,
             Err(err) => {
                 tracing::debug!(
-                    "[junk-scan] read_dir path={:?} err={}",
+                    "[junk-scan] enumerate_directory path={:?} err={}",
                     path,
                     err
                 );
                 return;
             }
         };
-        for entry in read.filter_map(|e| match e {
-            Ok(e) => Some(e),
-            Err(err) => {
-                tracing::debug!(
-                    "[junk-scan] read_dir entry path={:?} err={}",
-                    path,
-                    err
-                );
-                None
-            }
-        }) {
-            let entry_path = entry.path();
-            let meta = match entry.metadata() {
-                Ok(m) => m,
-                Err(err) => {
-                    tracing::debug!(
-                        "[junk-scan] metadata path={:?} err={}",
-                        entry_path,
-                        err
-                    );
-                    continue;
-                }
-            };
-            let is_dir = meta.is_dir();
+        for entry in entries {
+            let is_dir = entry.is_dir && !entry.is_symlink;
             let (size, count) = if is_dir {
-                dir_size_and_count(&entry_path)
+                dir_size_and_count(&entry.path)
             } else {
-                (meta.len(), 1usize)
+                (entry.size, 1usize)
             };
             items.push(JunkItem {
                 rule_id: rule.id.to_string(),
                 category: rule.category,
                 category_name: category_name.clone(),
                 rule_name: rule.name.to_string(),
-                path: entry_path.to_string_lossy().to_string(),
+                path: entry.path.to_string_lossy().to_string(),
                 size,
                 file_count: count,
                 is_directory: is_dir,
@@ -354,34 +328,26 @@ fn scan_path_for_rule(path: &Path, rule: &JunkRule, items: &mut Vec<JunkItem>) {
 fn dir_size_and_count(path: &Path) -> (u64, usize) {
     let mut size: u64 = 0;
     let mut count: usize = 0;
-    for entry in walkdir::WalkDir::new(path)
-        .into_iter()
-        .filter_map(|e| match e {
-            Ok(e) => Some(e),
-            Err(err) => {
-                tracing::debug!(
-                    "[junk-scan] dir size walkdir path={:?} err={}",
-                    path,
-                    err
-                );
-                None
-            }
-        })
-    {
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        match entry.metadata() {
-            Ok(m) => {
-                size = size.saturating_add(m.len());
-                count += 1;
+    let mut pending = vec![path.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        match winfs::enumerate_directory(&dir, false) {
+            Ok(entries) => {
+                for entry in entries {
+                    if entry.is_dir && !entry.is_symlink {
+                        pending.push(entry.path);
+                    } else if !entry.is_dir {
+                        size = size.saturating_add(entry.size);
+                        count += 1;
+                    }
+                }
             }
             Err(err) => {
                 tracing::debug!(
-                    "[junk-scan] dir size metadata path={:?} err={}",
-                    entry.path(),
+                    "[junk-scan] dir_size_and_count enumerate err dir={:?} err={}",
+                    dir,
                     err
                 );
+                continue;
             }
         }
     }

@@ -101,7 +101,10 @@ function handleAdminToggle(event: Event) {
 
 async function confirmRestartAsAdmin() {
   try {
-    await invoke('restart_as_admin');
+    // 先把当前选中的盘 / 默认目标盘当作意图写入 pending_scan.json，
+    // UAC 重启后新进程会通过 consume_pending_scan_intent 续扫。
+    const disk = settings.value.defaultTargetDisk || 'C:\\';
+    await invoke('request_admin_rescan', { disk });
   } catch {
     showToast('重启失败', '请手动以管理员身份运行应用', 'error');
   }
@@ -553,9 +556,7 @@ function onDeleteModeToggle(event: Event) {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(45, 35, 25, 0.4);
-  backdrop-filter: blur(24px) saturate(100%);
-  -webkit-backdrop-filter: blur(24px) saturate(100%);
+  background: var(--modal-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;

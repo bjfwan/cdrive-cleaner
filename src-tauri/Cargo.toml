@@ -1,6 +1,6 @@
 [package]
 name = "cdrive-cleaner"
-version = "0.1.3"
+version = "0.1.4"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -27,6 +27,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
 tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1.35", features = ["full"] }
@@ -42,11 +43,10 @@ windows = { version = "0.52", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_RestartManager"
 ] }
-walkdir = "2.4"
 jwalk = "0.8"
 rayon = "1.8"
 rusqlite = { version = "0.31", features = ["bundled"] }
-chrono = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1.0"
 junction = "1.0"
 winreg = "0.55.0"
@@ -55,3 +55,25 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 trash = "5"
 twox-hash = "2"
+thiserror = "2"
+dashmap = "6"
+bincode = "1"
+
+[dev-dependencies]
+serial_test = "3"
+
+# ─── Build Profiles ───────────────────────────────────────────────────────────
+
+[profile.release]
+lto = "thin"          # 跨 crate 内联，不用 fat（与 Tauri WebView2 链接兼容性问题）
+codegen-units = 1     # 最大优化（牺牲编译时间）
+strip = "symbols"     # 移除符号表，减小体积（避免 strip = true 的 Windows debuginfo 问题）
+opt-level = 3         # 最大运行时性能
+panic = "abort"       # 不需要 unwind，减小体积约 10%
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.dev.package."*"]
+opt-level = 2         # 依赖库 O2 编译（只编译一次），自己的代码 O0 快速迭代

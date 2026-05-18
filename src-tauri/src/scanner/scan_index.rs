@@ -115,6 +115,9 @@ impl IndexedScanResult {
                 root_file_id: self.root_file_id,
                 usn_journal_id: self.usn_journal_id,
                 usn_next_usn: self.usn_next_usn,
+                cache_schema_version: 0,
+                env_fingerprint: Default::default(),
+                scan_completed: false,
             });
         }
 
@@ -138,6 +141,9 @@ impl IndexedScanResult {
             root_file_id: self.root_file_id,
             usn_journal_id: self.usn_journal_id,
             usn_next_usn: self.usn_next_usn,
+            cache_schema_version: 0,
+            env_fingerprint: Default::default(),
+            scan_completed: false,
         })
     }
 

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, shallowRef, watchEffect } from 'vue';
 import { IconFile, IconDocument, IconMigrate } from './icons';
 import type { FileInfo } from '../types';
 import { formatBytes, formatDate } from '../utils/format';
+import VirtualList from './VirtualList.vue';
 
 interface Props {
   files: FileInfo[];
@@ -17,10 +18,29 @@ defineEmits<{
   'migrate-file': [file: FileInfo];
 }>();
 
-const filteredFiles = computed(() => {
-  const thresholdBytes = props.largeFileThreshold * 1024 * 1024;
-  return props.files.filter((file) => file.size >= thresholdBytes);
+// 缓存：当 props.files / props.largeFileThreshold 都没变时直接复用上一次结果。
+const filteredCache = shallowRef<FileInfo[]>([]);
+let lastFilesRef: FileInfo[] | null = null;
+let lastThreshold = -1;
+
+watchEffect(() => {
+  const files = props.files;
+  const threshold = props.largeFileThreshold;
+  if (files === lastFilesRef && threshold === lastThreshold) {
+    return;
+  }
+  lastFilesRef = files;
+  lastThreshold = threshold;
+  const thresholdBytes = threshold * 1024 * 1024;
+  const next: FileInfo[] = [];
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    if (f.size >= thresholdBytes) next.push(f);
+  }
+  filteredCache.value = next;
 });
+
+const filteredFiles = computed(() => filteredCache.value);
 </script>
 
 <template>
@@ -63,27 +83,34 @@ const filteredFiles = computed(() => {
       </div>
 
       <div class="table-body">
-        <div v-for="file in filteredFiles" :key="file.path" class="table-row">
-          <div class="td td-name">
-            <IconFile :size="18" />
-            <span :title="file.name">{{ file.name }}</span>
-          </div>
+        <VirtualList
+          :items="filteredFiles"
+          :item-size="56"
+          :buffer="6"
+          v-slot="{ item: file }"
+        >
+          <div :key="(file as FileInfo).path" class="table-row">
+            <div class="td td-name">
+              <IconFile :size="18" />
+              <span :title="(file as FileInfo).name">{{ (file as FileInfo).name }}</span>
+            </div>
 
-          <div class="td td-path" :title="file.path">{{ file.path }}</div>
-          <div class="td td-size">{{ formatBytes(file.size) }}</div>
-          <div class="td td-modified">{{ formatDate(file.modified_at) }}</div>
+            <div class="td td-path" :title="(file as FileInfo).path">{{ (file as FileInfo).path }}</div>
+            <div class="td td-size">{{ formatBytes((file as FileInfo).size) }}</div>
+            <div class="td td-modified">{{ formatDate((file as FileInfo).modified_at) }}</div>
 
-          <div class="td td-actions">
-            <button
-              class="action-btn migrate-btn"
-              @click.stop="$emit('migrate-file', file)"
-              :disabled="!hasDeepScanned"
-              :title="!hasDeepScanned ? '请先进行深度扫描' : '迁移到其他磁盘'"
-            >
-              <IconMigrate :size="16" />
-            </button>
+            <div class="td td-actions">
+              <button
+                class="action-btn migrate-btn"
+                @click.stop="$emit('migrate-file', (file as FileInfo))"
+                :disabled="!hasDeepScanned"
+                :title="!hasDeepScanned ? '请先进行深度扫描' : '迁移到其他磁盘'"
+              >
+                <IconMigrate :size="16" />
+              </button>
+            </div>
           </div>
-        </div>
+        </VirtualList>
       </div>
     </div>
   </div>
@@ -212,7 +239,6 @@ const filteredFiles = computed(() => {
 .table-body {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
   padding: 0.3rem 0;
 }
 
@@ -221,11 +247,12 @@ const filteredFiles = computed(() => {
   padding: 0.82rem 0.4rem;
   border-radius: var(--radius-md);
   border: 1px solid transparent;
-  transition: transform var(--transition-base), background var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
+  height: 56px;
+  box-sizing: border-box;
+  transition: background var(--transition-base), border-color var(--transition-base);
 }
 
 .table-row:hover {
-  transform: translateY(-1px);
   background: rgba(255, 255, 255, 0.72);
   border-color: rgba(46, 33, 18, 0.08);
   box-shadow: var(--shadow-xs);

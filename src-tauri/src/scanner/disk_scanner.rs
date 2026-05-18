@@ -3,8 +3,10 @@ use super::file_info::{DirectoryNode, ScanResult};
 use super::progress::ScanProgress;
 use super::scan_index::IndexedScanResult;
 use super::timing::StageTimer;
+use crate::session::CancellationToken;
 use anyhow::Result;
 use chrono;
+use dashmap::DashMap;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
@@ -110,6 +112,28 @@ impl DiskScanner {
             .await
     }
 
+    /// 与 [`scan_deep`] 等价，但取消信号由外部 [`CancellationToken`] 提供。
+    /// 命令层在拿到 RAII session handle 之后应该用这个入口，让 session 退出时
+    /// 自动停掉扫描。
+    pub async fn scan_deep_with_token<P: AsRef<Path>, R: Runtime>(
+        &self,
+        path: P,
+        app: AppHandle<R>,
+        estimated_files: usize,
+        cancellation: &CancellationToken,
+    ) -> Result<ScanResult> {
+        let progress_emitter: ScanProgressEmitter = Arc::new(move |progress: ScanProgress| {
+            let _ = app.emit("deep-scan-progress", progress);
+        });
+        self.scan_deep_with_progress_and_token(
+            path,
+            Some(progress_emitter),
+            estimated_files,
+            Some(cancellation),
+        )
+        .await
+    }
+
     pub async fn scan_deep_silent<P: AsRef<Path>>(
         &self,
         path: P,
@@ -125,9 +149,38 @@ impl DiskScanner {
         progress_emitter: Option<ScanProgressEmitter>,
         estimated_files: usize,
     ) -> Result<ScanResult> {
+        self.scan_deep_with_progress_and_token(path, progress_emitter, estimated_files, None)
+            .await
+    }
+
+    /// 通用入口：可选地接受一个 [`CancellationToken`]。
+    /// - 不传：沿用原来"DiskScanner 自己持有的 AtomicBool + reset_cancel()"语义；
+    /// - 传：把外部 token 的 atomic flag 同步到 self.cancelled，扫描期间任意一边
+    ///   触发 cancel，扫描内部循环都会看到。
+    pub(crate) async fn scan_deep_with_progress_and_token<P: AsRef<Path>>(
+        &self,
+        path: P,
+        progress_emitter: Option<ScanProgressEmitter>,
+        estimated_files: usize,
+        cancellation: Option<&CancellationToken>,
+    ) -> Result<ScanResult> {
         let path = path.as_ref().to_path_buf();
-        let cancelled = Arc::clone(&self.cancelled);
-        self.reset_cancel();
+
+        // 选定扫描期间真正被 mft_usn / native walk 内部循环 load 的那个 flag。
+        // 优先用外部 token：注册表 + RAII guard 才能保证 panic / 提前 return 时
+        // 也会自动 cancel，避免遗留半成品扫描。
+        let cancelled = match cancellation {
+            Some(token) => {
+                // 进入新扫描时把外部 token 的标志位重置一下，避免上次取消遗留
+                // 影响这次扫描。Token 的所有权在 SessionHandle 上，重置是安全的。
+                token.as_atomic().store(false, Ordering::Relaxed);
+                token.as_atomic()
+            }
+            None => {
+                self.reset_cancel();
+                Arc::clone(&self.cancelled)
+            }
+        };
 
         tokio::task::spawn_blocking(move || {
             Self::scan_deep_blocking_internal(&path, estimated_files, cancelled, progress_emitter)
@@ -207,16 +260,11 @@ impl DiskScanner {
         tracing::info!("扫描路径: {}", root_path);
 
         let inaccessible_count = Arc::new(AtomicUsize::new(0));
-        let mut large_files: Vec<super::file_info::FileInfo> = Vec::new();
         let large_file_threshold = 100 * 1024 * 1024u64;
 
         let total_files = Arc::new(AtomicUsize::new(0));
         let total_dirs = Arc::new(AtomicUsize::new(0));
         let total_size = Arc::new(AtomicU64::new(0));
-
-        // jwalk 迭代器是单线程消费的，这些 map 只在主线程访问，无需 Arc<Mutex<>>
-        let mut dir_file_stats: HashMap<PathBuf, (u64, usize)> = HashMap::new();
-        let mut dir_nodes: HashMap<PathBuf, DirectoryNode> = HashMap::new();
 
         Self::emit_progress(
             progress_emitter.as_ref(),
@@ -235,7 +283,7 @@ impl DiskScanner {
         let tf = Arc::clone(&total_files);
         let td = Arc::clone(&total_dirs);
         let ts = Arc::clone(&total_size);
-        let start_c = start.clone();
+        let start_c = start;
         let should_stop = Arc::new(AtomicBool::new(false));
         let should_stop_c = Arc::clone(&should_stop);
         let cancelled_c = Arc::clone(&cancelled);
@@ -306,108 +354,32 @@ impl DiskScanner {
             "deep-native",
             format!("walk_native_directory_tree path={}", path.display()),
         );
-        let mut pending_dirs = vec![path.to_path_buf()];
-        while let Some(current_dir) = pending_dirs.pop() {
-            if cancelled.load(Ordering::Relaxed) {
-                break;
-            }
 
-            let entries = match winfs::enumerate_directory(&current_dir, true) {
-                Ok(entries) => entries,
-                Err(_) => {
-                    inaccessible_count.fetch_add(1, Ordering::Relaxed);
-                    continue;
-                }
-            };
+        // --- Parallel native walk using rayon::scope ---
+        let dir_nodes: DashMap<PathBuf, DirectoryNode> =
+            DashMap::with_capacity(estimated_files / 8);
+        let dir_file_stats: DashMap<PathBuf, (u64, usize)> =
+            DashMap::with_capacity(estimated_files / 8);
+        let large_files: Mutex<Vec<super::file_info::FileInfo>> = Mutex::new(Vec::new());
 
-            for entry in entries {
-                if cancelled.load(Ordering::Relaxed) {
-                    break;
-                }
+        rayon::scope(|s| {
+            Self::walk_dir_parallel(
+                s,
+                path.to_path_buf(),
+                &cancelled,
+                &inaccessible_count,
+                &total_files,
+                &total_dirs,
+                &total_size,
+                &dir_nodes,
+                &dir_file_stats,
+                &large_files,
+                large_file_threshold,
+            );
+        });
 
-                if entry.is_symlink {
-                    if entry.is_dir {
-                        total_dirs.fetch_add(1, Ordering::Relaxed);
-                        dir_nodes.insert(
-                            entry.path.clone(),
-                            DirectoryNode {
-                                path: entry.path.to_string_lossy().to_string(),
-                                name: entry.name,
-                                size: 0,
-                                file_count: 0,
-                                dir_count: 1,
-                                children: vec![],
-                                has_children: false,
-                                is_symlink: true,
-                                link_target: winfs::resolve_link_target(&entry.path),
-                                safety: None,
-                                modified_time: entry.modified_time,
-                                file_id: None,
-                            },
-                        );
-                    }
-                    continue;
-                }
+        let large_files = large_files.into_inner().unwrap();
 
-                if entry.is_dir {
-                    total_dirs.fetch_add(1, Ordering::Relaxed);
-                    pending_dirs.push(entry.path.clone());
-
-                    dir_nodes.insert(
-                        entry.path.clone(),
-                        DirectoryNode {
-                            path: entry.path.to_string_lossy().to_string(),
-                            name: entry.name,
-                            size: 0,
-                            file_count: 0,
-                            dir_count: 1,
-                            children: vec![],
-                            has_children: false,
-                            is_symlink: false,
-                            link_target: None,
-                            safety: None,
-                            modified_time: entry.modified_time,
-                            file_id: entry.file_id,
-                        },
-                    );
-                    continue;
-                }
-
-                let file_size = entry.size;
-                total_files.fetch_add(1, Ordering::Relaxed);
-                total_size.fetch_add(file_size, Ordering::Relaxed);
-
-                if file_size >= large_file_threshold {
-                    let modified_at = entry
-                        .modified_time
-                        .and_then(|secs| chrono::DateTime::from_timestamp(secs as i64, 0))
-                        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                        .unwrap_or_default();
-
-                    large_files.push(super::file_info::FileInfo {
-                        path: entry.path.to_string_lossy().to_string(),
-                        name: entry.name,
-                        size: file_size,
-                        extension: entry
-                            .path
-                            .extension()
-                            .and_then(|e| e.to_str())
-                            .unwrap_or("")
-                            .to_string(),
-                        modified_at,
-                        is_readonly: entry.is_readonly,
-                        is_symlink: false,
-                        link_target: None,
-                    });
-                }
-
-                if let Some(parent) = entry.path.parent() {
-                    let stats = dir_file_stats.entry(parent.to_path_buf()).or_insert((0, 0));
-                    stats.0 += file_size;
-                    stats.1 += 1;
-                }
-            }
-        }
         enumerate_timer.finish_with(format!(
             "files={} dirs={} size={} inaccessible={} large_files={}",
             total_files.load(Ordering::Relaxed),
@@ -429,7 +401,10 @@ impl DiskScanner {
             "deep-native",
             format!("aggregate_directory_totals path={}", path.display()),
         );
-        let mut nodes_map = dir_nodes;
+
+        // Convert DashMap to HashMap for sequential post-processing
+        let dir_file_stats: HashMap<PathBuf, (u64, usize)> = dir_file_stats.into_iter().collect();
+        let mut nodes_map: HashMap<PathBuf, DirectoryNode> = dir_nodes.into_iter().collect();
 
         let (root_file_count, root_file_size) = dir_file_stats
             .get(path)
@@ -617,6 +592,9 @@ impl DiskScanner {
                 root_file_id: winfs::get_path_file_id(path),
                 usn_journal_id: Some(journal.journal_id),
                 usn_next_usn: Some(journal.next_usn),
+                cache_schema_version: 0,
+                env_fingerprint: Default::default(),
+                scan_completed: false,
             });
         }
 
@@ -633,7 +611,154 @@ impl DiskScanner {
             root_file_id: winfs::get_path_file_id(path),
             usn_journal_id: None,
             usn_next_usn: None,
+            cache_schema_version: 0,
+            env_fingerprint: Default::default(),
+            scan_completed: false,
         })
+    }
+
+    /// Recursively walk a directory in parallel using rayon::scope.
+    /// Each directory enumeration is spawned as a rayon task; discovered
+    /// subdirectories spawn further tasks, saturating the thread pool.
+    fn walk_dir_parallel<'s>(
+        scope: &rayon::Scope<'s>,
+        dir: PathBuf,
+        cancelled: &'s Arc<AtomicBool>,
+        inaccessible_count: &'s Arc<AtomicUsize>,
+        total_files: &'s Arc<AtomicUsize>,
+        total_dirs: &'s Arc<AtomicUsize>,
+        total_size: &'s Arc<AtomicU64>,
+        dir_nodes: &'s DashMap<PathBuf, DirectoryNode>,
+        dir_file_stats: &'s DashMap<PathBuf, (u64, usize)>,
+        large_files: &'s Mutex<Vec<super::file_info::FileInfo>>,
+        large_file_threshold: u64,
+    ) {
+        if cancelled.load(Ordering::Relaxed) {
+            return;
+        }
+
+        let entries = match winfs::enumerate_directory(&dir, true) {
+            Ok(entries) => entries,
+            Err(_) => {
+                inaccessible_count.fetch_add(1, Ordering::Relaxed);
+                return;
+            }
+        };
+
+        // Collect subdirectories to spawn after processing entries
+        let mut subdirs: Vec<PathBuf> = Vec::new();
+
+        for entry in entries {
+            if cancelled.load(Ordering::Relaxed) {
+                return;
+            }
+
+            if entry.is_symlink {
+                if entry.is_dir {
+                    total_dirs.fetch_add(1, Ordering::Relaxed);
+                    dir_nodes.insert(
+                        entry.path.clone(),
+                        DirectoryNode {
+                            path: entry.path.to_string_lossy().to_string(),
+                            name: entry.name,
+                            size: 0,
+                            file_count: 0,
+                            dir_count: 1,
+                            children: vec![],
+                            has_children: false,
+                            is_symlink: true,
+                            link_target: winfs::resolve_link_target(&entry.path),
+                            safety: None,
+                            modified_time: entry.modified_time,
+                            file_id: None,
+                        },
+                    );
+                }
+                continue;
+            }
+
+            if entry.is_dir {
+                total_dirs.fetch_add(1, Ordering::Relaxed);
+                dir_nodes.insert(
+                    entry.path.clone(),
+                    DirectoryNode {
+                        path: entry.path.to_string_lossy().to_string(),
+                        name: entry.name,
+                        size: 0,
+                        file_count: 0,
+                        dir_count: 1,
+                        children: vec![],
+                        has_children: false,
+                        is_symlink: false,
+                        link_target: None,
+                        safety: None,
+                        modified_time: entry.modified_time,
+                        file_id: entry.file_id,
+                    },
+                );
+                subdirs.push(entry.path);
+                continue;
+            }
+
+            // File entry
+            let file_size = entry.size;
+            total_files.fetch_add(1, Ordering::Relaxed);
+            total_size.fetch_add(file_size, Ordering::Relaxed);
+
+            if file_size >= large_file_threshold {
+                let modified_at = entry
+                    .modified_time
+                    .and_then(|secs| chrono::DateTime::from_timestamp(secs as i64, 0))
+                    .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                    .unwrap_or_default();
+
+                let file_info = super::file_info::FileInfo {
+                    path: entry.path.to_string_lossy().to_string(),
+                    name: entry.name,
+                    size: file_size,
+                    extension: entry
+                        .path
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    modified_at,
+                    is_readonly: entry.is_readonly,
+                    is_symlink: false,
+                    link_target: None,
+                };
+                if let Ok(mut lf) = large_files.lock() {
+                    lf.push(file_info);
+                }
+            }
+
+            if let Some(parent) = entry.path.parent() {
+                let mut stats = dir_file_stats
+                    .entry(parent.to_path_buf())
+                    .or_insert((0, 0));
+                stats.0 += file_size;
+                stats.1 += 1;
+            }
+        }
+
+        // Spawn parallel tasks for subdirectories
+        for subdir in subdirs {
+            scope.spawn(move |s| {
+                Self::walk_dir_parallel(
+                    s,
+                    subdir,
+                    cancelled,
+                    inaccessible_count,
+                    total_files,
+                    total_dirs,
+                    total_size,
+                    dir_nodes,
+                    dir_file_stats,
+                    large_files,
+                    large_file_threshold,
+                );
+            });
+        }
     }
 
     fn sort_directory_tree(nodes: &mut [DirectoryNode]) {

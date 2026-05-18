@@ -43,9 +43,7 @@ const emit = defineEmits<{
 .confirm-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(45, 35, 25, 0.4);
-  backdrop-filter: blur(24px) saturate(100%);
-  -webkit-backdrop-filter: blur(24px) saturate(100%);
+  background: var(--modal-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;

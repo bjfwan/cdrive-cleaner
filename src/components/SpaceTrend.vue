@@ -23,8 +23,10 @@ const snapshots = ref<DiskSnapshot[]>([]);
 const loading = ref(false);
 const detailOpen = ref(false);
 
-const sparklineWidth = 240;
-const sparklineHeight = 64;
+const SPARK_W = 240;
+const SPARK_H = 64;
+const DETAIL_W = 540 - 64;
+const DETAIL_H = 360 - 160;
 
 watch(
   () => [props.drive, props.refreshKey, range.value] as const,
@@ -71,84 +73,122 @@ function normalizeDrive(input: string): string | null {
   return `${letter}:\\`;
 }
 
-const latest = computed(() => snapshots.value.at(-1) ?? null);
-
-const compareIndex = (days: number) => {
-  if (snapshots.value.length === 0) return null;
-  const target = Date.now() - days * 24 * 60 * 60 * 1000;
-  let best: DiskSnapshot | null = null;
-  let bestDiff = Number.POSITIVE_INFINITY;
-  for (const snap of snapshots.value) {
-    const ts = parseSqlTime(snap.captured_at);
-    const diff = Math.abs(ts - target);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      best = snap;
-    }
-  }
-  return best;
-};
-
-const compare7 = computed(() => compareIndex(7));
-const compare30 = computed(() => compareIndex(30));
-
 function parseSqlTime(value: string): number {
   const normalized = value.includes('T') ? value : value.replace(' ', 'T') + 'Z';
   const parsed = Date.parse(normalized);
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
+/**
+ * Walk the snapshot list once and produce everything the template needs.
+ * This replaces the previous design where each of `sparklinePath`,
+ * `sparklineFill`, `detailPath`, `detailFill`, `compare7`, `compare30`
+ * triggered an independent O(n) traversal (and `Math.min(...values)` /
+ * `Math.max(...values)` allocated and spread the entire array on every
+ * recompute).
+ */
+const trendModel = computed(() => {
+  const points = snapshots.value;
+  const len = points.length;
+
+  const empty = {
+    mini: '',
+    miniFill: '',
+    large: '',
+    largeFill: '',
+    direction: 'flat' as 'up' | 'down' | 'flat',
+    latest: null as DiskSnapshot | null,
+    compare7: null as DiskSnapshot | null,
+    compare30: null as DiskSnapshot | null,
+  };
+
+  if (len === 0) {
+    return empty;
+  }
+
+  // Single sweep: min/max for the y-axis + nearest snapshot to (now - 7d) and
+  // (now - 30d).
+  const target7 = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const target30 = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  let min = points[0].used_size;
+  let max = min;
+  let best7: DiskSnapshot | null = null;
+  let best30: DiskSnapshot | null = null;
+  let best7Diff = Number.POSITIVE_INFINITY;
+  let best30Diff = Number.POSITIVE_INFINITY;
+
+  for (let i = 0; i < len; i += 1) {
+    const snap = points[i];
+    const v = snap.used_size;
+    if (v < min) min = v;
+    if (v > max) max = v;
+
+    const ts = parseSqlTime(snap.captured_at);
+    const d7 = Math.abs(ts - target7);
+    if (d7 < best7Diff) {
+      best7Diff = d7;
+      best7 = snap;
+    }
+    const d30 = Math.abs(ts - target30);
+    if (d30 < best30Diff) {
+      best30Diff = d30;
+      best30 = snap;
+    }
+  }
+
+  const latest = points[len - 1];
+  const compare30 = best30;
+  let direction: 'up' | 'down' | 'flat' = 'flat';
+  if (compare30) {
+    const delta = latest.used_size - compare30.used_size;
+    if (delta > 0) direction = 'up';
+    else if (delta < 0) direction = 'down';
+  }
+
+  const span = Math.max(max - min, 1);
+  const padding = 4;
+
+  // Build both viewports' line + fill paths in one pass.
+  const buildPaths = (width: number, height: number) => {
+    if (len < 2) {
+      const y = height / 2;
+      return { line: `M 0 ${y} L ${width} ${y}`, fill: '' };
+    }
+    const innerH = height - padding * 2;
+    const stepX = width / (len - 1);
+    let line = '';
+    for (let i = 0; i < len; i += 1) {
+      const x = i * stepX;
+      const y = padding + innerH - ((points[i].used_size - min) / span) * innerH;
+      line += `${i === 0 ? 'M' : ' L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    }
+    const fill = `${line} L ${width.toFixed(2)} ${height} L 0 ${height} Z`;
+    return { line, fill };
+  };
+
+  const mini = buildPaths(SPARK_W, SPARK_H);
+  const large = buildPaths(DETAIL_W, DETAIL_H);
+
+  return {
+    mini: mini.line,
+    miniFill: mini.fill,
+    large: large.line,
+    largeFill: large.fill,
+    direction,
+    latest,
+    compare7: best7,
+    compare30,
+  };
+});
+
 const trendCopy = computed(() => {
-  if (!latest.value || !compare30.value) return '记录中…';
-  const delta = latest.value.used_size - compare30.value.used_size;
+  const { latest, compare30 } = trendModel.value;
+  if (!latest || !compare30) return '记录中…';
+  const delta = latest.used_size - compare30.used_size;
   if (delta === 0) return '过去 30 天没有变化';
   const verb = delta > 0 ? '增加了' : '减少了';
   return `过去 30 天${verb} ${formatBytes(Math.abs(delta))}`;
 });
-
-const trendDirection = computed<'up' | 'down' | 'flat'>(() => {
-  if (!latest.value || !compare30.value) return 'flat';
-  const delta = latest.value.used_size - compare30.value.used_size;
-  if (delta > 0) return 'up';
-  if (delta < 0) return 'down';
-  return 'flat';
-});
-
-const sparklinePath = computed(() => buildPath(sparklineWidth, sparklineHeight, snapshots.value));
-const sparklineFill = computed(() => buildFillPath(sparklineWidth, sparklineHeight, snapshots.value));
-
-function buildPath(width: number, height: number, points: DiskSnapshot[]): string {
-  if (points.length < 2) {
-    if (points.length === 1) {
-      const y = height / 2;
-      return `M 0 ${y} L ${width} ${y}`;
-    }
-    return '';
-  }
-  const values = points.map((p) => p.used_size);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = Math.max(max - min, 1);
-  const padding = 4;
-  const innerH = height - padding * 2;
-  const stepX = points.length === 1 ? width : width / (points.length - 1);
-  return points
-    .map((p, i) => {
-      const x = i * stepX;
-      const y = padding + innerH - ((p.used_size - min) / span) * innerH;
-      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(' ');
-}
-
-function buildFillPath(width: number, height: number, points: DiskSnapshot[]): string {
-  if (points.length < 2) return '';
-  const main = buildPath(width, height, points);
-  return `${main} L ${width.toFixed(2)} ${height} L 0 ${height} Z`;
-}
-
-const detailPath = computed(() => buildPath(540 - 64, 360 - 160, snapshots.value));
-const detailFill = computed(() => buildFillPath(540 - 64, 360 - 160, snapshots.value));
 
 function openDetail() {
   if (snapshots.value.length === 0) return;
@@ -188,47 +228,55 @@ function formatTimestamp(value: string): string {
       </div>
     </div>
 
-    <div v-else class="trend-row" @click="openDetail" role="button" tabindex="0" @keydown.enter="openDetail">
-      <div class="trend-copy">
-        <span class="trend-kicker">空间趋势</span>
-        <strong>{{ latest ? formatBytes(latest.used_size) : '--' }}</strong>
-        <small>{{ trendCopy }}</small>
-      </div>
-
-      <svg
-        class="trend-chart"
-        :viewBox="`0 0 ${sparklineWidth} ${sparklineHeight}`"
-        preserveAspectRatio="none"
-        :data-direction="trendDirection"
+    <template v-else>
+      <div
+        class="trend-row"
+        @click="openDetail"
+        role="button"
+        tabindex="0"
+        @keydown.enter="openDetail"
       >
-        <defs>
-          <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="currentColor" stop-opacity="0.32" />
-            <stop offset="100%" stop-color="currentColor" stop-opacity="0" />
-          </linearGradient>
-        </defs>
-        <path :d="sparklineFill" fill="url(#trend-fill)" />
-        <path
-          :d="sparklinePath"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.6"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
-
-      <div class="trend-stats">
-        <div class="trend-stat">
-          <span>7 天前</span>
-          <strong>{{ compare7 ? formatBytes(compare7.used_size) : '--' }}</strong>
+        <div class="trend-copy">
+          <span class="trend-kicker">空间趋势</span>
+          <strong>{{ trendModel.latest ? formatBytes(trendModel.latest.used_size) : '--' }}</strong>
+          <small>{{ trendCopy }}</small>
         </div>
-        <div class="trend-stat">
-          <span>30 天前</span>
-          <strong>{{ compare30 ? formatBytes(compare30.used_size) : '--' }}</strong>
+
+        <svg
+          class="trend-chart"
+          :viewBox="`0 0 ${SPARK_W} ${SPARK_H}`"
+          preserveAspectRatio="none"
+          :data-direction="trendModel.direction"
+        >
+          <defs>
+            <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="currentColor" stop-opacity="0.32" />
+              <stop offset="100%" stop-color="currentColor" stop-opacity="0" />
+            </linearGradient>
+          </defs>
+          <path :d="trendModel.miniFill" fill="url(#trend-fill)" />
+          <path
+            :d="trendModel.mini"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+
+        <div class="trend-stats">
+          <div class="trend-stat">
+            <span>7 天前</span>
+            <strong>{{ trendModel.compare7 ? formatBytes(trendModel.compare7.used_size) : '--' }}</strong>
+          </div>
+          <div class="trend-stat">
+            <span>30 天前</span>
+            <strong>{{ trendModel.compare30 ? formatBytes(trendModel.compare30.used_size) : '--' }}</strong>
+          </div>
         </div>
       </div>
-    </div>
+    </template>
 
     <Teleport to="body">
       <transition name="modal">
@@ -250,9 +298,9 @@ function formatTimestamp(value: string): string {
             <div class="trend-modal-body">
               <svg
                 class="trend-chart-large"
-                :viewBox="`0 0 ${540 - 64} ${360 - 160}`"
+                :viewBox="`0 0 ${DETAIL_W} ${DETAIL_H}`"
                 preserveAspectRatio="none"
-                :data-direction="trendDirection"
+                :data-direction="trendModel.direction"
               >
                 <defs>
                   <linearGradient id="trend-fill-large" x1="0" y1="0" x2="0" y2="1">
@@ -260,9 +308,9 @@ function formatTimestamp(value: string): string {
                     <stop offset="100%" stop-color="currentColor" stop-opacity="0" />
                   </linearGradient>
                 </defs>
-                <path :d="detailFill" fill="url(#trend-fill-large)" />
+                <path :d="trendModel.largeFill" fill="url(#trend-fill-large)" />
                 <path
-                  :d="detailPath"
+                  :d="trendModel.large"
                   fill="none"
                   stroke="currentColor"
                   stroke-width="2"
@@ -274,7 +322,7 @@ function formatTimestamp(value: string): string {
               <div class="trend-modal-stats">
                 <div class="trend-modal-stat">
                   <span>当前已用</span>
-                  <strong>{{ latest ? formatBytes(latest.used_size) : '--' }}</strong>
+                  <strong>{{ trendModel.latest ? formatBytes(trendModel.latest.used_size) : '--' }}</strong>
                 </div>
                 <div class="trend-modal-stat">
                   <span>采样点</span>

@@ -5,6 +5,7 @@ import type { DiskInfo, GameInfo, GameLibraryInfo, GamePlatform } from '../types
 import { formatBytes } from '../utils/format';
 import { useCart } from '../composables/useCart';
 import { useToast } from '../composables/useToast';
+import VirtualList from './VirtualList.vue';
 
 interface Props {
   availableDisks: DiskInfo[];
@@ -38,15 +39,27 @@ const installedPlatforms = computed(() =>
 const migratableGames = computed(() => activeLibrary.value?.games.filter((g) => g.can_migrate) ?? []);
 const blockedGames = computed(() => activeLibrary.value?.games.filter((g) => !g.can_migrate) ?? []);
 
-const checkedCount = computed(
-  () => migratableGames.value.filter((g) => checked.value[g.install_path]).length,
-);
-const checkedSize = computed(() =>
-  migratableGames.value.reduce(
-    (sum, g) => (checked.value[g.install_path] ? sum + g.install_size : sum),
-    0,
-  ),
-);
+// Incremental checked count/size tracking (avoids full traversal on each toggle)
+let _checkedCount = 0;
+let _checkedSize = 0;
+const checkedCount = ref(0);
+const checkedSize = ref(0);
+
+function bumpChecked(countDelta: number, sizeDelta: number) {
+  _checkedCount += countDelta;
+  _checkedSize += sizeDelta;
+  if (_checkedCount < 0) _checkedCount = 0;
+  if (_checkedSize < 0) _checkedSize = 0;
+  checkedCount.value = _checkedCount;
+  checkedSize.value = _checkedSize;
+}
+
+function resetCheckedCounters() {
+  _checkedCount = 0;
+  _checkedSize = 0;
+  checkedCount.value = 0;
+  checkedSize.value = 0;
+}
 
 onMounted(() => {
   void load();
@@ -69,18 +82,31 @@ async function load() {
 }
 
 function toggleGame(game: GameInfo) {
+  const wasChecked = !!checked.value[game.install_path];
   checked.value = {
     ...checked.value,
-    [game.install_path]: !checked.value[game.install_path],
+    [game.install_path]: !wasChecked,
   };
+  if (wasChecked) {
+    bumpChecked(-1, -game.install_size);
+  } else {
+    bumpChecked(1, game.install_size);
+  }
 }
 
 function selectAll() {
   const next = { ...checked.value };
+  let countDelta = 0;
+  let sizeDelta = 0;
   for (const game of migratableGames.value) {
-    next[game.install_path] = true;
+    if (!next[game.install_path]) {
+      next[game.install_path] = true;
+      countDelta++;
+      sizeDelta += game.install_size;
+    }
   }
   checked.value = next;
+  bumpChecked(countDelta, sizeDelta);
 }
 
 function deselectAll() {
@@ -89,6 +115,7 @@ function deselectAll() {
     delete next[game.install_path];
   }
   checked.value = next;
+  resetCheckedCounters();
 }
 
 function platformLabel(p: GamePlatform) {
@@ -124,20 +151,23 @@ function addToCart(game: GameInfo) {
 function addCheckedToCart() {
   const items = migratableGames.value.filter((g) => checked.value[g.install_path]);
   if (items.length === 0) return;
-  for (const game of items) {
-    cart.add({
+  let totalSize = 0;
+  const batch = items.map((game) => {
+    totalSize += game.install_size;
+    return {
       path: game.install_path,
       name: game.name,
       size: game.install_size,
       file_count: 1,
-      recommendation: 'migrate',
-      source: 'game',
+      recommendation: 'migrate' as const,
+      source: 'game' as const,
       game: { platform: game.platform, app_id: game.app_id },
-    });
-  }
+    };
+  });
+  cart.addBatch(batch);
   showToast(
     '已加入搬运车',
-    `${items.length} 项游戏 · 共 ${formatBytes(items.reduce((s, g) => s + g.install_size, 0))}`,
+    `${items.length} 项游戏 · 共 ${formatBytes(totalSize)}`,
     'info',
   );
   deselectAll();
@@ -213,39 +243,46 @@ defineExpose({ reload: load });
         </button>
       </div>
 
-      <ul v-if="migratableGames.length > 0" class="game-list">
-        <li
-          v-for="game in migratableGames"
-          :key="game.install_path"
-          class="game-item"
-          :class="{ checked: checked[game.install_path] }"
+      <div v-if="migratableGames.length > 0" class="game-list-shell">
+        <VirtualList
+          :items="migratableGames"
+          :item-size="82"
+          :buffer="4"
+          :overscan="2"
+          v-slot="{ item: game }"
         >
-          <button class="game-check" @click="toggleGame(game)" aria-label="选择">
-            <svg v-if="checked[game.install_path]" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-              <path
-                d="M3 8.5L6.5 12L13 4.5"
-                stroke="currentColor"
-                stroke-width="2.4"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                fill="none"
-              />
-            </svg>
-          </button>
-          <div class="game-cover" :data-platform="game.platform">{{ platforms.find((p) => p.key === game.platform)?.mark ?? 'GME' }}</div>
-          <div class="game-main">
-            <div class="game-name-row">
-              <span class="game-name" :title="game.install_path">{{ game.name }}</span>
-              <span class="game-tag">{{ platformLabel(game.platform) }}</span>
-              <span class="game-tag" v-if="game.drive_letter">{{ game.drive_letter }}</span>
+          <div
+            :key="(game as GameInfo).install_path"
+            class="game-item"
+            :class="{ checked: checked[(game as GameInfo).install_path] }"
+          >
+            <button class="game-check" @click="toggleGame(game as GameInfo)" aria-label="选择">
+              <svg v-if="checked[(game as GameInfo).install_path]" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <path
+                  d="M3 8.5L6.5 12L13 4.5"
+                  stroke="currentColor"
+                  stroke-width="2.4"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  fill="none"
+                />
+              </svg>
+            </button>
+            <div class="game-cover" :data-platform="(game as GameInfo).platform">{{ platforms.find((p) => p.key === (game as GameInfo).platform)?.mark ?? 'GME' }}</div>
+            <div class="game-main">
+              <div class="game-name-row">
+                <span class="game-name" :title="(game as GameInfo).install_path">{{ (game as GameInfo).name }}</span>
+                <span class="game-tag">{{ platformLabel((game as GameInfo).platform) }}</span>
+                <span class="game-tag" v-if="(game as GameInfo).drive_letter">{{ (game as GameInfo).drive_letter }}</span>
+              </div>
+              <div class="game-path" :title="(game as GameInfo).install_path">{{ (game as GameInfo).install_path }}</div>
+              <div class="game-hint">{{ (game as GameInfo).migration_hint }}</div>
             </div>
-            <div class="game-path" :title="game.install_path">{{ game.install_path }}</div>
-            <div class="game-hint">{{ game.migration_hint }}</div>
+            <div class="game-size">{{ formatBytes((game as GameInfo).install_size) }}</div>
+            <button class="single-btn" @click="addToCart(game as GameInfo)">加入搬运车</button>
           </div>
-          <div class="game-size">{{ formatBytes(game.install_size) }}</div>
-          <button class="single-btn" @click="addToCart(game)">加入搬运车</button>
-        </li>
-      </ul>
+        </VirtualList>
+      </div>
 
       <div v-else-if="blockedGames.length === 0" class="placeholder-soft">
         当前平台未发现已安装游戏。
@@ -256,20 +293,28 @@ defineExpose({ reload: load });
           <strong>需要在系统设置中迁移</strong>
           <small>{{ blockedGames.length }} 项 · WindowsApps 受系统保护，本工具不直接动它们</small>
         </header>
-        <ul class="blocked-list">
-          <li v-for="game in blockedGames" :key="game.install_path" class="blocked-item">
-            <div class="game-cover blocked">MS</div>
-            <div class="game-main">
-              <div class="game-name-row">
-                <span class="game-name">{{ game.name }}</span>
-                <span class="game-tag warn">{{ platformLabel(game.platform) }}</span>
+        <div class="blocked-list-shell">
+          <VirtualList
+            :items="blockedGames"
+            :item-size="82"
+            :buffer="4"
+            :overscan="2"
+            v-slot="{ item: game }"
+          >
+            <div :key="(game as GameInfo).install_path" class="blocked-item">
+              <div class="game-cover blocked">MS</div>
+              <div class="game-main">
+                <div class="game-name-row">
+                  <span class="game-name">{{ (game as GameInfo).name }}</span>
+                  <span class="game-tag warn">{{ platformLabel((game as GameInfo).platform) }}</span>
+                </div>
+                <div class="game-path">{{ (game as GameInfo).install_path }}</div>
+                <div class="game-hint">{{ (game as GameInfo).migration_hint }}</div>
               </div>
-              <div class="game-path">{{ game.install_path }}</div>
-              <div class="game-hint">{{ game.migration_hint }}</div>
+              <button class="primary-btn" @click="openNativeMigrationUi((game as GameInfo).platform)">在系统设置中迁移</button>
             </div>
-            <button class="primary-btn" @click="openNativeMigrationUi(game.platform)">在系统设置中迁移</button>
-          </li>
-        </ul>
+          </VirtualList>
+        </div>
       </section>
     </section>
   </div>
@@ -489,12 +534,17 @@ defineExpose({ reload: load });
 .single-btn { background: transparent; color: var(--color-text-secondary); }
 .single-btn:hover { background: var(--color-surface-hover); color: var(--color-text-primary); }
 
-.game-list,
-.blocked-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
+.game-list-shell,
+.blocked-list-shell {
+  height: min(520px, 60vh);
+  min-height: 164px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.game-list-shell :deep(.vlist),
+.blocked-list-shell :deep(.vlist) {
+  padding: 0.25rem 0;
 }
 
 .game-item,
@@ -507,6 +557,8 @@ defineExpose({ reload: load });
   border-radius: 14px;
   background: var(--color-surface-strong);
   border: 1px solid var(--color-border-light);
+  height: 82px;
+  box-sizing: border-box;
   transition: border-color var(--transition-fast), background var(--transition-fast);
 }
 .game-item:hover { border-color: var(--color-border-medium); }

@@ -1,17 +1,19 @@
 use super::file_info::FileInfo;
 use anyhow::{anyhow, Result};
+use rayon::prelude::*;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs::File;
 use std::hash::Hasher;
 use std::io::Read;
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use twox_hash::XxHash3_64;
 
 const QUICK_HASH_BYTES: usize = 64 * 1024;
 const DUPLICATE_MIN_SIZE: u64 = 100 * 1024 * 1024;
-const FULL_HASH_BUFFER: usize = 1024 * 1024;
+const FULL_HASH_BUFFER: usize = 4 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DuplicateFile {
@@ -54,30 +56,37 @@ pub fn find_duplicates_blocking(
     }
 
     let mut groups = Vec::new();
-    let mut scanned_files: usize = 0;
+    let scanned_files = AtomicUsize::new(0);
 
     let mut size_buckets: Vec<(u64, Vec<FileInfo>)> = by_size
         .into_iter()
         .filter(|(_, files)| files.len() >= 2)
         .collect();
-    size_buckets.sort_by(|a, b| b.0.cmp(&a.0));
+    size_buckets.sort_by_key(|b| std::cmp::Reverse(b.0));
 
     for (size, bucket) in size_buckets {
-        let mut by_quick: HashMap<u64, Vec<FileInfo>> = HashMap::new();
-        for file in bucket {
-            scanned_files += 1;
-            match quick_hash_file(Path::new(&file.path)) {
-                Ok(hash) => {
-                    by_quick.entry(hash).or_default().push(file);
-                }
+        let bucket_len = bucket.len();
+
+        // Parallel quick hash
+        let quick_results: Vec<(u64, FileInfo)> = bucket
+            .par_iter()
+            .filter_map(|file| match quick_hash_file(Path::new(&file.path)) {
+                Ok(hash) => Some((hash, file.clone())),
                 Err(err) => {
                     tracing::debug!(
                         "[duplicates] quick hash failed path={} error={}",
                         file.path,
                         err
                     );
+                    None
                 }
-            }
+            })
+            .collect();
+
+        // Group by quick hash
+        let mut by_quick: HashMap<u64, Vec<FileInfo>> = HashMap::new();
+        for (hash, file) in quick_results {
+            by_quick.entry(hash).or_default().push(file);
         }
 
         for (_, quick_group) in by_quick {
@@ -85,20 +94,26 @@ pub fn find_duplicates_blocking(
                 continue;
             }
 
-            let mut by_full: HashMap<u64, Vec<FileInfo>> = HashMap::new();
-            for file in quick_group {
-                match full_hash_file(Path::new(&file.path)) {
-                    Ok(hash) => {
-                        by_full.entry(hash).or_default().push(file);
-                    }
+            // Parallel full hash
+            let full_results: Vec<(u64, FileInfo)> = quick_group
+                .par_iter()
+                .filter_map(|file| match full_hash_file(Path::new(&file.path)) {
+                    Ok(hash) => Some((hash, file.clone())),
                     Err(err) => {
                         tracing::debug!(
                             "[duplicates] full hash failed path={} error={}",
                             file.path,
                             err
                         );
+                        None
                     }
-                }
+                })
+                .collect();
+
+            // Group by full hash
+            let mut by_full: HashMap<u64, Vec<FileInfo>> = HashMap::new();
+            for (hash, file) in full_results {
+                by_full.entry(hash).or_default().push(file);
             }
 
             for (_, mut full_group) in by_full {
@@ -119,19 +134,21 @@ pub fn find_duplicates_blocking(
                     wasted_bytes: wasted,
                 };
                 groups.push(group);
-
-                if let Some(emit) = on_progress.as_ref() {
-                    emit(DuplicateProgress {
-                        current_size: size,
-                        scanned_files,
-                        found_groups: groups.len(),
-                    });
-                }
             }
+        }
+
+        // Batch progress update per size bucket
+        scanned_files.fetch_add(bucket_len, Ordering::Relaxed);
+        if let Some(emit) = on_progress.as_ref() {
+            emit(DuplicateProgress {
+                current_size: size,
+                scanned_files: scanned_files.load(Ordering::Relaxed),
+                found_groups: groups.len(),
+            });
         }
     }
 
-    groups.sort_by(|a, b| b.wasted_bytes.cmp(&a.wasted_bytes));
+    groups.sort_by_key(|b| std::cmp::Reverse(b.wasted_bytes));
     Ok(groups)
 }
 

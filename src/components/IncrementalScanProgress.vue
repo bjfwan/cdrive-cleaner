@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { computed, onMounted, onUnmounted } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { IconFolder, IconSpeed } from './icons';
+import { useThrottledShallowRef } from '../composables/useThrottledRef';
 
 interface Props {
   scanning: boolean;
@@ -9,14 +10,27 @@ interface Props {
 
 defineProps<Props>();
 
-const phase = ref('detecting');
-const totalDirs = ref(0);
-const checkedDirs = ref(0);
-const changedDirs = ref(0);
-const scannedDirs = ref(0);
+interface IncrementalState {
+  phase: string;
+  totalDirs: number;
+  checkedDirs: number;
+  changedDirs: number;
+  scannedDirs: number;
+}
+
+const INITIAL: IncrementalState = {
+  phase: 'detecting',
+  totalDirs: 0,
+  checkedDirs: 0,
+  changedDirs: 0,
+  scannedDirs: 0,
+};
+
+const incremental = useThrottledShallowRef<IncrementalState>({ ...INITIAL }, 80);
+const state = computed(() => incremental.state.value);
 
 const phaseText = computed(() => {
-  switch (phase.value) {
+  switch (state.value.phase) {
     case 'detecting':
       return '检测变化中';
     case 'scanning':
@@ -31,25 +45,32 @@ const phaseText = computed(() => {
 });
 
 const progressPercent = computed(() => {
-  if (phase.value === 'detecting') {
-    return totalDirs.value > 0 ? (checkedDirs.value / totalDirs.value) * 100 : 0;
-  } else if (phase.value === 'scanning') {
-    return changedDirs.value > 0 ? (scannedDirs.value / changedDirs.value) * 100 : 0;
-  } else if (phase.value === 'merging' || phase.value === 'completed') {
+  const s = state.value;
+  if (s.phase === 'detecting') {
+    return s.totalDirs > 0 ? (s.checkedDirs / s.totalDirs) * 100 : 0;
+  }
+  if (s.phase === 'scanning') {
+    return s.changedDirs > 0 ? (s.scannedDirs / s.changedDirs) * 100 : 0;
+  }
+  if (s.phase === 'merging' || s.phase === 'completed') {
     return 100;
   }
   return 0;
 });
 
 const statusMessage = computed(() => {
-  if (phase.value === 'detecting') {
-    return `已检查 ${checkedDirs.value} / ${totalDirs.value} 个目录`;
-  } else if (phase.value === 'scanning') {
-    return `发现 ${changedDirs.value} 个变化，已扫描 ${scannedDirs.value} 个`;
-  } else if (phase.value === 'merging') {
+  const s = state.value;
+  if (s.phase === 'detecting') {
+    return `已检查 ${s.checkedDirs} / ${s.totalDirs} 个目录`;
+  }
+  if (s.phase === 'scanning') {
+    return `发现 ${s.changedDirs} 个变化，已扫描 ${s.scannedDirs} 个`;
+  }
+  if (s.phase === 'merging') {
     return '正在合并扫描结果...';
-  } else if (phase.value === 'completed') {
-    return `完成！共处理 ${changedDirs.value} 个变化`;
+  }
+  if (s.phase === 'completed') {
+    return `完成！共处理 ${s.changedDirs} 个变化`;
   }
   return '';
 });
@@ -57,20 +78,27 @@ const statusMessage = computed(() => {
 let unlisten: (() => void) | null = null;
 
 onMounted(async () => {
-  unlisten = await listen<{ phase: string; total_dirs: number; checked_dirs: number; changed_dirs: number; scanned_dirs: number }>('incremental-scan-progress', (event) => {
-    const progress = event.payload;
-    phase.value = progress.phase;
-    totalDirs.value = progress.total_dirs;
-    checkedDirs.value = progress.checked_dirs;
-    changedDirs.value = progress.changed_dirs;
-    scannedDirs.value = progress.scanned_dirs;
+  unlisten = await listen<{
+    phase: string;
+    total_dirs: number;
+    checked_dirs: number;
+    changed_dirs: number;
+    scanned_dirs: number;
+  }>('incremental-scan-progress', (event) => {
+    const p = event.payload;
+    incremental.push({
+      phase: p.phase,
+      totalDirs: p.total_dirs,
+      checkedDirs: p.checked_dirs,
+      changedDirs: p.changed_dirs,
+      scannedDirs: p.scanned_dirs,
+    });
   });
 });
 
 onUnmounted(() => {
-  if (unlisten) {
-    unlisten();
-  }
+  unlisten?.();
+  incremental.flush();
 });
 </script>
 
@@ -88,29 +116,29 @@ onUnmounted(() => {
           <p class="phase-text">{{ phaseText }}</p>
         </div>
       </div>
-      
+
       <div class="progress-stats">
         <div class="stat-card">
           <div class="stat-icon">
             <IconFolder :size="20" />
           </div>
           <div class="stat-content">
-            <div class="stat-value">{{ changedDirs }}</div>
+            <div class="stat-value">{{ state.changedDirs }}</div>
             <div class="stat-label">变化目录</div>
           </div>
         </div>
-        
+
         <div class="stat-card">
           <div class="stat-icon">
             <IconSpeed :size="20" />
           </div>
           <div class="stat-content">
-            <div class="stat-value">{{ totalDirs }}</div>
+            <div class="stat-value">{{ state.totalDirs }}</div>
             <div class="stat-label">总目录数</div>
           </div>
         </div>
       </div>
-      
+
       <div class="progress-bar-section">
         <div class="progress-bar-track">
           <div class="progress-bar-fill" :style="{ width: `${Math.min(progressPercent, 100)}%` }"></div>

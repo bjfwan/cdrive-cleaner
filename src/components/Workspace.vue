@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { DiskInfo, ScanResult, SmartItem, SmartScanReport } from '../types';
-import { formatBytes, formatNumber, formatTime } from '../utils/format';
+import { formatBytes, formatNumber } from '../utils/format';
 import { useCart } from '../composables/useCart';
 import { useCountUp } from '../composables/useCountUp';
 import { useToast } from '../composables/useToast';
@@ -42,7 +42,16 @@ const browseTab = ref<'list' | 'large_files' | 'duplicates'>('list');
 const trendRefreshKey = ref(0);
 
 const smartGroups = computed(() => smartReport.value?.groups ?? []);
-const totalSavings = useCountUp(() => smartReport.value?.default_savings ?? 0, 700);
+// Workspace is mounted under `v-if="activeTab === 'workspace'"` in App.vue,
+// so the tab being inactive already prevents this composable from running
+// (effectScope dispose cancels the raf). We still gate raf on the browse
+// drawer being closed because the drawer fully overlays the hero card —
+// running raf in that period burns cycles for an off-screen update.
+const isHeroVisible = () => !browseOpen.value;
+const totalSavings = useCountUp(() => smartReport.value?.default_savings ?? 0, {
+  durationMs: 700,
+  isVisible: isHeroVisible,
+});
 const potentialSavings = computed(() => smartReport.value?.potential_savings ?? 0);
 const itemCount = computed(() =>
   smartGroups.value.reduce((sum, g) => sum + g.item_count, 0),
@@ -53,7 +62,12 @@ watch(
   async (next) => {
     if (next && props.hasDeepScanned) {
       await loadSmart();
-      trendRefreshKey.value += 1;
+      // Defer the trend refresh by a tick so SpaceTrend doesn't re-fetch in the
+      // same microtask as `loadSmart`'s reactive fan-out, which can otherwise
+      // cause its watcher to fire while smartReport is mid-update.
+      void nextTick(() => {
+        trendRefreshKey.value += 1;
+      });
     } else {
       smartReport.value = null;
     }
@@ -100,26 +114,32 @@ function onListMigrateFile(file: { path: string; name: string; size: number }) {
 }
 
 function onListBatchMigrate(items: Array<{ path: string; name: string; size: number; file_count?: number }>) {
-  for (const it of items) {
-    cart.add({
+  let totalSize = 0;
+  const batch = items.map((it) => {
+    totalSize += it.size;
+    return {
       path: it.path,
       name: it.name,
       size: it.size,
       file_count: it.file_count ?? 1,
-      recommendation: 'migrate',
-      source: 'browse',
-    });
-  }
-  showToast('已加入搬运车', `${items.length} 项 · 共 ${formatBytes(items.reduce((s, x) => s + x.size, 0))}`, 'info');
+      recommendation: 'migrate' as const,
+      source: 'browse' as const,
+    };
+  });
+  cart.addBatch(batch);
+  showToast('已加入搬运车', `${items.length} 项 · 共 ${formatBytes(totalSize)}`, 'info');
 }
 
 const heroSubtitle = computed(() => {
   if (props.deepScanning) return '正在分析磁盘…';
   if (loadingSmart.value) return '正在生成智能建议…';
   if (!props.hasDeepScanned) return `${props.selectedDiskInfo?.drive_letter ?? ''} 选择磁盘并点击"开始扫描"`;
-  if (!smartReport.value) return '准备智能建议中…';
-  if (smartReport.value.default_savings === 0)
-    return `已扫描 ${formatNumber(props.scanResult?.total_files ?? 0)} 个文件，未发现明显可省项`;
+  const report = smartReport.value;
+  if (!report) return '准备智能建议中…';
+  if (report.default_savings === 0) {
+    const totalFiles = props.scanResult?.total_files ?? 0;
+    return `已扫描 ${formatNumber(totalFiles)} 个文件，未发现明显可省项`;
+  }
   return `在 ${itemCount.value} 项建议里默认勾选了安全可搬走的`;
 });
 </script>

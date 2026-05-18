@@ -72,7 +72,7 @@ function finish() {
 
 async function enableAdmin() {
   try {
-    await invoke('restart_as_admin');
+    await invoke('request_admin_rescan', { disk: 'C:\\' });
   } catch {
     next();
   }
@@ -237,8 +237,7 @@ function focusPrimary() {
   align-items: center;
   justify-content: center;
   padding: 1.2rem;
-  background: rgba(15, 23, 32, 0.46);
-  backdrop-filter: blur(18px) saturate(120%);
+  background: var(--modal-backdrop);
   z-index: 2000;
   font-family: var(--font-sans);
   animation: overlay-in var(--transition-base);
@@ -318,7 +317,12 @@ function focusPrimary() {
   width: 76px;
   height: 76px;
   margin-bottom: 0.4rem;
-  filter: drop-shadow(0 12px 24px rgba(15, 23, 32, 0.18));
+  border-radius: 20px;
+  object-fit: cover;
+  box-shadow:
+    0 12px 28px rgba(15, 23, 32, 0.22),
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 0 0 1px rgba(15, 23, 32, 0.06);
 }
 
 .step-title {
@@ -586,7 +590,7 @@ function focusPrimary() {
   font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+  transition: transform var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
 }
 
 .step-btn:focus-visible {

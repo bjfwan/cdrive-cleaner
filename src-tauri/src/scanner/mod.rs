@@ -1,6 +1,7 @@
 pub mod backend;
 pub mod disk_scanner;
 pub mod duplicates;
+pub mod env_fingerprint;
 pub mod file_info;
 pub mod incremental;
 pub mod mft_usn;

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { IconSpinner } from './icons';
 import { formatBytes, formatTime } from '../utils/format';
+import { useThrottledShallowRef } from '../composables/useThrottledRef';
 
 interface Props {
   scanning: boolean;
@@ -29,58 +30,97 @@ interface IncrementalScanProgressPayload {
   scanned_dirs: number;
 }
 
+interface DeepState {
+  scannedFiles: number;
+  scannedDirs: number;
+  totalSize: number;
+  progressPercent: number;
+  filesPerSecond: number;
+  elapsedMs: number;
+  currentPath: string;
+}
+
+interface IncrementalState {
+  phase: string;
+  totalDirs: number;
+  checkedDirs: number;
+  changedDirs: number;
+  scannedDirs: number;
+}
+
+type Mode = 'deep' | 'incremental';
+
+const INITIAL_DEEP: DeepState = {
+  scannedFiles: 0,
+  scannedDirs: 0,
+  totalSize: 0,
+  progressPercent: 0,
+  filesPerSecond: 0,
+  elapsedMs: 0,
+  currentPath: '',
+};
+
+const INITIAL_INCREMENTAL: IncrementalState = {
+  phase: 'detecting',
+  totalDirs: 0,
+  checkedDirs: 0,
+  changedDirs: 0,
+  scannedDirs: 0,
+};
+
+const THROTTLE_MS = 80;
+
+const deep = useThrottledShallowRef<DeepState>({ ...INITIAL_DEEP }, THROTTLE_MS);
+const incremental = useThrottledShallowRef<IncrementalState>({ ...INITIAL_INCREMENTAL }, THROTTLE_MS);
+// `mode` itself updates at most once per scan-mode switch, so a regular
+// throttled ref isn't required; the latest value of either throttled state
+// drives the readout once `mode` flips.
+const modeRef = useThrottledShallowRef<Mode>('deep', THROTTLE_MS);
+
 async function cancelScan() {
   try {
     await invoke('cancel_scan');
   } catch {}
 }
 
-const mode = ref<'deep' | 'incremental'>('deep');
-const scannedFiles = ref(0);
-const scannedDirs = ref(0);
-const totalSize = ref(0);
-const progressPercent = ref(0);
-const filesPerSecond = ref(0);
-const elapsedMs = ref(0);
-const currentPath = ref('');
-
-const incrementalPhase = ref('detecting');
-const totalIncrementalDirs = ref(0);
-const checkedDirs = ref(0);
-const changedDirs = ref(0);
-const rescannedDirs = ref(0);
+const deepState = computed(() => deep.state.value);
+const incrementalState = computed(() => incremental.state.value);
+const mode = computed<Mode>(() => modeRef.state.value);
 
 const incrementalProgressPercent = computed(() => {
-  const phase = incrementalPhase.value;
-  if (phase === 'detecting') {
-    return totalIncrementalDirs.value > 0
-      ? (checkedDirs.value / totalIncrementalDirs.value) * 100
-      : 0;
+  const s = incrementalState.value;
+  if (s.phase === 'detecting') {
+    return s.totalDirs > 0 ? (s.checkedDirs / s.totalDirs) * 100 : 0;
   }
-  if (phase === 'scanning') {
-    return changedDirs.value > 0 ? (rescannedDirs.value / changedDirs.value) * 100 : 0;
+  if (s.phase === 'scanning') {
+    return s.changedDirs > 0 ? (s.scannedDirs / s.changedDirs) * 100 : 0;
   }
-  if (phase === 'merging' || phase === 'completed') {
+  if (s.phase === 'merging' || s.phase === 'completed') {
     return 100;
   }
   return 0;
 });
 
 const progressValue = computed(() => {
-  const raw = mode.value === 'incremental' ? incrementalProgressPercent.value : progressPercent.value;
-  return Math.min(Math.max(raw, 0), 100);
+  const raw = mode.value === 'incremental'
+    ? incrementalProgressPercent.value
+    : deepState.value.progressPercent;
+  if (raw < 0) return 0;
+  if (raw > 100) return 100;
+  return raw;
 });
-const formattedSize = computed(() => formatBytes(totalSize.value));
-const formattedTime = computed(() => formatTime(elapsedMs.value));
+
+const formattedSize = computed(() => formatBytes(deepState.value.totalSize));
+const formattedTime = computed(() => formatTime(deepState.value.elapsedMs));
 const formattedSpeed = computed(() => {
-  const speed = filesPerSecond.value;
+  const speed = deepState.value.filesPerSecond;
   if (speed === 0) return '计算中...';
   if (speed < 10) return `${speed.toFixed(1)} 文件/秒`;
   return `${Math.round(speed)} 文件/秒`;
 });
 
 const incrementalPhaseText = computed(() => {
-  switch (incrementalPhase.value) {
+  switch (incrementalState.value.phase) {
     case 'detecting':
       return '检测变化中';
     case 'scanning':
@@ -93,93 +133,85 @@ const incrementalPhaseText = computed(() => {
       return '处理中';
   }
 });
+
 const incrementalStatusLine = computed(() => {
-  if (incrementalPhase.value === 'detecting') {
-    return `已检查 ${checkedDirs.value.toLocaleString()} / ${totalIncrementalDirs.value.toLocaleString()} 个目录`;
+  const s = incrementalState.value;
+  if (s.phase === 'detecting') {
+    return `已检查 ${s.checkedDirs.toLocaleString()} / ${s.totalDirs.toLocaleString()} 个目录`;
   }
-  if (incrementalPhase.value === 'scanning') {
-    return `发现 ${changedDirs.value.toLocaleString()} 个变化 · 已重扫 ${rescannedDirs.value.toLocaleString()} 个`;
+  if (s.phase === 'scanning') {
+    return `发现 ${s.changedDirs.toLocaleString()} 个变化 · 已重扫 ${s.scannedDirs.toLocaleString()} 个`;
   }
-  if (incrementalPhase.value === 'merging') {
+  if (s.phase === 'merging') {
     return '正在合并扫描结果...';
   }
-  if (incrementalPhase.value === 'completed') {
-    return `完成，共处理 ${changedDirs.value.toLocaleString()} 个变化`;
+  if (s.phase === 'completed') {
+    return `完成，共处理 ${s.changedDirs.toLocaleString()} 个变化`;
   }
   return '准备中...';
 });
 
 const hasBackendPhaseText = computed(() =>
-  /(MFT|USN|初始化|水合|索引|切换到全量深度扫描)/.test(currentPath.value),
+  /(MFT|USN|初始化|水合|索引|切换到全量深度扫描)/.test(deepState.value.currentPath),
 );
-const hasRunningPhaseText = computed(() =>
-  /(扫描中|聚合|统计|\.\.\.)/.test(currentPath.value),
-);
+const hasRunningPhaseText = computed(() => /(扫描中|聚合|统计|\.\.\.)/.test(deepState.value.currentPath));
+
 const phaseTitle = computed(() => {
   if (mode.value === 'incremental') {
     return `USN 增量更新 · ${incrementalPhaseText.value}`;
   }
 
-  if (!currentPath.value) {
+  const path = deepState.value.currentPath;
+  if (!path) {
     return '正在准备深度扫描';
   }
-
   if (hasBackendPhaseText.value) {
-    return currentPath.value;
+    return path;
   }
-
   if (hasRunningPhaseText.value) {
     return '目录树统计与聚合中';
   }
-
   return '正在构建完整目录树';
 });
+
 const phaseDescription = computed(() => {
   if (mode.value === 'incremental') {
     return '检测到缓存后，将优先按 USN 变化集更新目录统计，并合并为新的快照。';
   }
 
-  if (!currentPath.value) {
+  const path = deepState.value.currentPath;
+  if (!path) {
     return '正在读取卷能力、准备目录索引，并建立第一批统计结果。';
   }
-
-  if (currentPath.value.includes('切换到全量深度扫描')) {
+  if (path.includes('切换到全量深度扫描')) {
     return '增量变化集不足以安全快速合并，系统已自动切换为全量深度扫描，并继续持续上报进度。';
   }
-
   if (hasBackendPhaseText.value) {
     return '底层索引建立完成后，会继续刷新目录体积、层级结构和可导航快照。';
   }
-
   return '扫描结果会持续更新到分析页，完成后即可直接按目录层级继续下钻。';
 });
+
 const displayPath = computed(() => {
   if (mode.value === 'incremental') {
     return incrementalStatusLine.value;
   }
 
-  if (!currentPath.value || hasBackendPhaseText.value || hasRunningPhaseText.value) {
+  const path = deepState.value.currentPath;
+  if (!path || hasBackendPhaseText.value || hasRunningPhaseText.value) {
     return '';
   }
-
-  return currentPath.value;
+  return path;
 });
 
 function resetState() {
-  mode.value = 'deep';
-  scannedFiles.value = 0;
-  scannedDirs.value = 0;
-  totalSize.value = 0;
-  progressPercent.value = 0;
-  filesPerSecond.value = 0;
-  elapsedMs.value = 0;
-  currentPath.value = '';
-
-  incrementalPhase.value = 'detecting';
-  totalIncrementalDirs.value = 0;
-  checkedDirs.value = 0;
-  changedDirs.value = 0;
-  rescannedDirs.value = 0;
+  modeRef.push('deep');
+  deep.push({ ...INITIAL_DEEP });
+  incremental.push({ ...INITIAL_INCREMENTAL });
+  // Make sure resets are visible immediately.
+  modeRef.flush();
+  deep.flush();
+  incremental.flush();
 }
 
 watch(
@@ -203,24 +235,28 @@ onMounted(async () => {
   try {
     const [deepListener, incrementalListener] = await Promise.all([
       listen<DeepScanProgressPayload>('deep-scan-progress', (event) => {
-        const progress = event.payload;
-        mode.value = 'deep';
-        scannedFiles.value = progress.scanned_files;
-        scannedDirs.value = progress.scanned_dirs;
-        totalSize.value = progress.total_size;
-        progressPercent.value = progress.progress_percent;
-        filesPerSecond.value = progress.files_per_second;
-        elapsedMs.value = progress.elapsed_ms;
-        currentPath.value = progress.current_path;
+        const p = event.payload;
+        modeRef.push('deep');
+        deep.push({
+          scannedFiles: p.scanned_files,
+          scannedDirs: p.scanned_dirs,
+          totalSize: p.total_size,
+          progressPercent: p.progress_percent,
+          filesPerSecond: p.files_per_second,
+          elapsedMs: p.elapsed_ms,
+          currentPath: p.current_path,
+        });
       }),
       listen<IncrementalScanProgressPayload>('incremental-scan-progress', (event) => {
-        const progress = event.payload;
-        mode.value = 'incremental';
-        incrementalPhase.value = progress.phase;
-        totalIncrementalDirs.value = progress.total_dirs;
-        checkedDirs.value = progress.checked_dirs;
-        changedDirs.value = progress.changed_dirs;
-        rescannedDirs.value = progress.scanned_dirs;
+        const p = event.payload;
+        modeRef.push('incremental');
+        incremental.push({
+          phase: p.phase,
+          totalDirs: p.total_dirs,
+          checkedDirs: p.checked_dirs,
+          changedDirs: p.changed_dirs,
+          scannedDirs: p.scanned_dirs,
+        });
       }),
     ]);
 
@@ -232,6 +268,10 @@ onMounted(async () => {
 onUnmounted(() => {
   unlistenDeep?.();
   unlistenIncremental?.();
+  // Final flush so the last frame is observable for any consumers (e.g. tests).
+  deep.flush();
+  incremental.flush();
+  modeRef.flush();
 });
 </script>
 
@@ -269,12 +309,12 @@ onUnmounted(() => {
 
       <div class="progress-counts">
         <template v-if="mode === 'incremental'">
-          <span>{{ checkedDirs.toLocaleString() }} / {{ totalIncrementalDirs.toLocaleString() }} 已检查</span>
-          <span>{{ rescannedDirs.toLocaleString() }} / {{ changedDirs.toLocaleString() }} 已重扫</span>
+          <span>{{ incrementalState.checkedDirs.toLocaleString() }} / {{ incrementalState.totalDirs.toLocaleString() }} 已检查</span>
+          <span>{{ incrementalState.scannedDirs.toLocaleString() }} / {{ incrementalState.changedDirs.toLocaleString() }} 已重扫</span>
         </template>
         <template v-else>
-          <span>{{ scannedFiles.toLocaleString() }} 个文件</span>
-          <span>{{ scannedDirs.toLocaleString() }} 个目录</span>
+          <span>{{ deepState.scannedFiles.toLocaleString() }} 个文件</span>
+          <span>{{ deepState.scannedDirs.toLocaleString() }} 个目录</span>
         </template>
       </div>
     </div>
@@ -302,12 +342,12 @@ onUnmounted(() => {
 
       <div class="metric-tile">
         <span>扫描文件</span>
-        <strong>{{ scannedFiles.toLocaleString() }}</strong>
+        <strong>{{ deepState.scannedFiles.toLocaleString() }}</strong>
       </div>
 
       <div class="metric-tile">
         <span>扫描目录</span>
-        <strong>{{ scannedDirs.toLocaleString() }}</strong>
+        <strong>{{ deepState.scannedDirs.toLocaleString() }}</strong>
       </div>
     </div>
 
@@ -319,17 +359,17 @@ onUnmounted(() => {
 
       <div class="metric-tile">
         <span>已检查目录</span>
-        <strong>{{ checkedDirs.toLocaleString() }}</strong>
+        <strong>{{ incrementalState.checkedDirs.toLocaleString() }}</strong>
       </div>
 
       <div class="metric-tile">
         <span>变化目录</span>
-        <strong>{{ changedDirs.toLocaleString() }}</strong>
+        <strong>{{ incrementalState.changedDirs.toLocaleString() }}</strong>
       </div>
 
       <div class="metric-tile">
         <span>已重扫目录</span>
-        <strong>{{ rescannedDirs.toLocaleString() }}</strong>
+        <strong>{{ incrementalState.scannedDirs.toLocaleString() }}</strong>
       </div>
 
       <div class="metric-tile">

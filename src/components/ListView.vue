@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, markRaw, shallowRef, watch } from 'vue';
 import {
   IconRiskSafe,
   IconRiskLow,
@@ -13,6 +13,8 @@ import {
 import type { DirectoryNode, FileInfo } from '../types';
 import { formatBytes, formatNumber } from '../utils/format';
 import { useToast } from '../composables/useToast';
+import { useSelectionSet } from '../composables/useSelectionSet';
+import VirtualList from './VirtualList.vue';
 
 const showToast = useToast();
 
@@ -32,101 +34,137 @@ const emit = defineEmits<{
   'batch-migrate': [items: Array<DirectoryNode | FileInfo>];
 }>();
 
-const loadingFiles = ref(false);
-const currentFiles = ref<FileInfo[]>([]);
-const selectedDirs = ref<Set<string>>(new Set());
-const selectedFiles = ref<Set<string>>(new Set());
+// 图标组件 markRaw 化，避免每行 v-for 实例化时被 Vue 重复 reactive 包装。
+const ICON_FOLDER = markRaw(IconFolder);
+const ICON_FILE = markRaw(IconFile);
+const ICON_MIGRATE = markRaw(IconMigrate);
+const ICON_RISK_SAFE = markRaw(IconRiskSafe);
+const ICON_RISK_LOW = markRaw(IconRiskLow);
+const ICON_RISK_MEDIUM = markRaw(IconRiskMedium);
+const ICON_RISK_DANGER = markRaw(IconRiskDanger);
+const ICON_RISK_UNKNOWN = markRaw(IconRiskUnknown);
+
+interface DirRow {
+  kind: 'dir';
+  key: string;
+  dir: DirectoryNode;
+  selectable: boolean;
+}
+interface FileRow {
+  kind: 'file';
+  key: string;
+  file: FileInfo;
+  selectable: boolean;
+}
+type Row = DirRow | FileRow;
+
+const loadingFiles = shallowRef(false);
+const currentFiles = shallowRef<FileInfo[]>([]);
+const selectedDirs = useSelectionSet<string>();
+const selectedFiles = useSelectionSet<string>();
 let fileLoadRequestId = 0;
-
-const selectedItems = computed(() => {
-  const items: Array<DirectoryNode | FileInfo> = [];
-
-  props.directories.forEach((dir) => {
-    if (selectedDirs.value.has(dir.path)) {
-      items.push(dir);
-    }
-  });
-
-  currentFiles.value.forEach((file) => {
-    if (selectedFiles.value.has(file.path)) {
-      items.push(file);
-    }
-  });
-
-  return items;
-});
-
-const hasSelection = computed(() => selectedDirs.value.size > 0 || selectedFiles.value.size > 0);
-const selectableDirs = computed(() => props.directories.filter((dir) => isDirSelectable(dir)));
-const selectableFiles = computed(() => currentFiles.value.filter((file) => !file.is_symlink));
-const allSelectableCount = computed(() => selectableDirs.value.length + selectableFiles.value.length);
-const allSelected = computed(() => allSelectableCount.value > 0 && selectedItems.value.length === allSelectableCount.value);
 
 function isDirSelectable(dir: DirectoryNode) {
   return !dir.is_symlink && (!props.deepScanning || dir.has_children);
 }
 
-function toggleDirSelection(dir: DirectoryNode) {
-  const newSet = new Set(selectedDirs.value);
-
-  if (newSet.has(dir.path)) {
-    newSet.delete(dir.path);
-  } else {
-    newSet.add(dir.path);
+// 将 directories + currentFiles 合并为统一行结构，供 VirtualList 渲染。
+const rows = computed<Row[]>(() => {
+  const dirs = props.directories;
+  const files = currentFiles.value;
+  const total = dirs.length + files.length;
+  const out: Row[] = new Array(total);
+  for (let i = 0; i < dirs.length; i++) {
+    const d = dirs[i];
+    out[i] = {
+      kind: 'dir',
+      key: 'd:' + d.path,
+      dir: d,
+      selectable: isDirSelectable(d),
+    };
   }
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    out[dirs.length + i] = {
+      kind: 'file',
+      key: 'f:' + f.path,
+      file: f,
+      selectable: !f.is_symlink,
+    };
+  }
+  return out;
+});
 
-  selectedDirs.value = newSet;
+const selectableDirCount = computed(() => {
+  let n = 0;
+  for (const d of props.directories) if (isDirSelectable(d)) n += 1;
+  return n;
+});
+
+const selectableFileCount = computed(() => {
+  let n = 0;
+  for (const f of currentFiles.value) if (!f.is_symlink) n += 1;
+  return n;
+});
+
+const allSelectableCount = computed(() => selectableDirCount.value + selectableFileCount.value);
+
+const selectedTotal = computed(() => selectedDirs.size + selectedFiles.size);
+
+const hasSelection = computed(() => selectedTotal.value > 0);
+
+const allSelected = computed(
+  () => allSelectableCount.value > 0 && selectedTotal.value === allSelectableCount.value,
+);
+
+function selectedItems(): Array<DirectoryNode | FileInfo> {
+  const items: Array<DirectoryNode | FileInfo> = [];
+  const dirSet = selectedDirs.value;
+  const fileSet = selectedFiles.value;
+  for (const dir of props.directories) {
+    if (dirSet.has(dir.path)) items.push(dir);
+  }
+  for (const file of currentFiles.value) {
+    if (fileSet.has(file.path)) items.push(file);
+  }
+  return items;
+}
+
+function toggleDirSelection(dir: DirectoryNode) {
+  selectedDirs.toggle(dir.path);
 }
 
 function toggleFileSelection(file: FileInfo) {
-  const newSet = new Set(selectedFiles.value);
-
-  if (newSet.has(file.path)) {
-    newSet.delete(file.path);
-  } else {
-    newSet.add(file.path);
-  }
-
-  selectedFiles.value = newSet;
+  selectedFiles.toggle(file.path);
 }
 
 function selectAll() {
-  const newDirSet = new Set(selectedDirs.value);
-  const newFileSet = new Set(selectedFiles.value);
+  const dirKeys: string[] = [];
+  for (const d of props.directories) {
+    if (isDirSelectable(d)) dirKeys.push(d.path);
+  }
+  selectedDirs.addAll(dirKeys);
 
-  selectableDirs.value.forEach((dir) => {
-    if (isDirSelectable(dir)) {
-      newDirSet.add(dir.path);
-    }
-  });
-
-  selectableFiles.value.forEach((file) => {
-    newFileSet.add(file.path);
-  });
-
-  selectedDirs.value = newDirSet;
-  selectedFiles.value = newFileSet;
+  const fileKeys: string[] = [];
+  for (const f of currentFiles.value) {
+    if (!f.is_symlink) fileKeys.push(f.path);
+  }
+  selectedFiles.addAll(fileKeys);
 }
 
 function clearSelection() {
-  selectedDirs.value = new Set();
-  selectedFiles.value = new Set();
+  selectedDirs.clear();
+  selectedFiles.clear();
 }
 
 function handleBatchMigrate() {
-  if (!hasSelection.value) {
-    return;
-  }
-
-  emit('batch-migrate', selectedItems.value);
+  if (!hasSelection.value) return;
+  emit('batch-migrate', selectedItems());
   clearSelection();
 }
 
 function handleItemClick(dir: DirectoryNode) {
-  if (!props.hasDeepScanned) {
-    return;
-  }
-
+  if (!props.hasDeepScanned) return;
   emit('navigate', dir.path);
 }
 
@@ -190,12 +228,43 @@ function getVerdictClass(verdict?: string): string {
       return '';
   }
 }
+
+function riskIconFor(verdict?: string) {
+  switch (verdict) {
+    case 'safe':
+      return ICON_RISK_SAFE;
+    case 'safe_after_action':
+      return ICON_RISK_LOW;
+    case 'blocked':
+      return ICON_RISK_MEDIUM;
+    case 'system_critical':
+      return ICON_RISK_DANGER;
+    default:
+      return ICON_RISK_UNKNOWN;
+  }
+}
+
+function dirSelected(path: string): boolean {
+  return selectedDirs.has(path);
+}
+
+function fileSelected(path: string): boolean {
+  return selectedFiles.has(path);
+}
+
+function pctText(size: number): string {
+  return props.totalSize ? ((size / props.totalSize) * 100).toFixed(1) : '0.0';
+}
+
+function pctWidth(size: number): string {
+  return props.totalSize ? ((size / props.totalSize) * 100) + '%' : '0%';
+}
 </script>
 
 <template>
   <div class="list-view">
-    <div v-if="directories.length === 0 && currentFiles.length === 0 && !loadingFiles" class="empty">
-      <IconFolder class="empty-icon" :size="44" />
+    <div v-if="rows.length === 0 && !loadingFiles" class="empty">
+      <component :is="ICON_FOLDER" class="empty-icon" :size="44" />
       <h3>此目录目前没有内容</h3>
       <p>没有检测到子目录或文件。</p>
     </div>
@@ -208,13 +277,13 @@ function getVerdictClass(verdict?: string): string {
     <template v-else>
       <div v-if="hasSelection" class="batch-toolbar">
         <div class="batch-copy">
-          <span class="batch-info">已选择 {{ selectedItems.length }} 项</span>
+          <span class="batch-info">已选择 {{ selectedTotal }} 项</span>
           <span class="batch-note">{{ hasDeepScanned ? '可以直接发起批量迁移' : '完成深度扫描后可启用批量迁移' }}</span>
         </div>
 
         <div class="batch-actions">
           <button class="batch-btn batch-migrate-btn" @click="handleBatchMigrate" :disabled="!hasDeepScanned">
-            <IconMigrate :size="16" />
+            <component :is="ICON_MIGRATE" :size="16" />
             批量迁移
           </button>
           <button class="batch-btn batch-clear-btn" @click="clearSelection">清除选择</button>
@@ -239,122 +308,149 @@ function getVerdictClass(verdict?: string): string {
         </div>
 
         <div class="table-body">
-          <div
-            v-for="dir in directories"
-            :key="dir.path"
-            class="table-row"
-            :class="{
-              'row-disabled': !isDirSelectable(dir),
-              'row-selected': selectedDirs.has(dir.path),
-              'row-link': dir.is_symlink,
-            }"
+          <VirtualList
+            :items="rows"
+            :item-size="56"
+            :buffer="6"
+            v-slot="{ item: row }"
           >
-            <div class="td td-checkbox" @click.stop>
-              <input
-                type="checkbox"
-                class="checkbox"
-                :checked="selectedDirs.has(dir.path)"
-                :disabled="!isDirSelectable(dir)"
-                @change="toggleDirSelection(dir)"
-              />
-            </div>
-
+            <!-- 目录行 -->
             <div
-              class="td td-name"
-              @click="handleItemClick(dir)"
-              :class="{ disabled: !hasDeepScanned }"
-              :title="!hasDeepScanned ? '请先进行深度扫描以查看子目录' : ''"
+              v-if="(row as Row).kind === 'dir'"
+              :key="(row as DirRow).key"
+              class="table-row"
+              :class="{
+                'row-disabled': !(row as DirRow).selectable,
+                'row-selected': dirSelected((row as DirRow).dir.path),
+                'row-link': (row as DirRow).dir.is_symlink,
+              }"
             >
-              <IconFolder :size="18" />
-              <span class="name-text">{{ dir.name }}</span>
-              <span v-if="dir.is_symlink" class="badge symlink" :title="dir.link_target || '迁移后的链接占位'">链接</span>
-              <span
-                v-if="dir.safety"
-                class="risk-badge"
-                :class="getVerdictClass(dir.safety.verdict)"
-                :title="`${getVerdictLabel(dir.safety.verdict)} - ${dir.safety.app_type}`"
+              <div class="td td-checkbox" @click.stop>
+                <input
+                  type="checkbox"
+                  class="checkbox"
+                  :checked="dirSelected((row as DirRow).dir.path)"
+                  :disabled="!(row as DirRow).selectable"
+                  @change="toggleDirSelection((row as DirRow).dir)"
+                />
+              </div>
+
+              <div
+                class="td td-name"
+                @click="handleItemClick((row as DirRow).dir)"
+                :class="{ disabled: !hasDeepScanned }"
+                :title="!hasDeepScanned ? '请先进行深度扫描以查看子目录' : ''"
               >
-                <IconRiskSafe v-if="dir.safety.verdict === 'safe'" :size="16" />
-                <IconRiskLow v-else-if="dir.safety.verdict === 'safe_after_action'" :size="16" />
-                <IconRiskMedium v-else-if="dir.safety.verdict === 'blocked'" :size="16" />
-                <IconRiskDanger v-else-if="dir.safety.verdict === 'system_critical'" :size="16" />
-                <IconRiskUnknown v-else :size="16" />
-              </span>
-              <span v-if="deepScanning && !dir.has_children" class="badge">扫描中</span>
-            </div>
+                <component :is="ICON_FOLDER" :size="18" />
+                <span class="name-text">{{ (row as DirRow).dir.name }}</span>
+                <span
+                  v-if="(row as DirRow).dir.is_symlink"
+                  class="badge symlink"
+                  :title="(row as DirRow).dir.link_target || '迁移后的链接占位'"
+                >链接</span>
+                <span
+                  v-if="(row as DirRow).dir.safety"
+                  class="risk-badge"
+                  :class="getVerdictClass((row as DirRow).dir.safety!.verdict)"
+                  :title="`${getVerdictLabel((row as DirRow).dir.safety!.verdict)} - ${(row as DirRow).dir.safety!.app_type}`"
+                >
+                  <component :is="riskIconFor((row as DirRow).dir.safety!.verdict)" :size="16" />
+                </span>
+                <span v-if="deepScanning && !(row as DirRow).dir.has_children" class="badge">扫描中</span>
+              </div>
 
-            <div class="td td-size" @click="handleItemClick(dir)" :class="{ disabled: !hasDeepScanned }">
-              {{ formatBytes(dir.size) }}
-            </div>
+              <div
+                class="td td-size"
+                @click="handleItemClick((row as DirRow).dir)"
+                :class="{ disabled: !hasDeepScanned }"
+              >
+                {{ formatBytes((row as DirRow).dir.size) }}
+              </div>
 
-            <div class="td td-percent" @click="handleItemClick(dir)" :class="{ disabled: !hasDeepScanned }">
-              <div class="percent-container">
-                <div class="percent-bar" :style="{ width: `${totalSize ? (dir.size / totalSize) * 100 : 0}%` }"></div>
-                <span class="percent-text">{{ totalSize ? ((dir.size / totalSize) * 100).toFixed(1) : '0.0' }}%</span>
+              <div
+                class="td td-percent"
+                @click="handleItemClick((row as DirRow).dir)"
+                :class="{ disabled: !hasDeepScanned }"
+              >
+                <div class="percent-container">
+                  <div class="percent-bar" :style="{ width: pctWidth((row as DirRow).dir.size) }"></div>
+                  <span class="percent-text">{{ pctText((row as DirRow).dir.size) }}%</span>
+                </div>
+              </div>
+
+              <div
+                class="td td-files"
+                @click="handleItemClick((row as DirRow).dir)"
+                :class="{ disabled: !hasDeepScanned }"
+              >
+                {{ (row as DirRow).dir.is_symlink ? '链接目录' : formatNumber((row as DirRow).dir.file_count) }}
+              </div>
+
+              <div class="td td-actions">
+                <button
+                  class="action-btn migrate-btn"
+                  @click.stop="$emit('migrate-dir', (row as DirRow).dir)"
+                  :disabled="!hasDeepScanned || (row as DirRow).dir.is_symlink"
+                  :title="(row as DirRow).dir.is_symlink ? '该目录已经迁移为链接占位' : (!hasDeepScanned ? '请先进行深度扫描' : '迁移到其他磁盘')"
+                >
+                  <component :is="ICON_MIGRATE" :size="16" />
+                </button>
               </div>
             </div>
 
-            <div class="td td-files" @click="handleItemClick(dir)" :class="{ disabled: !hasDeepScanned }">
-              {{ dir.is_symlink ? '链接目录' : formatNumber(dir.file_count) }}
-            </div>
+            <!-- 文件行 -->
+            <div
+              v-else
+              :key="(row as FileRow).key"
+              class="table-row table-row-file"
+              :class="{ 'row-selected': fileSelected((row as FileRow).file.path) }"
+            >
+              <div class="td td-checkbox" @click.stop>
+                <input
+                  type="checkbox"
+                  class="checkbox"
+                  :checked="fileSelected((row as FileRow).file.path)"
+                  :disabled="(row as FileRow).file.is_symlink"
+                  @change="toggleFileSelection((row as FileRow).file)"
+                />
+              </div>
 
-            <div class="td td-actions">
-              <button
-                class="action-btn migrate-btn"
-                @click.stop="$emit('migrate-dir', dir)"
-                :disabled="!hasDeepScanned || dir.is_symlink"
-                :title="dir.is_symlink ? '该目录已经迁移为链接占位' : (!hasDeepScanned ? '请先进行深度扫描' : '迁移到其他磁盘')"
-              >
-                <IconMigrate :size="16" />
-              </button>
-            </div>
-          </div>
+              <div class="td td-name">
+                <component :is="ICON_FILE" :size="18" />
+                <span class="name-text">{{ (row as FileRow).file.name }}</span>
+                <span v-if="(row as FileRow).file.is_readonly" class="badge readonly">只读</span>
+                <span
+                  v-if="(row as FileRow).file.is_symlink"
+                  class="badge symlink"
+                  :title="(row as FileRow).file.link_target || '迁移后的链接占位'"
+                >链接</span>
+              </div>
 
-          <div
-            v-for="file in currentFiles"
-            :key="file.path"
-            class="table-row table-row-file"
-            :class="{ 'row-selected': selectedFiles.has(file.path) }"
-          >
-            <div class="td td-checkbox" @click.stop>
-              <input
-                type="checkbox"
-                class="checkbox"
-                :checked="selectedFiles.has(file.path)"
-                :disabled="file.is_symlink"
-                @change="toggleFileSelection(file)"
-              />
-            </div>
+              <div class="td td-size">{{ formatBytes((row as FileRow).file.size) }}</div>
 
-            <div class="td td-name">
-              <IconFile :size="18" />
-              <span class="name-text">{{ file.name }}</span>
-              <span v-if="file.is_readonly" class="badge readonly">只读</span>
-              <span v-if="file.is_symlink" class="badge symlink" :title="file.link_target || '迁移后的链接占位'">链接</span>
-            </div>
+              <div class="td td-percent">
+                <div class="percent-container">
+                  <div class="percent-bar file-bar" :style="{ width: pctWidth((row as FileRow).file.size) }"></div>
+                  <span class="percent-text">{{ pctText((row as FileRow).file.size) }}%</span>
+                </div>
+              </div>
 
-            <div class="td td-size">{{ formatBytes(file.size) }}</div>
+              <div class="td td-files">
+                {{ (row as FileRow).file.is_symlink ? '链接' : ((row as FileRow).file.extension || '-') }}
+              </div>
 
-            <div class="td td-percent">
-              <div class="percent-container">
-                <div class="percent-bar file-bar" :style="{ width: `${totalSize ? (file.size / totalSize) * 100 : 0}%` }"></div>
-                <span class="percent-text">{{ totalSize ? ((file.size / totalSize) * 100).toFixed(1) : '0.0' }}%</span>
+              <div class="td td-actions">
+                <button
+                  class="action-btn migrate-btn"
+                  @click.stop="$emit('migrate-file', (row as FileRow).file)"
+                  :disabled="deepScanning || (row as FileRow).file.is_symlink"
+                  :title="(row as FileRow).file.is_symlink ? '该条目已经迁移为链接占位' : (deepScanning ? '深度扫描完成后可迁移' : '迁移到其他磁盘')"
+                >
+                  <component :is="ICON_MIGRATE" :size="16" />
+                </button>
               </div>
             </div>
-
-            <div class="td td-files">{{ file.is_symlink ? '链接' : (file.extension || '-') }}</div>
-
-            <div class="td td-actions">
-              <button
-                class="action-btn migrate-btn"
-                @click.stop="$emit('migrate-file', file)"
-                :disabled="deepScanning || file.is_symlink"
-                :title="file.is_symlink ? '该条目已经迁移为链接占位' : (deepScanning ? '深度扫描完成后可迁移' : '迁移到其他磁盘')"
-              >
-                <IconMigrate :size="16" />
-              </button>
-            </div>
-          </div>
+          </VirtualList>
         </div>
       </div>
     </template>
@@ -464,8 +560,7 @@ function getVerdictClass(verdict?: string): string {
 }
 
 .table-header {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 2;
   padding: 0.95rem 1rem;
   background: rgba(244, 239, 232, 0.94);
@@ -483,7 +578,6 @@ function getVerdictClass(verdict?: string): string {
 .table-body {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
   padding: 0.3rem 0;
 }
 
@@ -492,11 +586,12 @@ function getVerdictClass(verdict?: string): string {
   padding: 0.82rem 0.4rem;
   border-radius: var(--radius-md);
   border: 1px solid transparent;
-  transition: transform var(--transition-base), background var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base), opacity var(--transition-fast);
+  height: 56px;
+  box-sizing: border-box;
+  transition: background var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base), opacity var(--transition-fast);
 }
 
 .table-row:hover {
-  transform: translateY(-1px);
   background: rgba(255, 255, 255, 0.72);
   border-color: rgba(46, 33, 18, 0.08);
   box-shadow: var(--shadow-xs);
@@ -666,26 +761,21 @@ function getVerdictClass(verdict?: string): string {
   align-items: center;
   justify-content: center;
   margin-left: 0.1rem;
-  transition: transform var(--transition-fast);
-}
-
-.risk-badge:hover {
-  transform: scale(1.08);
 }
 
 .risk-safe {
   color: #16a34a;
 }
 
-.risk-moderate {
+.risk-warning {
   color: #ca8a04;
 }
 
-.risk-risky {
+.risk-blocked {
   color: #f97316;
 }
 
-.risk-dangerous {
+.risk-danger {
   color: #ef4444;
 }
 

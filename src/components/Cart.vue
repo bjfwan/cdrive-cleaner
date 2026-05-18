@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { useCart } from '../composables/useCart';
 import { formatBytes } from '../utils/format';
 import type { DeleteMode, DiskInfo } from '../types';
-import { useCountUp } from '../composables/useCountUp';
+import VirtualList from './VirtualList.vue';
 
 interface CartProgress {
   current: number;
@@ -51,12 +51,13 @@ watch(
 
 const targetOptions = computed(() => props.availableDisks.filter((d) => `${d.drive_letter}\\` !== props.currentDrive));
 const targetDisk = ref<string>('');
-watch(targetOptions, (next) => {
-  if (!targetDisk.value && next.length > 0) targetDisk.value = `${next[0].drive_letter}\\`;
-}, { immediate: true });
-
-const animatedSize = useCountUp(() => totalSize.value, 500);
-const animatedCount = useCountUp(() => count.value, 350);
+watch(
+  targetOptions,
+  (next) => {
+    if (!targetDisk.value && next.length > 0) targetDisk.value = `${next[0].drive_letter}\\`;
+  },
+  { immediate: true },
+);
 
 const progressPercent = computed(() => {
   const p = props.progress;
@@ -122,8 +123,8 @@ function dismissResults() {
     >
       <span class="cart-icon">🛒</span>
       <span class="cart-stats">
-        <strong>{{ Math.round(animatedCount) }}</strong>
-        <small>项 · {{ formatBytes(animatedSize) }}</small>
+        <strong>{{ count }}</strong>
+        <small>项 · {{ formatBytes(totalSize) }}</small>
       </span>
     </button>
 
@@ -195,22 +196,29 @@ function dismissResults() {
         <button class="dismiss-btn" @click="dismissResults">知道了</button>
       </div>
 
-      <ul v-else class="drawer-list">
-        <li v-for="item in items" :key="item.path" class="drawer-item">
-          <div class="drawer-item-main">
-            <div class="drawer-item-name" :title="item.path">
-              <span
-                class="drawer-item-tag"
-                :class="`tag-${item.recommendation}`"
-              >{{ item.recommendation === 'migrate' ? '搬' : item.recommendation === 'delete' ? '删' : '查' }}</span>
-              {{ item.name }}
+      <div v-else class="drawer-list-wrap">
+        <VirtualList
+          :items="items"
+          :item-size="64"
+          :buffer="6"
+          v-slot="{ item }"
+        >
+          <div :key="(item as any).path" class="drawer-item">
+            <div class="drawer-item-main">
+              <div class="drawer-item-name" :title="(item as any).path">
+                <span
+                  class="drawer-item-tag"
+                  :class="`tag-${(item as any).recommendation}`"
+                >{{ (item as any).recommendation === 'migrate' ? '搬' : (item as any).recommendation === 'delete' ? '删' : '查' }}</span>
+                {{ (item as any).name }}
+              </div>
+              <div class="drawer-item-path">{{ (item as any).path }}</div>
             </div>
-            <div class="drawer-item-path">{{ item.path }}</div>
+            <div class="drawer-item-size">{{ formatBytes((item as any).size) }}</div>
+            <button class="icon-btn small" @click="reveal((item as any).path)" aria-label="移出">×</button>
           </div>
-          <div class="drawer-item-size">{{ formatBytes(item.size) }}</div>
-          <button class="icon-btn small" @click="reveal(item.path)" aria-label="移出">×</button>
-        </li>
-      </ul>
+        </VirtualList>
+      </div>
 
       <footer v-if="!busy && !hasResults" class="drawer-foot">
         <template v-if="hasMigrate">
@@ -267,7 +275,12 @@ function dismissResults() {
 
 .cart-icon { font-size: 1.05rem; }
 .cart-stats { display: flex; align-items: baseline; gap: 0.4rem; line-height: 1; }
-.cart-stats strong { font-size: 1.05rem; font-weight: 700; font-feature-settings: 'tnum'; }
+.cart-stats strong {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-feature-settings: 'tnum';
+  transition: transform 0.18s var(--transition-spring, cubic-bezier(0.16, 1, 0.3, 1));
+}
 .cart-stats small { font-size: 0.78rem; opacity: 0.8; }
 
 .cart-overlay {
@@ -313,10 +326,9 @@ function dismissResults() {
 .icon-btn:hover { background: var(--color-surface-hover); color: var(--color-text-primary); }
 .icon-btn.small { width: 24px; height: 24px; border-radius: 8px; font-size: 0.95rem; }
 
-.drawer-list {
-  flex: 1; min-height: 0; overflow-y: auto;
-  list-style: none;
-  padding: 0.5rem 0;
+.drawer-list-wrap {
+  flex: 1;
+  min-height: 0;
 }
 
 .drawer-item {
@@ -326,6 +338,8 @@ function dismissResults() {
   gap: 0.7rem;
   padding: 0.7rem 1.4rem;
   border-bottom: 1px solid var(--color-border-light);
+  height: 64px;
+  box-sizing: border-box;
 }
 
 .drawer-item-main { min-width: 0; }

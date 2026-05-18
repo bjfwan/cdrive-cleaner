@@ -5,10 +5,9 @@
   align-items: center;
   justify-content: center;
   padding: 1.2rem;
-  background: rgba(18, 18, 18, 0.38);
-  backdrop-filter: blur(24px) saturate(120%);
+  background: var(--modal-backdrop);
   z-index: 2000;
-  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   font-family: var(--font-sans);
 }
 
@@ -35,7 +34,7 @@
     linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 241, 232, 0.94));
   border: 1px solid rgba(255, 255, 255, 0.28);
   box-shadow: var(--shadow-xl);
-  animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes slideUp {
@@ -74,7 +73,7 @@
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(46, 33, 18, 0.08);
   box-shadow: 0 22px 44px rgba(26, 20, 14, 0.12);
-  animation: logoFloat 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.08s backwards;
+  animation: logoFloat 0.36s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 @keyframes logoFloat {
@@ -93,7 +92,7 @@
   font-size: 2.65rem;
   line-height: 0.92;
   margin: 1.2rem 0 0.65rem;
-  animation: fadeInUp 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.18s backwards;
+  animation: fadeInUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) 0.08s backwards;
 }
 
 .app-subtitle {
@@ -102,7 +101,7 @@
   font-size: 1rem;
   line-height: 1.7;
   color: var(--color-text-tertiary);
-  animation: fadeInUp 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.24s backwards;
+  animation: fadeInUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) 0.16s backwards;
 }
 
 @keyframes fadeInUp {
@@ -148,14 +147,10 @@
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.68);
   border: 1px solid rgba(46, 33, 18, 0.08);
-  transition: transform var(--transition-base), box-shadow var(--transition-base), background var(--transition-base), border-color var(--transition-base);
-  animation: fadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  transition: transform var(--transition-base), background var(--transition-base), border-color var(--transition-base);
+  animation: fadeInUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation-delay: 0.16s;
 }
-
-.feature-item:nth-child(1) { animation-delay: 0.28s; }
-.feature-item:nth-child(2) { animation-delay: 0.34s; }
-.feature-item:nth-child(3) { animation-delay: 0.4s; }
-.feature-item:nth-child(4) { animation-delay: 0.46s; }
 
 .feature-item:hover {
   transform: translateY(-2px);
@@ -212,7 +207,7 @@
   padding: 1.4rem 2.8rem 1.8rem;
   border-top: 1px solid rgba(46, 33, 18, 0.08);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(247, 241, 232, 0.72));
-  animation: fadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.52s backwards;
+  animation: fadeInUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) 0.16s backwards;
 }
 
 .button-group {
@@ -227,7 +222,7 @@
   font-size: 0.92rem;
   font-weight: 800;
   cursor: pointer;
-  transition: transform var(--transition-base), box-shadow var(--transition-base), background var(--transition-base), border-color var(--transition-base), opacity var(--transition-fast);
+  transition: transform var(--transition-base), background var(--transition-base), border-color var(--transition-base), opacity var(--transition-fast);
 }
 
 .btn-secondary {

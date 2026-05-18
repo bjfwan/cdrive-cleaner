@@ -53,6 +53,17 @@
   --transition-fast: 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   --transition-base: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   --transition-slow: 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Modal overlay backdrop. Default: solid translucent (no blur) for fast paint. */
+  --modal-backdrop: rgba(15, 23, 32, 0.55);
+}
+
+/* When backdrop-filter is supported, lighten the overlay slightly.
+   The actual blur is applied only on .modal-overlay-base, never per-component. */
+@supports (backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px)) {
+  :root {
+    --modal-backdrop: rgba(15, 23, 32, 0.35);
+  }
 }
 
 * {
@@ -123,6 +134,7 @@ textarea:focus-visible {
   outline-offset: 2px;
 }
 
+/* Single source of truth for scrollbar appearance. */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

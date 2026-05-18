@@ -1,16 +1,20 @@
-﻿use crate::database::{MigrationDb, ScanCacheDb, SpaceHistoryDb};
+use crate::database::{MigrationDb, ScanCacheDb, SpaceHistoryDb};
 use crate::migration::{
     delete::{DeleteMode, DeleteProgress, DeleteProgressCallback, DeleteResult},
     file_migrator::{MigrationProgress, MigrationProgressCallback, MigrationResult},
     FileMigrator, LinkType,
 };
+use crate::pending_intent::{self, PendingScanIntent};
 use crate::scanner::{
     duplicates::{find_duplicates_blocking, DuplicateGroup},
+    env_fingerprint::{EnvFingerprint, CACHE_SCHEMA_VERSION},
     file_info::{FileInfo, ScanResult},
     timing::StageTimer,
     DiskScanner,
 };
+use crate::session::ScanSessionRegistry;
 use crate::winfs;
+use std::sync::Arc;
 use tauri::AppHandle;
 use tauri::Emitter;
 
@@ -29,19 +33,35 @@ fn persist_scan_result_async(
     disk_path: String,
     scan_type: &'static str,
     result: ScanResult,
+    fingerprint: EnvFingerprint,
 ) {
     let log_path = disk_path.clone();
     tauri::async_runtime::spawn(async move {
         let save_task = tokio::task::spawn_blocking(move || -> Result<(), String> {
-            let json = serde_json::to_string(&result).map_err(|e| e.to_string())?;
+            // 把指纹 + schema_version + scan_completed 写进 ScanResult JSON，
+            // 这样下次读出来就能直接和当前环境对比，无需再依赖 SQL 元列。
+            let mut sealed = result;
+            sealed.cache_schema_version = CACHE_SCHEMA_VERSION;
+            sealed.env_fingerprint = fingerprint.clone();
+            sealed.scan_completed = true;
+            let json = serde_json::to_string(&sealed).map_err(|e| e.to_string())?;
+            let fp_json = serde_json::to_string(&fingerprint).map_err(|e| e.to_string())?;
+            // 第一步：先 UPSERT 一条 scan_completed=0 的占位记录。
+            // 进程在 mark_scan_completed 之前挂掉，下次启动看到 0 直接判脏。
             cache_db
                 .save_scan_result(
                     &disk_path,
                     scan_type,
                     &json,
-                    result.total_files as i64,
-                    result.total_size as i64,
+                    sealed.total_files as i64,
+                    sealed.total_size as i64,
+                    &fp_json,
+                    false,
                 )
+                .map_err(|e| e.to_string())?;
+            // 第二步：把占位记录置为 scan_completed=1。
+            cache_db
+                .mark_scan_completed(&disk_path, scan_type)
                 .map_err(|e| e.to_string())?;
             Ok(())
         });
@@ -71,7 +91,19 @@ fn cache_has_usable_usn_checkpoint(result: &ScanResult) -> bool {
 fn should_rebuild_cached_deep_scan(
     path: &std::path::Path,
     result: &ScanResult,
+    current_fp: &EnvFingerprint,
 ) -> Option<&'static str> {
+    // 任何环境/完成态/schema 异常都比 USN 检查优先：先排除"根本不该被复用"的情况。
+    if !result.scan_completed {
+        return Some("cache_marked_incomplete");
+    }
+    if result.cache_schema_version != CACHE_SCHEMA_VERSION {
+        return Some("cache_schema_version_outdated");
+    }
+    if &result.env_fingerprint != current_fp {
+        return Some("env_fingerprint_changed");
+    }
+
     let backend = result.scan_backend.as_deref().unwrap_or("unknown");
     let expects_usn = matches!(backend, "mft_usn" | "incremental_usn");
 
@@ -97,6 +129,7 @@ pub async fn scan_disk_deep(
     scanner: tauri::State<'_, DiskScanner>,
     cache_db: tauri::State<'_, ScanCacheDb>,
     space_history: tauri::State<'_, SpaceHistoryDb>,
+    sessions: tauri::State<'_, Arc<ScanSessionRegistry>>,
 ) -> Result<ScanResult, String> {
     use crate::scanner::incremental;
 
@@ -108,11 +141,31 @@ pub async fn scan_disk_deep(
         path
     );
 
+    // 在这一刻拍下当前环境指纹，作为整次 scan_disk_deep 的判定基线（指纹一旦变了就走 fresh_rebuild）。
+    let current_fp = EnvFingerprint::current(std::path::Path::new(&path));
+    tracing::info!(
+        "[scan-deep] env fingerprint elevated={} fs={} volume_serial={:?} app={} rule={} sid={:?}",
+        current_fp.is_elevated,
+        current_fp.file_system,
+        current_fp.volume_serial,
+        current_fp.app_version,
+        current_fp.rule_version,
+        current_fp.user_sid,
+    );
+
+    // 同 disk 已有 inflight 会话先取消并等它退出（最长 5 秒）。
+    // RAII：本函数返回 / panic 时 session 会自动从注册表移除并 cancel token，
+    // 避免半成品扫描继续往 cache 写数据。
+    let registry = sessions.inner().clone();
+    let mut session = registry.begin_session(&path).await;
+    let token = session.token();
+    let scan_token = token.clone();
+
     let cache_lookup_timer = StageTimer::start(
         "scan-deep-command",
         format!("cache_lookup path={path} type=deep"),
     );
-    let cached = cache_db.get_scan_result(&path, "deep");
+    let cached = cache_db.get_valid_scan_result(&path, "deep", &current_fp);
     match &cached {
         Ok(Some(_)) => cache_lookup_timer.finish_with("hit=true"),
         Ok(None) => cache_lookup_timer.finish_with("hit=false"),
@@ -126,7 +179,7 @@ pub async fn scan_disk_deep(
             "scan-deep-command",
             format!("deserialize_cached_result path={path}"),
         );
-        let cached_result = serde_json::from_str::<ScanResult>(&cached.result_json);
+        let cached_result = cached.deserialize_result::<ScanResult>();
         match &cached_result {
             Ok(result) => deserialize_timer.finish_with(format!(
                 "status=ok backend={:?} files={} dirs={} size={}",
@@ -149,7 +202,7 @@ pub async fn scan_disk_deep(
             );
 
             if let Some(reason) =
-                should_rebuild_cached_deep_scan(std::path::Path::new(&path), &cached_result)
+                should_rebuild_cached_deep_scan(std::path::Path::new(&path), &cached_result, &current_fp)
             {
                 strategy = "fresh_rebuild_stale_deep_cache";
                 tracing::info!(
@@ -160,7 +213,7 @@ pub async fn scan_disk_deep(
                     format!("execute_strategy strategy={strategy} path={path}"),
                 );
                 let result = scanner
-                    .scan_deep(&path, app, estimated_files)
+                    .scan_deep_with_token(&path, app, estimated_files, &scan_token)
                     .await
                     .map_err(|e| e.to_string())?;
                 execute_timer.finish_with(format!(
@@ -171,11 +224,15 @@ pub async fn scan_disk_deep(
                     result.total_size,
                     result.inaccessible_count
                 ));
+                if scan_token.is_cancelled() {
+                    return Err("扫描已取消".to_string());
+                }
                 persist_scan_result_async(
                     cache_db.inner().clone(),
                     path.clone(),
                     "deep",
                     result.clone(),
+                    current_fp.clone(),
                 );
                 result
             } else {
@@ -189,6 +246,7 @@ pub async fn scan_disk_deep(
                     cached_result,
                     app.clone(),
                     scanner.inner(),
+                    Some(&scan_token),
                 )
                 .await
                 .map_err(|e| e.to_string())?;
@@ -200,11 +258,15 @@ pub async fn scan_disk_deep(
                     result.total_size,
                     result.inaccessible_count
                 ));
+                if scan_token.is_cancelled() {
+                    return Err("扫描已取消".to_string());
+                }
                 persist_scan_result_async(
                     cache_db.inner().clone(),
                     path.clone(),
                     "deep",
                     result.clone(),
+                    current_fp.clone(),
                 );
                 result
             }
@@ -216,7 +278,7 @@ pub async fn scan_disk_deep(
                 format!("execute_strategy strategy={strategy} path={path}"),
             );
             let result = scanner
-                .scan_deep(&path, app, estimated_files)
+                .scan_deep_with_token(&path, app, estimated_files, &scan_token)
                 .await
                 .map_err(|e| e.to_string())?;
             execute_timer.finish_with(format!(
@@ -227,11 +289,15 @@ pub async fn scan_disk_deep(
                 result.total_size,
                 result.inaccessible_count
             ));
+            if scan_token.is_cancelled() {
+                return Err("扫描已取消".to_string());
+            }
             persist_scan_result_async(
                 cache_db.inner().clone(),
                 path.clone(),
                 "deep",
                 result.clone(),
+                current_fp.clone(),
             );
             result
         }
@@ -245,7 +311,7 @@ pub async fn scan_disk_deep(
             format!("execute_strategy strategy={strategy} path={path}"),
         );
         let result = scanner
-            .scan_deep(&path, app, estimated_files)
+            .scan_deep_with_token(&path, app, estimated_files, &scan_token)
             .await
             .map_err(|e| e.to_string())?;
         execute_timer.finish_with(format!(
@@ -256,11 +322,15 @@ pub async fn scan_disk_deep(
             result.total_size,
             result.inaccessible_count
         ));
+        if scan_token.is_cancelled() {
+            return Err("扫描已取消".to_string());
+        }
         persist_scan_result_async(
             cache_db.inner().clone(),
             path.clone(),
             "deep",
             result.clone(),
+            current_fp.clone(),
         );
         result
     };
@@ -314,6 +384,10 @@ pub async fn scan_disk_deep(
         }
     }
 
+    // 走到这里说明扫描成功完成且没被取消：标记 session 为完成态，
+    // 让 SessionHandle::drop 不再额外触发 cancel。
+    session.mark_completed();
+    let _ = token;
     Ok(snapshot)
 }
 
@@ -355,8 +429,18 @@ pub fn reveal_in_explorer(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn cancel_scan(scanner: tauri::State<'_, DiskScanner>) -> Result<(), String> {
+pub async fn cancel_scan(
+    scanner: tauri::State<'_, DiskScanner>,
+    sessions: tauri::State<'_, Arc<ScanSessionRegistry>>,
+    disk_path: Option<String>,
+) -> Result<(), String> {
+    // 兼容旧调用：DiskScanner 自身的 AtomicBool 仍然 cancel 一下，
+    // 同时把 session registry 里对应（或全部）会话也 cancel。
     scanner.cancel();
+    match disk_path {
+        Some(path) if !path.is_empty() => sessions.cancel(&path),
+        _ => sessions.cancel_all(),
+    }
     Ok(())
 }
 
@@ -769,7 +853,13 @@ pub async fn save_scan_cache(
     cache_db: tauri::State<'_, ScanCacheDb>,
 ) -> Result<(), String> {
     ensure_deep_scan_type(&scan_type)?;
+    let current_fp = EnvFingerprint::current(std::path::Path::new(&disk_path));
+    let mut result = result;
+    result.cache_schema_version = CACHE_SCHEMA_VERSION;
+    result.env_fingerprint = current_fp.clone();
+    result.scan_completed = true;
     let json = serde_json::to_string(&result).map_err(|e| e.to_string())?;
+    let fp_json = serde_json::to_string(&current_fp).map_err(|e| e.to_string())?;
     cache_db
         .save_scan_result(
             &disk_path,
@@ -777,6 +867,8 @@ pub async fn save_scan_cache(
             &json,
             result.total_files as i64,
             result.total_size as i64,
+            &fp_json,
+            true,
         )
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -789,12 +881,13 @@ pub async fn get_scan_cache(
     cache_db: tauri::State<'_, ScanCacheDb>,
 ) -> Result<Option<ScanResult>, String> {
     ensure_deep_scan_type(&scan_type)?;
+    let current_fp = EnvFingerprint::current(std::path::Path::new(&disk_path));
     match cache_db
-        .get_scan_result(&disk_path, &scan_type)
+        .get_valid_scan_result(&disk_path, &scan_type, &current_fp)
         .map_err(|e| e.to_string())?
     {
         Some(cached) => Ok(Some(
-            serde_json::from_str(&cached.result_json).map_err(|e| e.to_string())?,
+            cached.deserialize_result().map_err(|e| e.to_string())?,
         )),
         None => Ok(None),
     }
@@ -839,6 +932,10 @@ pub fn is_elevated() -> bool {
 
 #[tauri::command]
 pub fn restart_as_admin(app: AppHandle) -> Result<(), String> {
+    do_restart_as_admin(app)
+}
+
+fn do_restart_as_admin(app: AppHandle) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use std::path::Path;
@@ -875,9 +972,53 @@ pub fn restart_as_admin(app: AppHandle) -> Result<(), String> {
     }
     #[cfg(not(target_os = "windows"))]
     {
+        let _ = app;
         return Err("Not supported on this platform".to_string());
     }
+    #[cfg(target_os = "windows")]
     Ok(())
+}
+
+/// 用户在 UI 上点「以管理员身份继续」时调用：先把当前 disk 的扫描意图持久化到
+/// `pending_scan.json`，再触发 ShellExecuteW("runas") 重启。
+///
+/// 重启失败时仍把 intent 留在磁盘上是可以接受的：consume() 走 TTL，10 分钟内用户
+/// 手动重启也能续上；超过 TTL 则被忽略并删除。
+#[tauri::command]
+pub fn request_admin_rescan(app: AppHandle, disk: String) -> Result<(), String> {
+    let trimmed = disk.trim();
+    if trimmed.is_empty() {
+        return Err("disk 不能为空".to_string());
+    }
+    let already_elevated = is_elevated();
+    let intent = PendingScanIntent::new(trimmed.to_string(), !already_elevated);
+    if let Err(err) = pending_intent::write(&intent) {
+        // 写失败不阻塞重启 —— 用户体验上还是要把 UAC 拉起来。
+        tracing::warn!("[pending-intent] write failed disk={trimmed} error={err}");
+    } else {
+        tracing::info!(
+            "[pending-intent] saved disk={} requested_with_elevation={}",
+            intent.disk,
+            intent.requested_with_elevation
+        );
+    }
+
+    if already_elevated {
+        // 已经是管理员的情况下也允许调用：意图已写入，前端应当跳过 UAC，
+        // 直接根据 consume_pending_scan_intent 在下一次启动时续扫。
+        // 这里不重启，避免无意义的 UAC 弹窗。
+        let _ = app;
+        return Ok(());
+    }
+
+    do_restart_as_admin(app)
+}
+
+/// 启动后由前端调用：读出上一次 `request_admin_rescan` 写入的意图，
+/// 文件读后立刻删除。返回 None 表示无 pending / 已过期 / JSON 损坏。
+#[tauri::command]
+pub fn consume_pending_scan_intent() -> Option<PendingScanIntent> {
+    pending_intent::consume()
 }
 
 #[tauri::command]

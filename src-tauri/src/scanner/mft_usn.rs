@@ -683,6 +683,9 @@ fn scan_path_once(
             root_file_id: Some(root_file_id),
             usn_journal_id: end_checkpoint.map(|item| item.journal_id),
             usn_next_usn: end_checkpoint.map(|item| item.next_usn),
+            cache_schema_version: 0,
+            env_fingerprint: Default::default(),
+            scan_completed: false,
         },
     }))
 }
@@ -1189,12 +1192,17 @@ fn reconcile_post_scan_window(
     let mut rescanned_nodes = Vec::new();
     let mut rescanned_large_files = Vec::new();
     let mut deleted_paths = Vec::new();
+    let mut own_overrides: HashMap<String, (u64, usize)> = HashMap::new();
 
     for changed_path in &changed_dirs {
         if changed_path.exists() {
-            if let Some((node, large_files)) =
+            if let Some((node, large_files, own_size, own_file_count)) =
                 incremental::rescan_directory_snapshot(changed_path, LARGE_FILE_THRESHOLD)
             {
+                own_overrides.insert(
+                    incremental::normalized_path_key_str(&node.path),
+                    (own_size, own_file_count),
+                );
                 rescanned_nodes.push(node);
                 rescanned_large_files.extend(large_files);
             } else {
@@ -1216,9 +1224,10 @@ fn reconcile_post_scan_window(
         "mft-usn-reconcile",
         format!("merge_reconciled_delta path={}", root_path.display()),
     );
-    let mut directories = incremental::merge_scan_results(
+    let mut directories = incremental::merge_scan_results_with_own(
         result.directories,
         rescanned_nodes,
+        &own_overrides,
         deleted_paths,
         root_path,
     );

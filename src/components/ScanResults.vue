@@ -279,7 +279,7 @@ function closeMigrateDialog() {
   color: var(--color-text-secondary);
   cursor: pointer;
   box-shadow: var(--shadow-xs);
-  transition: transform var(--transition-base), box-shadow var(--transition-base), background var(--transition-base), color var(--transition-fast);
+  transition: transform var(--transition-base), background var(--transition-base), color var(--transition-fast);
 }
 
 .back-btn:hover {
@@ -358,7 +358,7 @@ function closeMigrateDialog() {
   background: transparent;
   color: var(--color-text-tertiary);
   cursor: pointer;
-  transition: transform var(--transition-base), background var(--transition-base), color var(--transition-fast), box-shadow var(--transition-base);
+  transition: transform var(--transition-base), background var(--transition-base), color var(--transition-fast);
 }
 
 .view-btn span,
@@ -485,7 +485,7 @@ function closeMigrateDialog() {
   font-weight: 800;
   cursor: pointer;
   box-shadow: 0 16px 30px rgba(22, 73, 80, 0.18);
-  transition: transform var(--transition-base), box-shadow var(--transition-base), opacity var(--transition-fast);
+  transition: transform var(--transition-base), opacity var(--transition-fast);
 }
 
 .notice-action:hover:not(:disabled) {

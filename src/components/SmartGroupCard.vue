@@ -37,11 +37,37 @@ const riskMeta: Record<SmartRisk, { label: string; tone: string }> = {
 const meta = computed(() => categoryMeta[props.group.category]);
 const action = computed(() => actionMeta[props.group.recommendation]);
 
-const visibleItems = computed(() => (expanded.value ? props.group.items : props.group.items.slice(0, 4)));
+const visibleItems = computed(() =>
+  expanded.value ? props.group.items : props.group.items.slice(0, 4),
+);
 const remainingCount = computed(() => Math.max(0, props.group.items.length - 4));
 
-function isInCart(item: SmartItem) {
-  return cart.has(item.path);
+/**
+ * Build a Set of paths that are currently in the cart for this group's
+ * items in a single pass. Each item lookup in the template is then O(1)
+ * against the Set instead of O(N) `cart.has` calls per render. The
+ * `computed` re-runs whenever cart membership changes because `cart.has`
+ * reads the underlying reactive Map.
+ */
+const checkedSet = computed(() => {
+  const set = new Set<string>();
+  for (const it of props.group.items) {
+    if (cart.has(it.path)) set.add(it.path.toLowerCase());
+  }
+  return set;
+});
+
+const checkedInGroup = computed(() => checkedSet.value.size);
+const allSafeChecked = computed(() => {
+  let safeCount = 0;
+  for (const it of props.group.items) {
+    if (it.risk !== 'blocked') safeCount += 1;
+  }
+  return safeCount > 0 && checkedInGroup.value >= safeCount;
+});
+
+function isItemChecked(path: string) {
+  return checkedSet.value.has(path.toLowerCase());
 }
 
 function toggleItem(item: SmartItem) {
@@ -56,9 +82,17 @@ function toggleItem(item: SmartItem) {
 }
 
 function selectAll() {
+  const batch: Array<{
+    path: string;
+    name: string;
+    size: number;
+    file_count: number;
+    recommendation: SmartItem['recommendation'];
+    source: 'smart_scan';
+  }> = [];
   for (const it of props.group.items) {
     if (it.risk !== 'blocked') {
-      cart.add({
+      batch.push({
         path: it.path,
         name: it.name,
         size: it.size,
@@ -68,17 +102,14 @@ function selectAll() {
       });
     }
   }
+  cart.addBatch(batch);
 }
 
 function deselectAll() {
-  for (const it of props.group.items) cart.remove(it.path);
+  const paths: string[] = [];
+  for (const it of props.group.items) paths.push(it.path);
+  cart.removeBatch(paths);
 }
-
-const checkedInGroup = computed(() => props.group.items.filter((it) => isInCart(it)).length);
-const allSafeChecked = computed(() => {
-  const safeCount = props.group.items.filter((it) => it.risk !== 'blocked').length;
-  return safeCount > 0 && checkedInGroup.value >= safeCount;
-});
 </script>
 
 <template>
@@ -103,31 +134,29 @@ const allSafeChecked = computed(() => {
     </header>
 
     <ul class="items">
-      <TransitionGroup name="item">
-        <li
-          v-for="item in visibleItems"
-          :key="item.path"
-          class="item"
-          :data-risk="item.risk"
-          :class="{ checked: isInCart(item), blocked: item.risk === 'blocked' }"
-        >
-          <button class="item-check" @click="toggleItem(item)" :disabled="item.risk === 'blocked'">
-            <svg v-if="isInCart(item)" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-              <path d="M3 8.5L6.5 12L13 4.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-            </svg>
-          </button>
-          <div class="item-main">
-            <div class="item-name-row">
-              <span class="item-name" :title="item.path">{{ item.name }}</span>
-              <span class="item-rule">{{ item.rule }}</span>
-              <span class="risk" :data-risk="item.risk">{{ riskMeta[item.risk].label }}</span>
-            </div>
-            <div class="item-path" :title="item.path">{{ item.path }}</div>
+      <li
+        v-for="item in visibleItems"
+        :key="item.path"
+        class="item"
+        :data-risk="item.risk"
+        :class="{ checked: isItemChecked(item.path), blocked: item.risk === 'blocked' }"
+      >
+        <button class="item-check" @click="toggleItem(item)" :disabled="item.risk === 'blocked'">
+          <svg v-if="isItemChecked(item.path)" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+            <path d="M3 8.5L6.5 12L13 4.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+          </svg>
+        </button>
+        <div class="item-main">
+          <div class="item-name-row">
+            <span class="item-name" :title="item.path">{{ item.name }}</span>
+            <span class="item-rule">{{ item.rule }}</span>
+            <span class="risk" :data-risk="item.risk">{{ riskMeta[item.risk].label }}</span>
           </div>
-          <div class="item-size">{{ formatBytes(item.size) }}</div>
-          <button class="reveal" @click="emit('reveal', item.path)" title="在浏览器里定位">↗</button>
-        </li>
-      </TransitionGroup>
+          <div class="item-path" :title="item.path">{{ item.path }}</div>
+        </div>
+        <div class="item-size">{{ formatBytes(item.size) }}</div>
+        <button class="reveal" @click="emit('reveal', item.path)" title="在浏览器里定位">↗</button>
+      </li>
     </ul>
 
     <button v-if="remainingCount > 0" class="expand" @click="expanded = !expanded">
@@ -303,13 +332,4 @@ const allSafeChecked = computed(() => {
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 .expand:hover { background: rgba(255, 255, 255, 0.7); color: var(--color-text-primary); }
-
-.item-enter-active, .item-leave-active {
-  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.item-enter-from, .item-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-}
-.item-leave-active { position: absolute; }
 </style>

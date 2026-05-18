@@ -6,9 +6,41 @@ use crate::winfs;
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 use tauri::{AppHandle, Emitter, Runtime};
 
 type IncrementalProgressEmitter = std::sync::Arc<dyn Fn(IncrementalScanProgress) + Send + Sync>;
+const CLOCK_SKEW_TOLERANCE_SECS: u64 = 60;
+const MERGE_CANCEL_CHECK_STRIDE: usize = 1024;
+pub trait CancellationLike: Send + Sync {
+    fn is_cancelled(&self) -> bool;
+}
+
+impl CancellationLike for crate::session::CancellationToken {
+    fn is_cancelled(&self) -> bool {
+        crate::session::CancellationToken::is_cancelled(self)
+    }
+}
+fn wall_now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+#[derive(Debug)]
+pub enum IncrementalScanError {
+    Cancelled,
+}
+
+impl std::fmt::Display for IncrementalScanError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IncrementalScanError::Cancelled => write!(f, "增量扫描已取消"),
+        }
+    }
+}
+
+impl std::error::Error for IncrementalScanError {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ChangeStatus {
@@ -30,6 +62,8 @@ struct RescannedDirectory {
     node: DirectoryNode,
     large_files: Vec<FileInfo>,
     mode: RescanMode,
+    own_size: u64,
+    own_file_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,13 +82,13 @@ pub struct IncrementalScanProgress {
 }
 
 #[derive(Debug, Default)]
-struct TreeMergeHealth {
-    unique_dir_nodes: usize,
-    duplicate_paths: usize,
-    orphan_root_count: usize,
-    orphan_root_samples: Vec<String>,
-    inconsistent_node_count: usize,
-    inconsistent_node_samples: Vec<String>,
+pub struct TreeMergeHealth {
+    pub unique_dir_nodes: usize,
+    pub duplicate_paths: usize,
+    pub orphan_root_count: usize,
+    pub orphan_root_samples: Vec<String>,
+    pub inconsistent_node_count: usize,
+    pub inconsistent_node_samples: Vec<String>,
 }
 
 #[cfg(windows)]
@@ -93,7 +127,7 @@ fn normalized_path_key(path: &Path) -> String {
     path.to_string_lossy().to_string()
 }
 
-fn normalized_path_key_str(path: &str) -> String {
+pub(crate) fn normalized_path_key_str(path: &str) -> String {
     normalized_path_key(Path::new(path))
 }
 
@@ -138,6 +172,13 @@ fn path_starts_with_str(candidate: &str, prefix: &Path) -> bool {
 }
 
 pub fn check_directory_changes(cached_node: &DirectoryNode, current_path: &Path) -> ChangeStatus {
+    check_directory_changes_with_clock(cached_node, current_path, wall_now_secs())
+}
+pub fn check_directory_changes_with_clock(
+    cached_node: &DirectoryNode,
+    current_path: &Path,
+    wall_now: u64,
+) -> ChangeStatus {
     let current_metadata = match std::fs::symlink_metadata(current_path) {
         Ok(m) => m,
         Err(_) => return ChangeStatus::Deleted,
@@ -158,10 +199,23 @@ pub fn check_directory_changes(cached_node: &DirectoryNode, current_path: &Path)
         .ok()
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|d| d.as_secs());
+    if let Some(current_time) = current_modified {
+        if current_time > wall_now.saturating_add(CLOCK_SKEW_TOLERANCE_SECS) {
+            return ChangeStatus::Modified;
+        }
+    }
 
     match (cached_node.modified_time, current_modified) {
-        (Some(cached_time), Some(current_time)) if cached_time == current_time => {
-            ChangeStatus::Unchanged
+        (Some(cached_time), Some(current_time)) => {
+            if cached_time == current_time {
+                ChangeStatus::Unchanged
+            } else if current_time < cached_time
+                && cached_time - current_time < CLOCK_SKEW_TOLERANCE_SECS
+            {
+                ChangeStatus::Unchanged
+            } else {
+                ChangeStatus::Modified
+            }
         }
         _ => ChangeStatus::Modified,
     }
@@ -170,6 +224,14 @@ pub fn check_directory_changes(cached_node: &DirectoryNode, current_path: &Path)
 pub fn detect_changes_recursive(
     cached_tree: &[DirectoryNode],
     current_path: &Path,
+) -> Vec<ChangedDirectory> {
+    detect_changes_recursive_with_clock(cached_tree, current_path, wall_now_secs())
+}
+
+pub fn detect_changes_recursive_with_clock(
+    cached_tree: &[DirectoryNode],
+    current_path: &Path,
+    wall_now: u64,
 ) -> Vec<ChangedDirectory> {
     let cached_nodes: Vec<&DirectoryNode> = cached_tree
         .iter()
@@ -202,7 +264,7 @@ pub fn detect_changes_recursive(
             current_dirs.insert(entry_key.clone());
 
             if let Some(node) = cached_map.get(&entry_key) {
-                match check_directory_changes(node, &entry_path) {
+                match check_directory_changes_with_clock(node, &entry_path, wall_now) {
                     ChangeStatus::Deleted => changes.push(ChangedDirectory {
                         path: entry_path,
                         status: ChangeStatus::Deleted,
@@ -214,7 +276,11 @@ pub fn detect_changes_recursive(
                         mode: RescanMode::Recursive,
                     }),
                     ChangeStatus::Unchanged => {
-                        changes.extend(detect_changes_recursive(&node.children, &entry_path));
+                        changes.extend(detect_changes_recursive_with_clock(
+                            &node.children,
+                            &entry_path,
+                            wall_now,
+                        ));
                     }
                     ChangeStatus::New => {}
                 }
@@ -296,10 +362,27 @@ fn collect_direct_file_changed_dirs(root_path: &Path, candidates: HashSet<String
     paths
 }
 
-fn detect_changes_via_usn(
-    path: &Path,
-    cached_result: &ScanResult,
-) -> Option<(Vec<ChangedDirectory>, bool)> {
+/// `detect_changes_via_usn` 的结果摘要。
+///
+/// - `Available`：USN 拿到了完整的变化集，调用方按 changes / renames 走"快路径"。
+/// - `JournalReset`：USN journal_id 变了或 first_usn 越过我们的 checkpoint，
+///   走"USN 全量重建"路径——从 first_usn 起重读，把所有目录加入候选；如果
+///   USN 全量重建仍拿不到东西，再退化到 mtime。
+/// - `Unavailable`：没有 USN 路径可用，走 mtime 全量。
+pub enum UsnDetection {
+    Available {
+        changes: Vec<ChangedDirectory>,
+        root_files_changed: bool,
+        renames: Vec<winfs::UsnRenameEvent>,
+    },
+    JournalReset {
+        first_usn: i64,
+        new_journal_id: u64,
+    },
+    Unavailable,
+}
+
+fn detect_changes_via_usn_outcome(path: &Path, cached_result: &ScanResult) -> UsnDetection {
     let total_timer = StageTimer::start(
         "incremental-usn",
         format!("detect_changes_via_usn path={}", path.display()),
@@ -311,7 +394,7 @@ fn detect_changes_via_usn(
         },
         _ => {
             total_timer.finish_with("status=missing_checkpoint");
-            return None;
+            return UsnDetection::Unavailable;
         }
     };
 
@@ -328,32 +411,60 @@ fn detect_changes_via_usn(
 
     let usn_collect_timer = StageTimer::start(
         "incremental-usn",
-        format!("collect_usn_changed_dirs path={}", path.display()),
+        format!("read_usn_journal_with_retry path={}", path.display()),
     );
-    let change_set = match winfs::collect_usn_changed_dirs(
-        path,
-        checkpoint,
-        cached_result.root_file_id,
-        &file_id_map,
-    ) {
-        Ok(Some(changes)) => {
+    let change_set = match winfs_read_usn(path, checkpoint, cached_result.root_file_id, &file_id_map)
+    {
+        UsnReadShim::Records(set) => {
             usn_collect_timer.finish_with(format!(
-                "recursive_dirs={} direct_file_dirs={} root_files_changed={}",
-                changes.recursive_dirs.len(),
-                changes.direct_file_dirs.len(),
-                changes.root_files_changed
+                "recursive_dirs={} direct_file_dirs={} root_files_changed={} renames={}",
+                set.recursive_dirs.len(),
+                set.direct_file_dirs.len(),
+                set.root_files_changed,
+                set.renames.len()
             ));
-            changes
+            set
         }
-        Ok(None) => {
-            usn_collect_timer.finish_with("status=unavailable");
-            total_timer.finish_with("status=unavailable");
-            return None;
+        UsnReadShim::JournalReset {
+            new_journal_id,
+            first_usn,
+        } => {
+            usn_collect_timer.finish_with(format!(
+                "status=journal_reset new_journal_id={} first_usn={}",
+                new_journal_id, first_usn
+            ));
+            total_timer.finish_with(format!(
+                "status=journal_reset new_journal_id={} first_usn={}",
+                new_journal_id, first_usn
+            ));
+            tracing::info!(
+                "[阶段1] USN journal 已被重建/回卷 path={} reason=usn_journal_reset new_journal_id={} first_usn={}",
+                path.display(),
+                new_journal_id,
+                first_usn
+            );
+            return UsnDetection::JournalReset {
+                first_usn,
+                new_journal_id,
+            };
         }
-        Err(err) => {
+        UsnReadShim::StartUsnTooOld { first_usn } => {
+            usn_collect_timer.finish_with(format!("status=start_usn_too_old first_usn={first_usn}"));
+            total_timer.finish_with(format!("status=start_usn_too_old first_usn={first_usn}"));
+            tracing::info!(
+                "[阶段1] USN checkpoint 落后被回卷 path={} reason=usn_journal_reset first_usn={}",
+                path.display(),
+                first_usn
+            );
+            return UsnDetection::JournalReset {
+                first_usn,
+                new_journal_id: checkpoint.journal_id,
+            };
+        }
+        UsnReadShim::HardError(err) => {
             usn_collect_timer.finish_with(format!("status=error err={err}"));
             total_timer.finish_with(format!("status=error err={err}"));
-            return None;
+            return UsnDetection::Unavailable;
         }
     };
 
@@ -380,6 +491,9 @@ fn detect_changes_via_usn(
         })
         .collect();
 
+    // DirectFilesOnly 候选去重：祖先已经走 Recursive 重扫的，自动 dedupe 掉，
+    // 否则会出现「父被替换为最新子树、子又把 clone 出来的旧 children 覆盖回去」
+    // 的覆盖竞态。
     changes.extend(
         collect_direct_file_changed_dirs(path, change_set.direct_file_dirs)
             .into_iter()
@@ -404,12 +518,94 @@ fn detect_changes_via_usn(
         changes.len() + usize::from(change_set.root_files_changed)
     ));
     total_timer.finish_with(format!(
-        "status=complete total_changes={} root_files_changed={}",
+        "status=complete total_changes={} root_files_changed={} renames={}",
         changes.len() + usize::from(change_set.root_files_changed),
-        change_set.root_files_changed
+        change_set.root_files_changed,
+        change_set.renames.len()
     ));
 
-    Some((changes, change_set.root_files_changed))
+    UsnDetection::Available {
+        changes,
+        root_files_changed: change_set.root_files_changed,
+        renames: change_set.renames,
+    }
+}
+
+/// 平台抽象：windows 走真实 USN，其它平台立刻返回 HardError，让上层走 mtime。
+enum UsnReadShim {
+    Records(winfs::UsnChangeSet),
+    JournalReset { new_journal_id: u64, first_usn: i64 },
+    StartUsnTooOld { first_usn: i64 },
+    HardError(std::io::Error),
+}
+
+#[cfg(windows)]
+fn winfs_read_usn(
+    path: &Path,
+    checkpoint: winfs::UsnJournalCheckpoint,
+    root_file_id: Option<u64>,
+    file_id_map: &HashMap<u64, String>,
+) -> UsnReadShim {
+    match winfs::read_usn_journal_with_retry(path, checkpoint, root_file_id, file_id_map) {
+        winfs::UsnReadOutcome::Records(set) => UsnReadShim::Records(set),
+        winfs::UsnReadOutcome::JournalReset {
+            new_journal_id,
+            first_usn,
+        } => UsnReadShim::JournalReset {
+            new_journal_id,
+            first_usn,
+        },
+        winfs::UsnReadOutcome::StartUsnTooOld { first_usn } => {
+            UsnReadShim::StartUsnTooOld { first_usn }
+        }
+        winfs::UsnReadOutcome::HardError(err) => UsnReadShim::HardError(err),
+    }
+}
+
+#[cfg(not(windows))]
+fn winfs_read_usn(
+    _path: &Path,
+    _checkpoint: winfs::UsnJournalCheckpoint,
+    _root_file_id: Option<u64>,
+    _file_id_map: &HashMap<u64, String>,
+) -> UsnReadShim {
+    UsnReadShim::HardError(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "USN journal is only available on Windows NTFS volumes",
+    ))
+}
+
+/// 把整棵 cached 树的所有目录路径作为 USN 全量重建的"重扫候选"。
+/// 用于 USN journal_id 变了 / checkpoint 被回卷的情况——我们不知道具体哪些
+/// 子树变化了，但又不想退化到 mtime 全量递归。把缓存里所有目录都丢回阶段 2，
+/// 让阶段 2 按 Recursive 模式重扫；阶段 1 的去重逻辑只会留下根级别的 Recursive，
+/// 实际效果就是"以缓存为骨架做一次 USN 全量重建"。
+pub fn collect_all_cached_dirs_as_recursive(
+    cached_tree: &[DirectoryNode],
+    root_path: &Path,
+) -> Vec<ChangedDirectory> {
+    fn walk(
+        nodes: &[DirectoryNode],
+        root_path: &Path,
+        out: &mut Vec<ChangedDirectory>,
+    ) {
+        for node in nodes {
+            let pb = PathBuf::from(&node.path);
+            if pb != root_path && path_starts_with(&pb, root_path) {
+                out.push(ChangedDirectory {
+                    path: pb,
+                    status: ChangeStatus::Modified,
+                    mode: RescanMode::Recursive,
+                });
+            }
+            walk(&node.children, root_path, out);
+        }
+    }
+    let mut out = Vec::new();
+    walk(cached_tree, root_path, &mut out);
+    // 阶段 2 会按"祖先 Recursive 已经覆盖 → 后代不再单独重扫"去重；这里
+    // 直接交付完整列表即可，让上层 normalize 路径做收敛。
+    out
 }
 
 fn build_file_info(path: &Path, metadata: &std::fs::Metadata) -> FileInfo {
@@ -517,9 +713,9 @@ fn rescan_directory(path: &Path, large_file_threshold: u64) -> Option<RescannedD
 pub(crate) fn rescan_directory_snapshot(
     path: &Path,
     large_file_threshold: u64,
-) -> Option<(DirectoryNode, Vec<FileInfo>)> {
+) -> Option<(DirectoryNode, Vec<FileInfo>, u64, usize)> {
     rescan_directory_tree(path, large_file_threshold)
-        .map(|result| (result.node, result.large_files))
+        .map(|result| (result.node, result.large_files, result.own_size, result.own_file_count))
 }
 
 fn refresh_directory_direct_files(
@@ -563,6 +759,8 @@ fn refresh_directory_direct_files(
         node,
         large_files,
         mode: RescanMode::DirectFilesOnly,
+        own_size: direct_size,
+        own_file_count: direct_files,
     })
 }
 
@@ -600,6 +798,8 @@ fn rescan_directory_tree(path: &Path, large_file_threshold: u64) -> Option<Resca
             },
             large_files: vec![],
             mode: RescanMode::Recursive,
+            own_size: 0,
+            own_file_count: 0,
         });
     }
 
@@ -728,6 +928,14 @@ fn rescan_directory_tree(path: &Path, large_file_threshold: u64) -> Option<Resca
         }
     }
 
+    // 在把子目录大小累加上来之前，先把"根目录直接文件"的统计冻结下来——
+    // 它就是阶段 3 权威回填里需要的 own_size / own_file_count，不能再用
+    // node.size - Σchild.size 反算（中间过程会被父子覆盖污染）。
+    let (root_own_size, root_own_files) = dir_file_stats
+        .get(path)
+        .copied()
+        .unwrap_or((0u64, 0usize));
+
     let mut all_paths: Vec<PathBuf> = dir_nodes.keys().cloned().collect();
     all_paths.sort_by(|a, b| b.components().count().cmp(&a.components().count()));
 
@@ -770,6 +978,8 @@ fn rescan_directory_tree(path: &Path, large_file_threshold: u64) -> Option<Resca
         node,
         large_files,
         mode: RescanMode::Recursive,
+        own_size: root_own_size,
+        own_file_count: root_own_files,
     })
 }
 
@@ -778,6 +988,7 @@ pub async fn scan_incremental<R: Runtime>(
     cached_result: ScanResult,
     app: AppHandle<R>,
     scanner: &DiskScanner,
+    cancellation: Option<&crate::session::CancellationToken>,
 ) -> Result<ScanResult> {
     let incremental_app = app.clone();
     let progress_emitter: IncrementalProgressEmitter =
@@ -794,6 +1005,7 @@ pub async fn scan_incremental<R: Runtime>(
         scanner,
         Some(progress_emitter),
         Some(deep_progress_emitter),
+        cancellation.cloned(),
     )
     .await
 }
@@ -803,7 +1015,26 @@ pub async fn scan_incremental_silent(
     cached_result: ScanResult,
     scanner: &DiskScanner,
 ) -> Result<ScanResult> {
-    scan_incremental_internal(path, cached_result, scanner, None, None).await
+    scan_incremental_internal(path, cached_result, scanner, None, None, None).await
+}
+
+/// 与 `scan_incremental_silent` 一致，但额外接受一个 `CancellationToken`。
+/// 任务 B / C 的集成测试和命令层"无 UI 调用增量"的路径都用这个入口。
+pub async fn scan_incremental_with_token(
+    path: &Path,
+    cached_result: ScanResult,
+    scanner: &DiskScanner,
+    cancellation: Option<&crate::session::CancellationToken>,
+) -> Result<ScanResult> {
+    scan_incremental_internal(
+        path,
+        cached_result,
+        scanner,
+        None,
+        None,
+        cancellation.cloned(),
+    )
+    .await
 }
 
 fn emit_incremental_progress(
@@ -830,6 +1061,7 @@ async fn fallback_to_full_scan(
     estimated_files: usize,
     deep_progress_emitter: Option<&ScanProgressEmitter>,
     reason: &str,
+    cancellation: Option<&crate::session::CancellationToken>,
 ) -> Result<ScanResult> {
     let fallback_timer = StageTimer::start(
         "incremental",
@@ -852,7 +1084,12 @@ async fn fallback_to_full_scan(
         },
     );
     let result = scanner
-        .scan_deep_with_progress(path, deep_progress_emitter.cloned(), estimated_files)
+        .scan_deep_with_progress_and_token(
+            path,
+            deep_progress_emitter.cloned(),
+            estimated_files,
+            cancellation,
+        )
         .await;
     match &result {
         Ok(result) => fallback_timer.finish_with(format!(
@@ -874,6 +1111,7 @@ async fn scan_incremental_internal(
     scanner: &DiskScanner,
     progress_emitter: Option<IncrementalProgressEmitter>,
     deep_progress_emitter: Option<ScanProgressEmitter>,
+    cancellation: Option<crate::session::CancellationToken>,
 ) -> Result<ScanResult> {
     use std::time::Instant;
 
@@ -923,25 +1161,67 @@ async fn scan_incremental_internal(
         format!("stage1_detect_changes path={}", path.display()),
     );
     let detect_start = Instant::now();
+    let mut detected_renames: Vec<winfs::UsnRenameEvent> = Vec::new();
     let (changes, mut root_files_changed, detection_mode) =
-        if let Some((changes, root_files_changed)) = detect_changes_via_usn(path, &cached_result) {
-            (changes, root_files_changed, "usn")
-        } else {
-            let (current_root_size, current_root_files, _) =
-                scan_root_files(path, large_file_threshold);
-            let (cached_root_size, cached_root_files) = cached_result
-                .directories
-                .iter()
-                .find(|node| path_matches(&node.path, path))
-                .map(|node| (node.size, node.file_count))
-                .unwrap_or((0, 0));
-            let root_files_changed =
-                cached_root_size != current_root_size || cached_root_files != current_root_files;
-            (
-                detect_changes_recursive(&cached_result.directories, path),
+        match detect_changes_via_usn_outcome(path, &cached_result) {
+            UsnDetection::Available {
+                changes,
                 root_files_changed,
-                "mtime",
-            )
+                renames,
+            } => {
+                detected_renames = renames;
+                (changes, root_files_changed, "usn")
+            }
+            UsnDetection::JournalReset {
+                first_usn,
+                new_journal_id,
+            } => {
+                tracing::info!(
+                    "[阶段1] reason=usn_journal_reset first_usn={} new_journal_id={} → 走 USN 全量重建",
+                    first_usn,
+                    new_journal_id
+                );
+                let candidates =
+                    collect_all_cached_dirs_as_recursive(&cached_result.directories, path);
+                if candidates.is_empty() {
+                    // 缓存里啥也没有：那就只能 mtime 全量了。但我们仍然把
+                    // strategy 标签写到 tracing，方便排查。
+                    let (current_root_size, current_root_files, _) =
+                        scan_root_files(path, large_file_threshold);
+                    let (cached_root_size, cached_root_files) = cached_result
+                        .directories
+                        .iter()
+                        .find(|node| path_matches(&node.path, path))
+                        .map(|node| (node.size, node.file_count))
+                        .unwrap_or((0, 0));
+                    let rfc = cached_root_size != current_root_size
+                        || cached_root_files != current_root_files;
+                    (
+                        detect_changes_recursive(&cached_result.directories, path),
+                        rfc,
+                        "usn_full_rebuild_fallback_mtime",
+                    )
+                } else {
+                    (candidates, true, "usn_full_rebuild")
+                }
+            }
+            UsnDetection::Unavailable => {
+                let (current_root_size, current_root_files, _) =
+                    scan_root_files(path, large_file_threshold);
+                let (cached_root_size, cached_root_files) = cached_result
+                    .directories
+                    .iter()
+                    .find(|node| path_matches(&node.path, path))
+                    .map(|node| (node.size, node.file_count))
+                    .unwrap_or((0, 0));
+                let rfc = cached_root_size != current_root_size
+                    || cached_root_files != current_root_files;
+                (
+                    detect_changes_recursive(&cached_result.directories, path),
+                    rfc,
+                    "mtime",
+                )
+            }
         };
     let (current_root_size, current_root_files, root_large_files) =
         scan_root_files(path, large_file_threshold);
@@ -955,18 +1235,32 @@ async fn scan_incremental_internal(
         || cached_root_size != current_root_size
         || cached_root_files != current_root_files;
     tracing::info!(
-        "[阶段1] 变化检测完成，耗时: {:.2}ms | mode={}",
+        "[阶段1] 变化检测完成，耗时: {:.2}ms | mode={} renames={}",
         detect_start.elapsed().as_secs_f64() * 1000.0,
-        detection_mode
+        detection_mode,
+        detected_renames.len()
     );
-    if detection_mode == "mtime" {
-        if cached_result.usn_journal_id.is_some() && cached_result.usn_next_usn.is_some() {
-            tracing::info!("[阶段1] USN checkpoint 存在，但本次未能直接使用，已回退到 mtime 递归检测");
-        } else {
-            tracing::info!("[阶段1] 缓存缺少 USN checkpoint，本次只能使用 mtime 递归检测");
+    match detection_mode {
+        "mtime" => {
+            if cached_result.usn_journal_id.is_some() && cached_result.usn_next_usn.is_some() {
+                tracing::info!("[阶段1] USN checkpoint 存在，但本次未能直接使用，已回退到 mtime 递归检测");
+            } else {
+                tracing::info!("[阶段1] 缓存缺少 USN checkpoint，本次只能使用 mtime 递归检测");
+            }
         }
-    } else {
-        tracing::info!("[阶段1] 本次增量检测使用了 USN 日志");
+        "usn_full_rebuild" => {
+            tracing::info!(
+                "[阶段1] 走 USN 全量重建路径，本次按 Recursive 重扫整个缓存范围"
+            );
+        }
+        "usn_full_rebuild_fallback_mtime" => {
+            tracing::info!(
+                "[阶段1] 缓存为空，USN 全量重建退化到 mtime 全量递归"
+            );
+        }
+        _ => {
+            tracing::info!("[阶段1] 本次增量检测使用了 USN 日志");
+        }
     }
 
     let change_dirs = changes
@@ -1048,6 +1342,7 @@ async fn scan_incremental_internal(
             cached_result.total_files.max(1),
             deep_progress_emitter.as_ref(),
             &format!("变化比例 {:.1}% 超过 30% 阈值", change_ratio * 100.0),
+            cancellation.as_ref(),
         )
         .await?;
         total_timer.finish_with(format!(
@@ -1058,6 +1353,12 @@ async fn scan_incremental_internal(
     }
 
     // 阶段2: 重新扫描修改过的目录
+    if let Some(token) = cancellation.as_ref() {
+        if token.is_cancelled() {
+            total_timer.finish_with("status=cancelled stage=before_stage2");
+            return Err(IncrementalScanError::Cancelled.into());
+        }
+    }
     let rescan_candidates: Vec<&ChangedDirectory> = changes
         .iter()
         .filter(|c| c.status != ChangeStatus::Deleted)
@@ -1095,6 +1396,21 @@ async fn scan_incremental_internal(
     let stage2_start = Instant::now();
     let mut last_stage2_progress_log = Instant::now();
     for (i, change) in rescan_candidates.iter().enumerate() {
+        // 阶段 2 重扫循环：每完成一个目录检查一次取消，命中后立即返回。
+        if let Some(token) = cancellation.as_ref() {
+            if token.is_cancelled() {
+                rescan_timer.finish_with(format!(
+                    "status=cancelled completed={} of={}",
+                    i,
+                    rescan_candidates.len()
+                ));
+                total_timer.finish_with(format!(
+                    "status=cancelled stage=stage2_rescan completed={}",
+                    i
+                ));
+                return Err(IncrementalScanError::Cancelled.into());
+            }
+        }
         let rescan_start = Instant::now();
         let result = match change.mode {
             RescanMode::Recursive => rescan_directory(&change.path, large_file_threshold),
@@ -1248,16 +1564,65 @@ async fn scan_incremental_internal(
             "incremental",
             format!("stage3_merge_inner path={}", path.display()),
         );
-        let result = merge_scan_results(
+        let mut own_overrides: HashMap<String, (u64, usize)> =
+            HashMap::with_capacity(rescanned_dirs.len());
+        for item in &rescanned_dirs {
+            own_overrides.insert(
+                normalized_path_key_str(&item.node.path),
+                (item.own_size, item.own_file_count),
+            );
+            // 阶段 3 合并循环：每隔一段检查一次取消信号。
+            if let Some(token) = cancellation.as_ref() {
+                if token.is_cancelled() {
+                    return Err(IncrementalScanError::Cancelled.into());
+                }
+            }
+        }
+
+        // 重命名识别（best-effort）：USN 路径下，把 RENAME_OLD/NEW_NAME pair 起来
+        // 后变成 (old_path, new_path)。在送进 keyed merge 之前，先把缓存树里 old_path
+        // 的子树平移到 new_path 下，并把对应的 deleted_paths 干掉，让 keyed merge
+        // 把 rename 看成"什么都没动"。识别失败时退回到原本的"删 old + 建 new"。
+        let rescanned_keys: HashSet<String> = rescanned_dirs
+            .iter()
+            .map(|item| normalized_path_key_str(&item.node.path))
+            .collect();
+        let (deleted_paths, cached_directories, applied_renames) = apply_rename_pre_merge(
+            cached_directories,
+            deleted_paths,
+            &detected_renames,
+            &rescanned_keys,
+        );
+        if applied_renames > 0 {
+            tracing::info!(
+                "[阶段3] 识别到 {} 个 rename，已把缓存子树平移到新 path",
+                applied_renames
+            );
+        }
+
+        let result = match merge_scan_results_with_own_cancellable(
             cached_directories,
             rescanned_dirs
                 .iter()
                 .map(|item| item.node.clone())
                 .collect(),
+            &own_overrides,
             deleted_paths,
             path,
-        );
-        merge_inner_timer.finish_with(format!("nodes={}", result.len()));
+            cancellation.as_ref(),
+        ) {
+            Ok(tree) => tree,
+            Err(_partial) => {
+                merge_inner_timer
+                    .finish_with(format!("status=cancelled renames={}", applied_renames));
+                return Err(IncrementalScanError::Cancelled.into());
+            }
+        };
+        merge_inner_timer.finish_with(format!(
+            "nodes={} renames={}",
+            result.len(),
+            applied_renames
+        ));
         result
     };
     upsert_root_files_node(
@@ -1337,6 +1702,7 @@ async fn scan_incremental_internal(
             cached_total_files.max(1),
             deep_progress_emitter.as_ref(),
             "增量合并后的树结构校验失败，需要全量重建缓存",
+            cancellation.as_ref(),
         )
         .await?;
         total_timer.finish_with(format!(
@@ -1460,6 +1826,9 @@ async fn scan_incremental_internal(
             .map(|item| item.journal_id)
             .or(cached_usn_journal_id),
         usn_next_usn: journal.map(|item| item.next_usn).or(cached_usn_next_usn),
+        cache_schema_version: 0,
+        env_fingerprint: Default::default(),
+        scan_completed: false,
     })
 }
 
@@ -1640,6 +2009,150 @@ fn apply_direct_file_refreshes(
     let _ = walk(&mut tree, &mut updates, root_path);
     tree
 }
+fn apply_rename_pre_merge(
+    mut tree: Vec<DirectoryNode>,
+    mut deleted_paths: Vec<String>,
+    renames: &[winfs::UsnRenameEvent],
+    rescanned_keys: &HashSet<String>,
+) -> (Vec<String>, Vec<DirectoryNode>, usize) {
+    if renames.is_empty() {
+        return (deleted_paths, tree, 0);
+    }
+
+    let mut applied = 0usize;
+    let deleted_set: HashSet<String> = deleted_paths
+        .iter()
+        .map(|p| normalized_path_key_str(p))
+        .collect();
+
+    for rename in renames {
+        // 只搬目录，文件 rename 由 direct_file_dirs 的重扫负责。
+        if !rename.is_dir {
+            continue;
+        }
+        let old_key = normalized_path_key_str(&rename.old_path);
+        let new_key = normalized_path_key_str(&rename.new_path);
+        if old_key == new_key {
+            continue;
+        }
+        // 新 path 已经在本次 Recursive 重扫范围内 → 不要碰，让重扫覆盖。
+        if rescanned_keys
+            .iter()
+            .any(|k| key_starts_with(&new_key, k))
+        {
+            continue;
+        }
+        // 老 path 也在重扫范围内 → 同理，让重扫处理。
+        if rescanned_keys
+            .iter()
+            .any(|k| key_starts_with(&old_key, k))
+        {
+            continue;
+        }
+        // 新 path 已经存在在树里 → 让 keyed merge 走原本路径。
+        if find_node_mut(&mut tree, &new_key).is_some() {
+            continue;
+        }
+        // 把 old_key 子树取出来。
+        let Some(subtree) = extract_subtree(&mut tree, &old_key) else {
+            continue;
+        };
+        let mut moved = subtree;
+        relocate_subtree_path(&mut moved, &old_key, &rename.new_path);
+        if !attach_under_parent(&mut tree, &rename.new_path, moved) {
+            // 父节点找不到（常见于 new_path 的 parent 不在 cache 里）：
+            // 按"删旧 + 建新"语义留给 keyed merge 处理。但因为我们刚刚 extract
+            // 掉了 old_key，如果再走删旧路径会找不到节点 → 这里直接把删除项也
+            // 干掉，让 keyed merge 看到的就是"什么都没动"，新 path 的 Recursive
+            // 重扫节点（如果有）会负责挂上来。
+        } else {
+            applied += 1;
+        }
+    }
+
+    if applied > 0 {
+        // 把已经被 rename 处理过的 old_path 从 deleted_paths 里移除。
+        let renamed_old_keys: HashSet<String> = renames
+            .iter()
+            .filter(|r| r.is_dir)
+            .map(|r| normalized_path_key_str(&r.old_path))
+            .collect();
+        deleted_paths.retain(|p| !renamed_old_keys.contains(&normalized_path_key_str(p)));
+        let _ = deleted_set; // suppress unused
+    }
+
+    (deleted_paths, tree, applied)
+}
+
+fn find_node_mut<'a>(tree: &'a mut [DirectoryNode], key: &str) -> Option<&'a mut DirectoryNode> {
+    for node in tree.iter_mut() {
+        if normalized_path_key_str(&node.path) == key {
+            return Some(node);
+        }
+        if let Some(found) = find_node_mut(&mut node.children, key) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn extract_subtree(tree: &mut Vec<DirectoryNode>, key: &str) -> Option<DirectoryNode> {
+    if let Some(pos) = tree
+        .iter()
+        .position(|n| normalized_path_key_str(&n.path) == key)
+    {
+        return Some(tree.remove(pos));
+    }
+    for node in tree.iter_mut() {
+        if let Some(found) = extract_subtree(&mut node.children, key) {
+            node.has_children = !node.children.is_empty();
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn attach_under_parent(
+    tree: &mut Vec<DirectoryNode>,
+    new_path: &str,
+    new_node: DirectoryNode,
+) -> bool {
+    let parent = match Path::new(new_path).parent() {
+        Some(p) => p,
+        None => return false,
+    };
+    let parent_key = normalized_path_key(parent);
+    if let Some(parent_node) = find_node_mut(tree, &parent_key) {
+        parent_node.children.push(new_node);
+        parent_node.has_children = true;
+        return true;
+    }
+    false
+}
+
+/// 把整棵子树里的 path 字符串从 old_prefix 平移到 new_prefix。
+/// 用 normalized key 做匹配但保留原本的大小写格式（在 Windows 上能通过
+/// path_matches 做大小写不敏感的查找）。
+fn relocate_subtree_path(node: &mut DirectoryNode, old_key_prefix: &str, new_path: &str) {
+    let old_path_key = normalized_path_key_str(&node.path);
+    let new_path_for_node = if old_path_key == old_key_prefix {
+        new_path.to_string()
+    } else if old_path_key.starts_with(old_key_prefix) {
+        // suffix 包含分隔符，拼接到 new_path 上
+        let suffix = &old_path_key[old_key_prefix.len()..];
+        format!("{}{}", new_path, suffix)
+    } else {
+        node.path.clone()
+    };
+    node.name = Path::new(&new_path_for_node)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| node.name.clone());
+    node.path = new_path_for_node;
+    for child in node.children.iter_mut() {
+        relocate_subtree_path(child, old_key_prefix, new_path);
+    }
+}
 
 pub fn merge_scan_results(
     old_tree: Vec<DirectoryNode>,
@@ -1647,7 +2160,100 @@ pub fn merge_scan_results(
     deleted_paths: Vec<String>,
     root_path: &Path,
 ) -> Vec<DirectoryNode> {
-    match merge_scan_results_keyed(old_tree, changed_dirs, deleted_paths, root_path) {
+    merge_scan_results_with_own(old_tree, changed_dirs, &HashMap::new(), deleted_paths, root_path)
+}
+/// 增量合并的"权威"入口。和 [`merge_scan_results`] 的区别在于：
+/// - 把每个本次重扫节点的 `(own_size, own_file_count)` 也透传进来；
+/// - 合并完成后会自底向上做一次"权威回填"，确保父节点的 size/file_count/dir_count
+///   = 自己直接持有的值 + Σ 子节点。这样能修掉「父被 Recursive 替换、子又走
+///   DirectFilesOnly 把 clone 出来的旧 children 覆盖回去」造成的统计漂移。
+pub fn merge_scan_results_with_own(
+    old_tree: Vec<DirectoryNode>,
+    changed_dirs: Vec<DirectoryNode>,
+    own_overrides: &HashMap<String, (u64, usize)>,
+    deleted_paths: Vec<String>,
+    root_path: &Path,
+) -> Vec<DirectoryNode> {
+    merge_scan_results_with_own_cancellable::<NoCancel>(
+        old_tree,
+        changed_dirs,
+        own_overrides,
+        deleted_paths,
+        root_path,
+        None,
+    )
+    .unwrap_or_else(|partial| partial)
+}
+
+/// 与 `merge_scan_results_with_own` 一致，但允许在权威回填阶段每 1024 节点
+/// 检查一次取消信号，命中后立刻返回半成品树（封装在 Err 里）。生产路径
+/// 拿到 Err 时应当立刻退出整个增量扫描。
+pub(crate) fn merge_scan_results_with_own_cancellable<C: CancellationLike>(
+    old_tree: Vec<DirectoryNode>,
+    changed_dirs: Vec<DirectoryNode>,
+    own_overrides: &HashMap<String, (u64, usize)>,
+    deleted_paths: Vec<String>,
+    root_path: &Path,
+    cancellation: Option<&C>,
+) -> Result<Vec<DirectoryNode>, Vec<DirectoryNode>> {
+    // Step 0: 清掉旧树之前可能积累下来的统计偏差。
+    //
+    // 旧树里若有节点 size != own + Σchild.size（因为之前合并算法的累积漂移），
+    // 会让本轮采到的 cached_own = old_size - Σold_child.size 也带偏差。把
+    // 旧树先做一次自下而上的 enforce：own 用 saturating_sub 抓一下，然后强制
+    // node.size = own + Σchild.size，file_count / dir_count 同理。这样进入
+    // collect_cached_own 时拿到的就是已经一致的快照，own 也就对了。
+    //
+    // changed_dirs 里的节点马上要被替换，没必要清；root 的 size/file_count 由
+    // sum_tree 在 reconcile 末尾重算，这里也不强求清到根。
+    let mut old_tree = old_tree;
+    sanitize_tree_subtotals(&mut old_tree, root_path);
+
+    let mut cached_own: HashMap<String, (u64, usize)> = HashMap::new();
+    collect_cached_own(&old_tree, &mut cached_own);
+
+    // 同时把"changed_dirs 自带的 own"也合进 cached_own —— 这是兼容旧 API 的关键：
+    // 对每个被 upsert 替换的节点，size - Σchild.size 就是它本次扫描里"自己持有"
+    // 的部分，比 cached_own 留下的老值更新。`own_overrides`（外部显式传入）
+    // 优先级最高，依然可以覆盖这一步。
+    //
+    // 注意要递归到 changed_dirs 内部的所有子节点：rescan_directory_tree 返回
+    // 的子树里每个节点的 size/file_count 都是新扫到的真实值，应当一并覆盖
+    // cached_own 里同 path 的旧值。只浅扫一层会让 changed_dirs 子节点继续
+    // 沿用旧 cached_own 值，权威回填阶段就会用到陈旧 own。
+    //
+    // 重要：当 changed_dirs 同时包含 parent 和 child 的独立变更时（overlap），
+    // child 的值应该优先于 parent 中嵌套的同路径节点。先收集顶层 key 集合，
+    // 递归时遇到已有独立变更的 path 就跳过，最后由其自己的顶层 ingest 写入。
+    let top_level_keys: HashSet<String> = changed_dirs
+        .iter()
+        .map(|n| normalized_path_key_str(&n.path))
+        .collect();
+
+    fn ingest_changed_own(
+        nodes: &[DirectoryNode],
+        cached_own: &mut HashMap<String, (u64, usize)>,
+        top_level_keys: &HashSet<String>,
+        is_top_level: bool,
+    ) {
+        for node in nodes {
+            let key = normalized_path_key_str(&node.path);
+            // 如果这个 child 在顶层有独立变更，跳过——让它自己的顶层遍历写入正确值
+            if !is_top_level && top_level_keys.contains(&key) {
+                continue;
+            }
+            let child_size: u64 = node.children.iter().map(|c| c.size).sum();
+            let child_files: usize = node.children.iter().map(|c| c.file_count).sum();
+            let own_size = node.size.saturating_sub(child_size);
+            let own_files = node.file_count.saturating_sub(child_files);
+            cached_own.insert(key, (own_size, own_files));
+            ingest_changed_own(&node.children, cached_own, top_level_keys, false);
+        }
+    }
+    ingest_changed_own(&changed_dirs, &mut cached_own, &top_level_keys, true);
+
+    let mut tree = match merge_scan_results_keyed(old_tree, changed_dirs, deleted_paths, root_path)
+    {
         Ok(tree) => tree,
         Err(fallback_input) => merge_scan_results_flat(
             fallback_input.old_tree,
@@ -1655,7 +2261,139 @@ pub fn merge_scan_results(
             fallback_input.deleted_paths,
             root_path,
         ),
+    };
+    let root_key = normalized_path_key(root_path);
+    let mut counter: usize = 0;
+    let mut cancelled = false;
+    for node in tree.iter_mut() {
+        if normalized_path_key_str(&node.path) == root_key {
+            continue;
+        }
+        recalc_subtotals_authoritative_cancellable(
+            node,
+            own_overrides,
+            &cached_own,
+            &mut counter,
+            cancellation,
+            &mut cancelled,
+        );
+        if cancelled {
+            return Err(tree);
+        }
     }
+
+    sort_directory_tree(&mut tree);
+    Ok(tree)
+}
+
+/// 占位类型：提供一个 `CancellationLike` 但永不取消，用来给
+/// `merge_scan_results_with_own` 的非可取消入口填类型参数。
+struct NoCancel;
+impl CancellationLike for NoCancel {
+    fn is_cancelled(&self) -> bool {
+        false
+    }
+}
+
+fn recalc_subtotals_authoritative_cancellable<C: CancellationLike>(
+    node: &mut DirectoryNode,
+    own_overrides: &HashMap<String, (u64, usize)>,
+    cached_own: &HashMap<String, (u64, usize)>,
+    counter: &mut usize,
+    cancellation: Option<&C>,
+    cancelled: &mut bool,
+) {
+    if *cancelled {
+        return;
+    }
+    for child in node.children.iter_mut() {
+        recalc_subtotals_authoritative_cancellable(
+            child,
+            own_overrides,
+            cached_own,
+            counter,
+            cancellation,
+            cancelled,
+        );
+        if *cancelled {
+            return;
+        }
+    }
+    *counter += 1;
+    if *counter % MERGE_CANCEL_CHECK_STRIDE == 0 {
+        if let Some(token) = cancellation {
+            if token.is_cancelled() {
+                *cancelled = true;
+                return;
+            }
+        }
+    }
+    recalc_subtotals_authoritative(node, own_overrides, cached_own);
+}
+
+fn collect_cached_own(nodes: &[DirectoryNode], out: &mut HashMap<String, (u64, usize)>) {
+    for node in nodes {
+        let child_size: u64 = node.children.iter().map(|c| c.size).sum();
+        let child_files: usize = node.children.iter().map(|c| c.file_count).sum();
+        let own_size = node.size.saturating_sub(child_size);
+        let own_files = node.file_count.saturating_sub(child_files);
+        out.insert(normalized_path_key_str(&node.path), (own_size, own_files));
+        collect_cached_own(&node.children, out);
+    }
+}
+
+/// 自下而上地把每棵旧树修整成 size = own + Σchild.size、file_count = own + Σchild.file_count、
+/// dir_count = 1 + Σchild.dir_count。
+///
+/// 这是历史包袱清理：之前几轮合并算法可能在节点上累积了 size/file_count/dir_count
+/// 与子节点和不一致的偏差。直接从旧树读 cached_own 时，这种偏差会被错误地"持有"
+/// 到 own 上。先 sanitize 一次，确保拿到的 own 至少满足 own + Σchild = node 当前
+/// 持有值，把累积偏差冻结成"old 时刻已经存在的差"，不再被传到下一轮。
+///
+/// root 节点也走同样规则；调用方稍后会用 sum_tree 在更上层重算 root 的总量。
+fn sanitize_tree_subtotals(nodes: &mut [DirectoryNode], _root_path: &Path) {
+    for node in nodes.iter_mut() {
+        sanitize_tree_subtotals(&mut node.children, _root_path);
+        let child_size: u64 = node.children.iter().map(|c| c.size).sum();
+        let child_files: usize = node.children.iter().map(|c| c.file_count).sum();
+        let child_dirs: usize = node.children.iter().map(|c| c.dir_count).sum();
+        let own_size = node.size.saturating_sub(child_size);
+        let own_files = node.file_count.saturating_sub(child_files);
+        node.size = own_size + child_size;
+        node.file_count = own_files + child_files;
+        node.dir_count = 1 + child_dirs;
+        node.has_children = !node.children.is_empty();
+    }
+}
+fn recalc_subtotals_authoritative(
+    node: &mut DirectoryNode,
+    own_overrides: &HashMap<String, (u64, usize)>,
+    cached_own: &HashMap<String, (u64, usize)>,
+) {
+    for child in node.children.iter_mut() {
+        recalc_subtotals_authoritative(child, own_overrides, cached_own);
+    }
+
+    let key = normalized_path_key_str(&node.path);
+    let child_size: u64 = node.children.iter().map(|c| c.size).sum();
+    let child_files: usize = node.children.iter().map(|c| c.file_count).sum();
+    let child_dirs: usize = node.children.iter().map(|c| c.dir_count).sum();
+
+    let (own_size, own_files) = if let Some(&value) = own_overrides.get(&key) {
+        value
+    } else if let Some(&value) = cached_own.get(&key) {
+        value
+    } else {
+        (
+            node.size.saturating_sub(child_size),
+            node.file_count.saturating_sub(child_files),
+        )
+    };
+
+    node.size = own_size + child_size;
+    node.file_count = own_files + child_files;
+    node.dir_count = 1 + child_dirs;
+    node.has_children = !node.children.is_empty();
 }
 
 struct KeyedMergeFallback {
@@ -2045,7 +2783,7 @@ fn merge_scan_results_flat(
     rebuild_tree(flat, root_path)
 }
 
-fn inspect_tree_merge_health(nodes: &[DirectoryNode], root_path: &Path) -> TreeMergeHealth {
+pub fn inspect_tree_merge_health(nodes: &[DirectoryNode], root_path: &Path) -> TreeMergeHealth {
     fn walk(
         node: &DirectoryNode,
         root_path: &Path,

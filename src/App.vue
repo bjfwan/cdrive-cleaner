@@ -3,7 +3,6 @@ import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, provide, re
 import { invoke } from '@tauri-apps/api/core';
 import appIcon from './assets/app-icon.png';
 import ConfirmDialog from './components/ConfirmDialog.vue';
-import DeepScanProgress from './components/DeepScanProgress.vue';
 import { IconDeepScan, IconHistory, IconSettings } from './components/icons';
 import Toast from './components/Toast.vue';
 import Cart from './components/Cart.vue';
@@ -21,6 +20,10 @@ const Welcome = defineAsyncComponent(() => import('./components/Welcome.vue'));
 const MigrateDialog = defineAsyncComponent(() => import('./components/MigrateDialog.vue'));
 const CommandPalette = defineAsyncComponent(() => import('./components/CommandPalette.vue'));
 const GamesView = defineAsyncComponent(() => import('./components/GamesView.vue'));
+// DeepScanProgress is only mounted while a scan is in flight, so loading the
+// chunk lazily keeps the initial bundle smaller and lets the component fully
+// detach (event listeners + reactive state) when not scanning.
+const DeepScanProgress = defineAsyncComponent(() => import('./components/DeepScanProgress.vue'));
 
 const disks = ref<DiskInfo[]>([]);
 const selectedDisk = ref<string>('');
@@ -63,7 +66,21 @@ const cart = useCart();
 
 let deepScanResult: ScanResult | null = null;
 let deepScanCache = new Map<string, ScanResult>();
+const DEEP_SCAN_CACHE_MAX = 8;
 const driveSessions = new Map<string, { root: ScanResult; navStack: string[] }>();
+
+function setDeepScanCacheEntry(path: string, result: ScanResult) {
+  // If key already exists, delete first so it moves to end (most recent)
+  if (deepScanCache.has(path)) {
+    deepScanCache.delete(path);
+  }
+  deepScanCache.set(path, result);
+  // LRU eviction: Map preserves insertion order, oldest is first
+  if (deepScanCache.size > DEEP_SCAN_CACHE_MAX) {
+    const oldest = deepScanCache.keys().next().value;
+    if (oldest) deepScanCache.delete(oldest);
+  }
+}
 
 const selectedDiskInfo = computed(() =>
   disks.value.find((disk) => `${disk.drive_letter}\\` === selectedDisk.value),
@@ -122,6 +139,7 @@ onMounted(async () => {
   checkFirstLaunch();
   window.addEventListener('keydown', onGlobalKey);
   void notifyOnGameDetection();
+  void resumePendingScanIntent();
 });
 
 onBeforeUnmount(() => {
@@ -280,6 +298,9 @@ async function refreshScanCapabilities(path = selectedDisk.value) {
 async function loadDeepSnapshot(path: string): Promise<ScanResult> {
   const cached = deepScanCache.get(path);
   if (cached) {
+    // Move to end (most recently used)
+    deepScanCache.delete(path);
+    deepScanCache.set(path, cached);
     return cached;
   }
 
@@ -287,7 +308,7 @@ async function loadDeepSnapshot(path: string): Promise<ScanResult> {
     rootPath: selectedDisk.value,
     path,
   });
-  deepScanCache.set(path, snapshot);
+  setDeepScanCacheEntry(path, snapshot);
   return snapshot;
 }
 
@@ -499,7 +520,8 @@ function loadUserSettings() {
 
 async function restartAsAdmin() {
   try {
-    await invoke('restart_as_admin');
+    const disk = selectedDisk.value || 'C:\\';
+    await invoke('request_admin_rescan', { disk });
   } catch {
     showToastNotification('管理员重启失败', '请手动以管理员身份运行应用', 'error');
   } finally {
@@ -771,6 +793,47 @@ async function revealInExplorer(path: string) {
     console.warn('reveal failed', err);
   }
 }
+
+interface PendingScanIntent {
+  disk: string;
+  requested_at: string;
+  requested_with_elevation: boolean;
+}
+
+async function resumePendingScanIntent() {
+  let pending: PendingScanIntent | null = null;
+  try {
+    pending = await invoke<PendingScanIntent | null>('consume_pending_scan_intent');
+  } catch (err) {
+    console.warn('consume_pending_scan_intent failed', err);
+    return;
+  }
+  if (!pending) {
+    return;
+  }
+
+  // 后端 TTL 已经把 10 分钟外的丢掉，但前端再做一次纵深防御，
+  // 避免奇葩的系统时钟把"过期 intent"塞回来。
+  const requestedAt = Date.parse(pending.requested_at);
+  if (!Number.isFinite(requestedAt)) {
+    return;
+  }
+  if (Date.now() - requestedAt > 10 * 60 * 1000) {
+    return;
+  }
+
+  // 把 selectedDisk 切到 intent 指向的盘（可能用户落点不同），再启动深度扫描。
+  if (pending.disk && pending.disk !== selectedDisk.value) {
+    selectedDisk.value = pending.disk;
+  }
+
+  showToastNotification('以管理员身份继续上次扫描', `${pending.disk} · 自动续扫`, 'info');
+
+  // selectedDisk 的 watch 是异步的；microtask 让 watch 把 driveSession / 缓存先复位，
+  // 再调用 startDeepScan，避免和初次加载竞态。
+  await Promise.resolve();
+  void startDeepScan();
+}
 </script>
 
 <template>
@@ -892,7 +955,7 @@ async function revealInExplorer(path: string) {
 
       <div class="main-frame">
         <div class="main-scroll">
-          <DeepScanProgress v-show="deepScanning" :scanning="deepScanning" class="main-deep-progress" />
+          <DeepScanProgress v-if="deepScanning" :scanning="deepScanning" class="main-deep-progress" />
 
           <Workspace
             v-if="activeTab === 'workspace'"

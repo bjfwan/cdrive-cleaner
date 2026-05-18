@@ -89,7 +89,7 @@ const presets: readonly Preset[] = [
   overflow: hidden;
   font: inherit;
   color: inherit;
-  transition: transform var(--transition-base), box-shadow var(--transition-base),
+  transition: transform var(--transition-base),
     border-color var(--transition-base), background var(--transition-base);
 }
 

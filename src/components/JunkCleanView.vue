@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount } from 'vue';
+import { ref, computed, onBeforeUnmount, shallowRef, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { ElCollapse, ElCollapseItem, ElCheckbox, ElTag } from 'element-plus';
@@ -18,8 +18,10 @@ import ConfirmDialog from './ConfirmDialog.vue';
 import JunkSkippedRulesDialog from './JunkSkippedRulesDialog.vue';
 import JunkPresets from './JunkPresets.vue';
 import MiddlePath from './MiddlePath.vue';
+import VirtualList from './VirtualList.vue';
 import { useToast } from '../composables/useToast';
 import { useJunkScanCache } from '../composables/useJunkScanCache';
+import { useSelectionSet } from '../composables/useSelectionSet';
 
 type Status = 'idle' | 'scanning' | 'scanned' | 'cleaning';
 
@@ -33,8 +35,8 @@ interface JunkScanProgress {
 }
 
 const status = ref<Status>('idle');
-const result = ref<JunkScanResult | null>(null);
-const checked = ref<Set<string>>(new Set());
+const result = shallowRef<JunkScanResult | null>(null);
+const checked = useSelectionSet<string>();
 const activeCollapse = ref<string[]>([]);
 const lastCategories = ref<JunkCategory[] | null>(null);
 const scanProgress = ref<JunkScanProgress | null>(null);
@@ -49,6 +51,44 @@ interface CategoryGroup {
   items: JunkItem[];
   totalSize: number;
   defaultSelectedCount: number;
+}
+
+interface GroupSummary {
+  total: number;
+  checked: number;
+  totalSize: number;
+  checkedSize: number;
+  all: boolean;
+  some: boolean;
+}
+
+// 按 path 分类的索引：path -> { item, group }
+const itemIndex = new Map<string, { item: JunkItem; group: CategoryGroup }>();
+
+// selectedSize 增量维护：每个写入点直接 +/- delta，避免遍历整个已选集合。
+// `replace`/`clear` 会走 `recomputeSelectedSize()` 做一次性重算。
+let selectedSizeAcc = 0;
+const selectedSizeRef = ref(0);
+
+function bumpSize(delta: number) {
+  if (delta === 0) return;
+  selectedSizeAcc += delta;
+  if (selectedSizeAcc < 0) selectedSizeAcc = 0;
+  selectedSizeRef.value = selectedSizeAcc;
+}
+
+function recomputeSelectedSize() {
+  let size = 0;
+  for (const p of checked.value) {
+    const idx = itemIndex.get(p);
+    if (idx) size += idx.item.size;
+  }
+  selectedSizeAcc = size;
+  selectedSizeRef.value = size;
+}
+
+function sizeOfPath(path: string): number {
+  return itemIndex.get(path)?.item.size ?? 0;
 }
 
 const groups = computed<CategoryGroup[]>(() => {
@@ -74,27 +114,59 @@ const groups = computed<CategoryGroup[]>(() => {
   return Array.from(map.values()).sort((a, b) => b.totalSize - a.totalSize);
 });
 
-const selectedItems = computed<JunkItem[]>(() => {
-  const r = result.value;
-  if (!r) return [];
-  return r.items.filter((i) => checked.value.has(i.path));
+// 模板里通过 Map 直接读取分组汇总，避免多次 groupCheckedCount(g) 函数调用。
+const groupSummaries = computed<Map<JunkCategory, GroupSummary>>(() => {
+  // 依赖：groups + checked.value
+  const checkedSet = checked.value;
+  const map = new Map<JunkCategory, GroupSummary>();
+  const list = groups.value;
+  for (const g of list) {
+    let n = 0;
+    let cs = 0;
+    for (const it of g.items) {
+      if (checkedSet.has(it.path)) {
+        n += 1;
+        cs += it.size;
+      }
+    }
+    const total = g.items.length;
+    map.set(g.category, {
+      total,
+      checked: n,
+      totalSize: g.totalSize,
+      checkedSize: cs,
+      all: total > 0 && n === total,
+      some: n > 0 && n < total,
+    });
+  }
+  return map;
 });
 
-const selectedSize = computed(() =>
-  selectedItems.value.reduce((sum, i) => sum + i.size, 0),
-);
+const selectedCount = checked.sizeRef;
+const selectedSize = computed(() => selectedSizeRef.value);
 
 const totalCleanableLabel = computed(() => {
   if (!result.value) return '';
   return formatBytes(result.value.total_size);
 });
 
-function applyDefaultSelection(items: JunkItem[]) {
-  const next = new Set<string>();
-  for (const item of items) {
-    if (item.default_selected) next.add(item.path);
+function rebuildItemIndex(items: JunkItem[]) {
+  itemIndex.clear();
+  // 临时：构建一个 path -> item 映射，分组在 groups computed 计算时填充
+  // 简化处理：先构建 path -> item，group 字段由 groups computed 的下一次访问负责对齐
+  // 但因 groupSummaries 不依赖 itemIndex.group，仅 selectedSize 用 itemIndex.item.size 即可
+  for (const it of items) {
+    itemIndex.set(it.path, { item: it, group: undefined as unknown as CategoryGroup });
   }
-  checked.value = next;
+}
+
+function applyDefaultSelection(items: JunkItem[]) {
+  const next: string[] = [];
+  for (const item of items) {
+    if (item.default_selected) next.push(item.path);
+  }
+  checked.replace(next);
+  recomputeSelectedSize();
 }
 
 function applyDefaultExpansion() {
@@ -111,6 +183,7 @@ async function startScan(categories: JunkCategory[] | null = lastCategories.valu
   const cached = cache.get(categories);
   if (cached) {
     result.value = cached.result;
+    rebuildItemIndex(cached.result.items);
     applyDefaultSelection(cached.result.items);
     applyDefaultExpansion();
     status.value = 'scanned';
@@ -122,7 +195,10 @@ async function startScan(categories: JunkCategory[] | null = lastCategories.valu
 
   status.value = 'scanning';
   result.value = null;
-  checked.value = new Set();
+  itemIndex.clear();
+  selectedSizeAcc = 0;
+  selectedSizeRef.value = 0;
+  checked.clear();
   activeCollapse.value = [];
   lastCategories.value = categories;
   scanProgress.value = null;
@@ -139,10 +215,10 @@ async function startScan(categories: JunkCategory[] | null = lastCategories.valu
     void 0;
   }
 
-
   try {
     const r = await invoke<JunkScanResult>(CMD_SCAN_JUNK, { categories });
     result.value = r;
+    rebuildItemIndex(r.items);
     cache.set(categories, r);
     applyDefaultSelection(r.items);
     applyDefaultExpansion();
@@ -185,59 +261,53 @@ function onPresetApply(categories: JunkCategory[] | null) {
 }
 
 function toggleItem(path: string, on: boolean | string | number) {
-  const next = new Set(checked.value);
-  if (on) next.add(path);
-  else next.delete(path);
-  checked.value = next;
+  if (on) {
+    if (checked.add(path)) bumpSize(sizeOfPath(path));
+  } else {
+    if (checked.delete(path)) bumpSize(-sizeOfPath(path));
+  }
 }
 
 function isChecked(path: string): boolean {
-  return checked.value.has(path);
+  return checked.has(path);
 }
 
 function selectAll() {
   if (!result.value) return;
-  const next = new Set<string>();
-  for (const item of result.value.items) next.add(item.path);
-  checked.value = next;
+  const all: string[] = [];
+  for (const item of result.value.items) all.push(item.path);
+  checked.replace(all);
+  recomputeSelectedSize();
 }
 
 function selectNone() {
-  checked.value = new Set();
+  checked.clear();
+  selectedSizeAcc = 0;
+  selectedSizeRef.value = 0;
 }
 
 function selectSafeOnly() {
   if (!result.value) return;
-  const next = new Set<string>();
+  const safeList: string[] = [];
   for (const item of result.value.items) {
-    if (item.risk_level === 'safe') next.add(item.path);
+    if (item.risk_level === 'safe') safeList.push(item.path);
   }
-  checked.value = next;
-}
-
-function groupCheckedCount(group: CategoryGroup): number {
-  let n = 0;
-  for (const item of group.items) if (checked.value.has(item.path)) n += 1;
-  return n;
-}
-
-function groupAllChecked(group: CategoryGroup): boolean {
-  return group.items.length > 0 && groupCheckedCount(group) === group.items.length;
-}
-
-function groupSomeChecked(group: CategoryGroup): boolean {
-  const n = groupCheckedCount(group);
-  return n > 0 && n < group.items.length;
+  checked.replace(safeList);
+  recomputeSelectedSize();
 }
 
 function toggleGroup(group: CategoryGroup, on: boolean | string | number) {
-  const next = new Set(checked.value);
+  let delta = 0;
   if (on) {
-    for (const item of group.items) next.add(item.path);
+    for (const item of group.items) {
+      if (checked.add(item.path)) delta += item.size;
+    }
   } else {
-    for (const item of group.items) next.delete(item.path);
+    for (const item of group.items) {
+      if (checked.delete(item.path)) delta -= item.size;
+    }
   }
-  checked.value = next;
+  bumpSize(delta);
 }
 
 function riskLabel(risk: JunkItem['risk_level']): string {
@@ -283,7 +353,7 @@ const confirmTitle = computed(() =>
 );
 
 const confirmMessage = computed(() => {
-  const n = checked.value.size;
+  const n = checked.size;
   if (confirmMode.value === 'permanent') {
     return `将永久删除 ${n} 项，无法恢复。`;
   }
@@ -299,7 +369,7 @@ const confirmText = computed(() =>
 );
 
 function openConfirm(mode: 'recycle' | 'permanent') {
-  if (checked.value.size === 0) return;
+  if (checked.size === 0) return;
   if (status.value === 'cleaning' || status.value === 'scanning') return;
   confirmMode.value = mode;
   confirmOpen.value = true;
@@ -339,12 +409,38 @@ async function performClean() {
     showToast('清理失败', String(err), 'error');
   } finally {
     status.value = 'scanned';
-    checked.value = new Set();
+    checked.clear();
+    selectedSizeAcc = 0;
+    selectedSizeRef.value = 0;
     cache.clear();
     await startScan();
   }
 }
 
+// 当 result 变化时同步 itemIndex（确保 setFromCache 也同步）
+watch(
+  () => result.value,
+  (r) => {
+    if (r) rebuildItemIndex(r.items);
+  },
+);
+
+function summaryOf(category: JunkCategory): GroupSummary {
+  return (
+    groupSummaries.value.get(category) ?? {
+      total: 0,
+      checked: 0,
+      totalSize: 0,
+      checkedSize: 0,
+      all: false,
+      some: false,
+    }
+  );
+}
+
+function isGroupActive(category: JunkCategory): boolean {
+  return activeCollapse.value.includes(category);
+}
 </script>
 
 <template>
@@ -425,8 +521,8 @@ async function performClean() {
           <template #title>
             <div class="junk-group-title" @click.stop>
               <ElCheckbox
-                :model-value="groupAllChecked(g)"
-                :indeterminate="groupSomeChecked(g)"
+                :model-value="summaryOf(g.category).all"
+                :indeterminate="summaryOf(g.category).some"
                 @update:model-value="(v) => toggleGroup(g, v)"
                 @click.stop
               />
@@ -435,35 +531,46 @@ async function performClean() {
             </div>
           </template>
 
-          <ul v-if="activeCollapse.includes(g.category)" class="junk-list">
-            <li v-for="item in g.items" :key="item.path" class="junk-row">
-              <ElCheckbox
-                class="junk-row-check"
-                :model-value="isChecked(item.path)"
-                @update:model-value="(v) => toggleItem(item.path, v)"
-              />
-              <div class="junk-row-main">
-                <div class="junk-row-name">{{ item.rule_name }}</div>
-                <MiddlePath class="junk-row-path" :path="item.path" />
+          <div
+            v-if="isGroupActive(g.category)"
+            class="junk-list-shell"
+            :style="{ height: Math.min(g.items.length, 10) * 64 + 'px' }"
+          >
+            <VirtualList
+              :items="g.items"
+              :item-size="64"
+              :buffer="6"
+              v-slot="{ item }"
+            >
+              <div :key="(item as JunkItem).path" class="junk-row">
+                <ElCheckbox
+                  class="junk-row-check"
+                  :model-value="isChecked((item as JunkItem).path)"
+                  @update:model-value="(v) => toggleItem((item as JunkItem).path, v)"
+                />
+                <div class="junk-row-main">
+                  <div class="junk-row-name">{{ (item as JunkItem).rule_name }}</div>
+                  <MiddlePath class="junk-row-path" :path="(item as JunkItem).path" />
+                </div>
+                <div class="junk-row-meta">
+                  <span class="junk-row-count">{{ (item as JunkItem).file_count }} 个文件</span>
+                  <span class="junk-row-size">{{ formatBytes((item as JunkItem).size) }}</span>
+                  <ElTag
+                    class="junk-row-risk"
+                    :type="riskTagType((item as JunkItem).risk_level)"
+                    size="small"
+                    effect="light"
+                    round
+                  >
+                    <span class="junk-risk-inner">
+                      <component :is="riskIconFor((item as JunkItem).risk_level)" :size="12" />
+                      <span>{{ riskLabel((item as JunkItem).risk_level) }}</span>
+                    </span>
+                  </ElTag>
+                </div>
               </div>
-              <div class="junk-row-meta">
-                <span class="junk-row-count">{{ item.file_count }} 个文件</span>
-                <span class="junk-row-size">{{ formatBytes(item.size) }}</span>
-                <ElTag
-                  class="junk-row-risk"
-                  :type="riskTagType(item.risk_level)"
-                  size="small"
-                  effect="light"
-                  round
-                >
-                  <span class="junk-risk-inner">
-                    <component :is="riskIconFor(item.risk_level)" :size="12" />
-                    <span>{{ riskLabel(item.risk_level) }}</span>
-                  </span>
-                </ElTag>
-              </div>
-            </li>
-          </ul>
+            </VirtualList>
+          </div>
         </ElCollapseItem>
       </ElCollapse>
     </template>
@@ -482,20 +589,20 @@ async function performClean() {
       class="junk-foot"
     >
       <div class="junk-foot-stats">
-        <strong>已选 {{ checked.size }} 项</strong>
+        <strong>已选 {{ selectedCount }} 项</strong>
         <span>{{ formatBytes(selectedSize) }}</span>
       </div>
       <div class="junk-foot-actions">
         <button
           class="junk-btn junk-btn--primary"
-          :disabled="checked.size === 0 || status === 'cleaning'"
+          :disabled="selectedCount === 0 || status === 'cleaning'"
           @click="openConfirm('recycle')"
         >
           清理到回收站
         </button>
         <button
           class="junk-btn junk-btn--danger"
-          :disabled="checked.size === 0 || status === 'cleaning'"
+          :disabled="selectedCount === 0 || status === 'cleaning'"
           @click="openConfirm('permanent')"
         >
           永久删除
@@ -739,11 +846,9 @@ async function performClean() {
   font-feature-settings: 'tnum';
 }
 
-.junk-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.junk-list-shell {
   background: var(--color-bg-secondary);
+  min-height: 64px;
 }
 
 .junk-row {
@@ -753,6 +858,8 @@ async function performClean() {
   gap: 0.7rem;
   padding: 0.55rem 1rem;
   border-top: 1px solid var(--color-border-light);
+  height: 64px;
+  box-sizing: border-box;
 }
 
 .junk-row-check {

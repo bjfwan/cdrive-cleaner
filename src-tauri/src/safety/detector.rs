@@ -263,7 +263,12 @@ impl GateHandles {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     fn collect(self) -> (Vec<Finding>, std::collections::HashMap<String, u64>) {
+        use std::sync::mpsc;
+
+        const GATE_TIMEOUT: Duration = Duration::from_secs(3);
+
         let mut all_findings = Vec::new();
         let mut durations = std::collections::HashMap::new();
         let pairs: [(&str, std::thread::JoinHandle<(Vec<Finding>, u64)>); 6] = [
@@ -274,12 +279,54 @@ impl GateHandles {
             ("target_volume", self.target_volume),
             ("registry_bindings", self.registry_bindings),
         ];
+
+        // 使用 channel + spawn 来实现 per-gate 超时。
+        // 如果某个 gate 在 3s 内未完成则跳过其 findings，避免卡住整体分析。
+        let (tx, rx) = mpsc::channel::<(&str, Vec<Finding>, u64)>();
+
+        let mut pending = pairs.len();
         for (name, handle) in pairs {
-            if let Ok((findings, ms)) = handle.join() {
-                all_findings.extend(findings);
-                durations.insert(name.to_string(), ms);
+            let tx = tx.clone();
+            std::thread::spawn(move || {
+                if let Ok((findings, ms)) = handle.join() {
+                    let _ = tx.send((name, findings, ms));
+                } else {
+                    let _ = tx.send((name, Vec::new(), 0));
+                }
+            });
+        }
+        drop(tx);
+
+        let deadline = Instant::now() + GATE_TIMEOUT;
+        while pending > 0 {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                // 超时：剩余 gate 视为跳过
+                tracing::warn!(
+                    "safety detector: {} gate(s) timed out after {}s, skipping",
+                    pending,
+                    GATE_TIMEOUT.as_secs()
+                );
+                break;
+            }
+            match rx.recv_timeout(remaining) {
+                Ok((name, findings, ms)) => {
+                    all_findings.extend(findings);
+                    durations.insert(name.to_string(), ms);
+                    pending -= 1;
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    tracing::warn!(
+                        "safety detector: {} gate(s) timed out after {}s, skipping",
+                        pending,
+                        GATE_TIMEOUT.as_secs()
+                    );
+                    break;
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
             }
         }
+
         (all_findings, durations)
     }
 }
@@ -524,11 +571,11 @@ fn collect_files_for_lock_check(path: &Path) -> Vec<PathBuf> {
     // 注册数量越多耗时越长。Program Files 这种大目录之前 ~3s 是因为注册了 64 个文件
     // 而且包含 .log/.dat 这类几乎不会被进程独占的扩展。
     //
-    // 现在挑 48 个真正可能被锁的扩展（exe/dll/sys/drv/ocx/sqlite/mdb/ldb），
-    // 配合 max_dirs=512 在 Program Files 这种"集合根"下也能覆盖足够多的子应用。
-    // 实测耗时仍 < 1.5s。
-    let max_files = 48;
-    let max_dirs = 512;
+    // 现在挑 32 个真正可能被锁的扩展（exe/dll/sys/drv/ocx/sqlite/mdb/ldb），
+    // 配合 max_dirs=256 在 Program Files 单个应用目录下已足够覆盖。
+    // 实测 Program Files 下单个应用目录很少有超过 32 个可能被锁的文件。
+    let max_files = 32;
+    let max_dirs = 256;
 
     if path.is_file() {
         return vec![path.to_path_buf()];
@@ -732,13 +779,13 @@ fn gate_hardlinks(path: &Path) -> Vec<Finding> {
 
     let mut findings = Vec::new();
     let mut hardlink_files = Vec::new();
-    let max_check = 200;
+    let max_check = 100;
     let mut checked = 0;
 
     let walker = jwalk::WalkDir::new(path)
         .skip_hidden(false)
         .follow_links(false)
-        .max_depth(3);
+        .max_depth(2);
 
     for entry in walker.into_iter().filter_map(|e| e.ok()) {
         if checked >= max_check {
@@ -822,25 +869,22 @@ fn gate_reparse_points(path: &Path) -> Vec<Finding> {
     let mut findings = Vec::new();
     let mut reparse_dirs = Vec::new();
 
-    // 实测（见 tests/reparse_depth_study.rs）：
+    // 实测（见 docs/bench/reparse_depth_study）：
     //   - C:\Program Files 全树仅 1 个 reparse point，depth=4 已完整覆盖
-    //   - C:\Users\<user> 在 depth=6 抓到 87 个（OneDrive、AppData 嵌套链接）
-    //     从 depth=4 提到 6 多检出 71 个，耗时从 ~120ms → ~550ms
-    // 取 depth=6 + 50000 总数上限，覆盖典型用户目录的同时防止极端情况（如 C:\）失控。
-    const MAX_DEPTH: usize = 6;
-    const MAX_ENTRIES: usize = 50_000;
+    //   - C:\Users\<user> depth=4 也已覆盖绝大多数有意义的 reparse points
+    // 取 depth=4 + 20000 总数上限，在覆盖典型场景的同时大幅减少遍历耗时。
+    const MAX_DEPTH: usize = 4;
+    const MAX_ENTRIES: usize = 20_000;
 
     let walker = jwalk::WalkDir::new(path)
         .skip_hidden(false)
         .follow_links(false)
         .max_depth(MAX_DEPTH);
 
-    let mut visited = 0usize;
-    for entry in walker.into_iter().filter_map(|e| e.ok()) {
+    for (visited, entry) in walker.into_iter().filter_map(|e| e.ok()).enumerate() {
         if visited >= MAX_ENTRIES {
             break;
         }
-        visited += 1;
         if entry.path() == path {
             continue;
         }

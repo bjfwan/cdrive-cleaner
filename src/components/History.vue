@@ -21,7 +21,7 @@
           <div class="stat-label">总迁移数</div>
         </div>
       </div>
-      
+
       <div class="stat-card">
         <div class="stat-icon size">
           <IconDisk :size="20" />
@@ -31,7 +31,7 @@
           <div class="stat-label">总迁移大小</div>
         </div>
       </div>
-      
+
       <div class="stat-card active">
         <div class="stat-icon">
           <IconSuccess :size="20" />
@@ -41,7 +41,7 @@
           <div class="stat-label">活跃迁移</div>
         </div>
       </div>
-      
+
       <div class="stat-card rolled">
         <div class="stat-icon">
           <IconRollback :size="20" />
@@ -57,7 +57,7 @@
       <div class="loading-spinner"></div>
       <p>加载中...</p>
     </div>
-    
+
     <div v-else-if="records.length === 0" class="empty-state">
       <IconDocument class="empty-icon" :size="64" />
       <h3>暂无迁移记录</h3>
@@ -65,61 +65,67 @@
     </div>
 
     <div v-else class="records-list">
-      <div 
-        v-for="record in records" 
-        :key="record.id" 
-        class="record-card"
-        :class="{ 'is-rolled-back': record.status === 'rolled_back' }"
+      <VirtualList
+        :items="records"
+        :item-size="recordItemSize"
+        :buffer="4"
+        v-slot="{ item: record }"
       >
-        <div class="record-header">
-          <div class="record-meta">
-            <span class="record-id">ID {{ record.id }}</span>
-            <span class="record-dot">·</span>
-            <span class="record-time">{{ formatDate(record.created_at) }}</span>
+        <div
+          :key="(record as MigrationRecord).id"
+          class="record-card"
+          :class="{ 'is-rolled-back': (record as MigrationRecord).status === 'rolled_back' }"
+        >
+          <div class="record-header">
+            <div class="record-meta">
+              <span class="record-id">ID {{ (record as MigrationRecord).id }}</span>
+              <span class="record-dot">·</span>
+              <span class="record-time">{{ formatDate((record as MigrationRecord).created_at) }}</span>
+            </div>
+            <div class="record-badge" :class="(record as MigrationRecord).status">
+              <span class="badge-dot"></span>
+              <span>{{ (record as MigrationRecord).status === 'active' ? '活跃' : '已回滚' }}</span>
+            </div>
           </div>
-          <div class="record-badge" :class="record.status">
-            <span class="badge-dot"></span>
-            <span>{{ record.status === 'active' ? '活跃' : '已回滚' }}</span>
-          </div>
-        </div>
-        
-        <div class="record-paths">
-          <div class="path-row">
-            <div class="path-label">源路径</div>
-            <div class="path-value">{{ record.source_path }}</div>
-          </div>
-          <div class="path-arrow">
-            <IconArrowRight :size="20" />
-          </div>
-          <div class="path-row">
-            <div class="path-label">目标路径</div>
-            <div class="path-value">{{ record.target_path }}</div>
-          </div>
-        </div>
 
-        <div class="record-details">
-          <div class="detail-item">
-            <IconSizeIcon :size="16" />
-            <span>{{ formatSize(record.file_size) }}</span>
+          <div class="record-paths">
+            <div class="path-row">
+              <div class="path-label">源路径</div>
+              <div class="path-value">{{ (record as MigrationRecord).source_path }}</div>
+            </div>
+            <div class="path-arrow">
+              <IconArrowRight :size="20" />
+            </div>
+            <div class="path-row">
+              <div class="path-label">目标路径</div>
+              <div class="path-value">{{ (record as MigrationRecord).target_path }}</div>
+            </div>
           </div>
-          <div class="detail-item">
-            <IconDocument :size="16" />
-            <span>{{ record.link_type }}</span>
-          </div>
-        </div>
 
-        <div v-if="record.status === 'active'" class="record-actions">
-          <button 
-            @click="confirmRollback(record)"
-            class="rollback-btn"
-            :disabled="rollingBack === record.id"
-          >
-            <IconRollback :size="16" />
-            <span v-if="rollingBack !== record.id">回滚</span>
-            <span v-else>回滚中...</span>
-          </button>
+          <div class="record-details">
+            <div class="detail-item">
+              <IconSizeIcon :size="16" />
+              <span>{{ formatSize((record as MigrationRecord).file_size) }}</span>
+            </div>
+            <div class="detail-item">
+              <IconDocument :size="16" />
+              <span>{{ (record as MigrationRecord).link_type }}</span>
+            </div>
+          </div>
+
+          <div v-if="(record as MigrationRecord).status === 'active'" class="record-actions">
+            <button
+              @click="confirmRollback(record as MigrationRecord)"
+              class="rollback-btn"
+              :disabled="rollingBack === (record as MigrationRecord).id"
+            >
+              <IconRollback :size="16" />
+              <span v-if="rollingBack !== (record as MigrationRecord).id">回滚</span>
+              <span v-else>回滚中...</span>
+            </button>
+          </div>
         </div>
-      </div>
+      </VirtualList>
     </div>
 
     <div v-if="showConfirm" class="modal-overlay" @click="showConfirm = false">
@@ -127,7 +133,7 @@
         <button class="modal-close" @click="showConfirm = false">
           <IconClose :size="20" />
         </button>
-        
+
         <div class="modal-header">
           <div class="modal-icon">
             <IconWarning :size="24" />
@@ -135,7 +141,7 @@
           <h3>确认回滚操作</h3>
           <p>此操作将撤销迁移并恢复原始文件位置</p>
         </div>
-        
+
         <div class="modal-content">
           <div class="info-section">
             <div class="info-row">
@@ -147,7 +153,7 @@
               <span class="info-value">{{ selectedRecord?.target_path }}</span>
             </div>
           </div>
-          
+
           <div class="warning-box">
             <IconWarning :size="20" />
             <div>
@@ -156,7 +162,7 @@
             </div>
           </div>
         </div>
-        
+
         <div class="modal-actions">
           <button @click="showConfirm = false" class="btn-secondary">取消</button>
           <button @click="executeRollback" class="btn-danger">确认回滚</button>
@@ -167,24 +173,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, shallowRef, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { 
-  IconRefresh, IconChart, IconSizeIcon, IconSuccess, IconRollback, 
-  IconDocument, IconArrowRight, IconDisk, IconClose, IconWarning 
+import {
+  IconRefresh, IconChart, IconSizeIcon, IconSuccess, IconRollback,
+  IconDocument, IconArrowRight, IconDisk, IconClose, IconWarning
 } from './icons'
+import VirtualList from './VirtualList.vue'
 import type { MigrationRecord, MigrationStats } from '../types'
 import { formatBytes, formatDate } from '../utils/format'
 import { useToast } from '../composables/useToast'
 
 const showToast = useToast()
 
-const records = ref<MigrationRecord[]>([])
-const stats = ref<MigrationStats | null>(null)
+const records = shallowRef<MigrationRecord[]>([])
+const stats = shallowRef<MigrationStats | null>(null)
 const loading = ref(false)
 const rollingBack = ref<number | null>(null)
 const showConfirm = ref(false)
 const selectedRecord = ref<MigrationRecord | null>(null)
+
+// 单条记录的估计高度（与 .record-card 的 padding/min-height 对齐）
+const recordItemSize = 250
 
 const loadHistory = async () => {
   loading.value = true
@@ -214,11 +224,11 @@ const confirmRollback = (record: MigrationRecord) => {
 
 const executeRollback = async () => {
   if (!selectedRecord.value) return
-  
+
   const recordId = selectedRecord.value.id
   rollingBack.value = recordId
   showConfirm.value = false
-  
+
   try {
     await invoke('rollback_migration', { migrationId: recordId })
     await loadHistory()
@@ -242,7 +252,6 @@ onMounted(() => {
 .history-container {
   height: 100%;
   min-height: 0;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   background: transparent;
@@ -250,9 +259,7 @@ onMounted(() => {
 }
 
 .history-header {
-  position: sticky;
-  top: 0;
-  z-index: 2;
+  flex-shrink: 0;
   display: flex;
   align-items: start;
   justify-content: space-between;
@@ -318,6 +325,7 @@ onMounted(() => {
 }
 
 .stats-grid {
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 1rem;
@@ -419,23 +427,25 @@ onMounted(() => {
 }
 
 .records-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  flex: 1;
+  min-height: 0;
   padding: 1.3rem 1.8rem 1.8rem;
 }
 
 .record-card {
+  margin-bottom: 1rem;
   padding: 1.35rem;
   border-radius: var(--radius-lg);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(247, 241, 232, 0.88));
   border: 1px solid var(--color-border-light);
   box-shadow: var(--shadow-xs);
-  transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base), opacity var(--transition-fast);
+  transition: background var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base), opacity var(--transition-fast);
+  height: 234px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .record-card:hover {
-  transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
 }
 

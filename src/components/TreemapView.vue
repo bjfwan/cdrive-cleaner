@@ -325,7 +325,7 @@ function handleItemClick(dir: DirectoryNode) {
   background: rgba(255, 255, 255, 0.64);
   border: 1px solid rgba(46, 33, 18, 0.08);
   cursor: pointer;
-  transition: transform var(--transition-base), box-shadow var(--transition-base), background var(--transition-base);
+  transition: transform var(--transition-base), background var(--transition-base);
 }
 
 .preview-item:hover {

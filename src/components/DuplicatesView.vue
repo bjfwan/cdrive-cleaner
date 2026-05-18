@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { formatBytes } from '../utils/format';
 import { useToast } from '../composables/useToast';
+import { useSelectionSet } from '../composables/useSelectionSet';
+import VirtualList from './VirtualList.vue';
 
 interface DuplicateFile {
   path: string;
@@ -14,6 +16,8 @@ interface DuplicateGroup {
   size: number;
   files: DuplicateFile[];
   wasted_bytes: number;
+  /** 缓存按 mtime 倒序排序的副本，避免每次模板里 [...].sort */
+  _sorted?: DuplicateFile[];
 }
 
 interface DuplicateProgress {
@@ -38,13 +42,40 @@ const props = defineProps<Props>();
 const emit = defineEmits<{ refresh: [] }>();
 
 const showToast = useToast();
-const groups = ref<DuplicateGroup[]>([]);
+const groups = shallowRef<DuplicateGroup[]>([]);
 const scanning = ref(false);
 const progress = ref<DuplicateProgress | null>(null);
-const expanded = ref<Set<number>>(new Set());
-const checked = ref<Set<string>>(new Set());
+const expanded = useSelectionSet<number>();
+const checked = useSelectionSet<string>();
 const deleting = ref(false);
 const deleteProgress = ref<{ deleted: number; total: number }>({ deleted: 0, total: 0 });
+
+// 已选大小累积器：在每个写入点直接 +/- delta，避免每次 toggle 遍历整个已选集合。
+let checkedTotalSize = 0;
+const checkedSizeRef = ref(0);
+
+function bumpCheckedSize(delta: number) {
+  if (delta === 0) return;
+  checkedTotalSize += delta;
+  if (checkedTotalSize < 0) checkedTotalSize = 0;
+  checkedSizeRef.value = checkedTotalSize;
+}
+
+function recomputeCheckedSize() {
+  let size = 0;
+  for (const p of checked.value) {
+    size += pathSizeMap.get(p) ?? 0;
+  }
+  checkedTotalSize = size;
+  checkedSizeRef.value = size;
+}
+
+function sizeOfPath(path: string): number {
+  return pathSizeMap.get(path) ?? 0;
+}
+
+// path -> 该 path 的文件 size（来自所属 group.size）
+const pathSizeMap = new Map<string, number>();
 
 let unlisten: UnlistenFn | null = null;
 
@@ -52,8 +83,11 @@ watch(
   () => props.rootPath,
   () => {
     groups.value = [];
-    checked.value = new Set();
-    expanded.value = new Set();
+    pathSizeMap.clear();
+    checkedTotalSize = 0;
+    checkedSizeRef.value = 0;
+    checked.clear();
+    expanded.clear();
   },
 );
 
@@ -64,6 +98,22 @@ onBeforeUnmount(() => {
   }
 });
 
+function rebuildPathSizeMap(list: DuplicateGroup[]) {
+  pathSizeMap.clear();
+  for (const g of list) {
+    for (const f of g.files) {
+      pathSizeMap.set(f.path, g.size);
+    }
+  }
+}
+
+function getSorted(group: DuplicateGroup): DuplicateFile[] {
+  if (group._sorted) return group._sorted;
+  const sorted = [...group.files].sort((a, b) => b.modified_at.localeCompare(a.modified_at));
+  group._sorted = sorted;
+  return sorted;
+}
+
 async function startScan() {
   if (!props.hasDeepScanned) {
     showToast('需要先扫描', '请先执行一次深度扫描', 'warning');
@@ -72,8 +122,11 @@ async function startScan() {
   if (scanning.value) return;
   scanning.value = true;
   groups.value = [];
-  checked.value = new Set();
-  expanded.value = new Set();
+  pathSizeMap.clear();
+  checkedTotalSize = 0;
+  checkedSizeRef.value = 0;
+  checked.clear();
+  expanded.clear();
   progress.value = { current_size: 0, scanned_files: 0, found_groups: 0 };
 
   if (unlisten) {
@@ -89,6 +142,7 @@ async function startScan() {
       rootPath: props.rootPath,
     });
     groups.value = result;
+    rebuildPathSizeMap(result);
     applyDefaultSelection(result);
     if (result.length === 0) {
       showToast('没有发现重复文件', '在 ≥ 100 MB 的大文件里没找到重复', 'info');
@@ -111,64 +165,50 @@ async function startScan() {
 }
 
 function applyDefaultSelection(list: DuplicateGroup[]) {
-  const next = new Set<string>();
+  const next: string[] = [];
   for (const group of list) {
-    const sorted = [...group.files].sort((a, b) => b.modified_at.localeCompare(a.modified_at));
+    const sorted = getSorted(group);
     for (let i = 1; i < sorted.length; i++) {
-      next.add(sorted[i].path);
+      next.push(sorted[i].path);
     }
   }
-  checked.value = next;
+  checked.replace(next);
+  recomputeCheckedSize();
 }
 
-const totalChecked = computed(() => checked.value.size);
-const totalCheckedSize = computed(() => {
-  let sum = 0;
-  for (const group of groups.value) {
-    for (const file of group.files) {
-      if (checked.value.has(file.path)) {
-        sum += group.size;
-      }
-    }
-  }
-  return sum;
-});
+const totalChecked = checked.sizeRef;
+const totalCheckedSize = computed(() => checkedSizeRef.value);
 
 function toggleExpand(index: number) {
-  const next = new Set(expanded.value);
-  if (next.has(index)) {
-    next.delete(index);
-  } else {
-    next.add(index);
-  }
-  expanded.value = next;
+  expanded.toggle(index);
 }
 
 function toggleFile(path: string) {
-  const next = new Set(checked.value);
-  if (next.has(path)) {
-    next.delete(path);
+  if (checked.has(path)) {
+    checked.delete(path);
+    bumpCheckedSize(-sizeOfPath(path));
   } else {
-    next.add(path);
+    checked.add(path);
+    bumpCheckedSize(sizeOfPath(path));
   }
-  checked.value = next;
 }
 
 function selectAllInGroup(group: DuplicateGroup) {
-  const next = new Set(checked.value);
-  const sorted = [...group.files].sort((a, b) => b.modified_at.localeCompare(a.modified_at));
+  const sorted = getSorted(group);
+  let delta = 0;
   for (let i = 1; i < sorted.length; i++) {
-    next.add(sorted[i].path);
+    const f = sorted[i];
+    if (checked.add(f.path)) delta += sizeOfPath(f.path);
   }
-  checked.value = next;
+  bumpCheckedSize(delta);
 }
 
 function clearGroup(group: DuplicateGroup) {
-  const next = new Set(checked.value);
+  let delta = 0;
   for (const file of group.files) {
-    next.delete(file.path);
+    if (checked.delete(file.path)) delta -= sizeOfPath(file.path);
   }
-  checked.value = next;
+  bumpCheckedSize(delta);
 }
 
 async function performDelete() {
@@ -196,14 +236,23 @@ async function performDelete() {
         'warning',
       );
     }
-    groups.value = groups.value
-      .map((group) => ({
-        ...group,
-        files: group.files.filter((file) => !paths.includes(file.path)),
-        wasted_bytes: Math.max(0, group.size * Math.max(0, group.files.filter((f) => !paths.includes(f.path)).length - 1)),
-      }))
+    const deletedSet = new Set(paths);
+    const next = groups.value
+      .map((group) => {
+        const remaining = group.files.filter((file) => !deletedSet.has(file.path));
+        return {
+          size: group.size,
+          files: remaining,
+          wasted_bytes: Math.max(0, group.size * Math.max(0, remaining.length - 1)),
+        } as DuplicateGroup;
+      })
       .filter((group) => group.files.length >= 2);
-    checked.value = new Set();
+    groups.value = next;
+    rebuildPathSizeMap(next);
+    checkedTotalSize = 0;
+    checkedSizeRef.value = 0;
+    checked.clear();
+    expanded.clear();
     emit('refresh');
   } catch (err) {
     showToast('清理失败', String(err), 'error');
@@ -213,7 +262,11 @@ async function performDelete() {
 }
 
 function isChecked(path: string) {
-  return checked.value.has(path);
+  return checked.has(path);
+}
+
+function isExpanded(idx: number) {
+  return expanded.has(idx);
 }
 
 function formatModified(value: string) {
@@ -281,28 +334,39 @@ function formatModified(value: string) {
           <div class="dupe-group-actions" @click.stop>
             <button class="dupe-btn dupe-btn--mini" @click="selectAllInGroup(group)">保留最新</button>
             <button class="dupe-btn dupe-btn--mini dupe-btn--ghost" @click="clearGroup(group)">全部取消</button>
-            <span class="dupe-toggle" :class="{ open: expanded.has(idx) }">▾</span>
+            <span class="dupe-toggle" :class="{ open: isExpanded(idx) }">▾</span>
           </div>
         </header>
 
-        <ul v-if="expanded.has(idx)" class="dupe-files">
-          <li v-for="file in [...group.files].sort((a, b) => b.modified_at.localeCompare(a.modified_at))" :key="file.path" class="dupe-file">
-            <button
-              class="dupe-check"
-              :class="{ checked: isChecked(file.path) }"
-              @click="toggleFile(file.path)"
-              :aria-label="isChecked(file.path) ? '取消选择' : '选择'"
-            >
-              <svg v-if="isChecked(file.path)" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-                <path d="M3 8.5L6.5 12L13 4.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-              </svg>
-            </button>
-            <div class="dupe-file-main">
-              <div class="dupe-file-path" :title="file.path">{{ file.path }}</div>
-              <small>修改于 {{ formatModified(file.modified_at) }}</small>
+        <div
+          v-if="isExpanded(idx)"
+          class="dupe-files-shell"
+          :style="{ height: Math.min(group.files.length, 8) * 56 + 'px' }"
+        >
+          <VirtualList
+            :items="getSorted(group)"
+            :item-size="56"
+            :buffer="4"
+            v-slot="{ item: file }"
+          >
+            <div :key="(file as DuplicateFile).path" class="dupe-file">
+              <button
+                class="dupe-check"
+                :class="{ checked: isChecked((file as DuplicateFile).path) }"
+                @click="toggleFile((file as DuplicateFile).path)"
+                :aria-label="isChecked((file as DuplicateFile).path) ? '取消选择' : '选择'"
+              >
+                <svg v-if="isChecked((file as DuplicateFile).path)" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+                  <path d="M3 8.5L6.5 12L13 4.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                </svg>
+              </button>
+              <div class="dupe-file-main">
+                <div class="dupe-file-path" :title="(file as DuplicateFile).path">{{ (file as DuplicateFile).path }}</div>
+                <small>修改于 {{ formatModified((file as DuplicateFile).modified_at) }}</small>
+              </div>
             </div>
-          </li>
-        </ul>
+          </VirtualList>
+        </div>
       </li>
     </ul>
 
@@ -574,12 +638,10 @@ function formatModified(value: string) {
   transform: rotate(180deg);
 }
 
-.dupe-files {
-  list-style: none;
-  padding: 0.5rem 0;
-  margin: 0;
+.dupe-files-shell {
   border-top: 1px solid var(--color-border-light);
   background: var(--color-bg-secondary);
+  min-height: 56px;
 }
 
 .dupe-file {
@@ -588,6 +650,8 @@ function formatModified(value: string) {
   align-items: center;
   gap: 0.7rem;
   padding: 0.5rem 1rem;
+  height: 56px;
+  box-sizing: border-box;
 }
 
 .dupe-check {

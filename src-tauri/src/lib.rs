@@ -3,8 +3,10 @@ pub mod database;
 pub mod diagnostics;
 pub mod games;
 pub mod migration;
+pub mod pending_intent;
 pub mod safety;
 pub mod scanner;
+pub mod session;
 mod utils;
 mod winfs;
 pub mod junk;
@@ -14,6 +16,8 @@ pub mod bench;
 
 use database::{MigrationDb, ScanCacheDb, SpaceHistoryDb};
 use scanner::DiskScanner;
+use session::ScanSessionRegistry;
+use std::sync::Arc;
 
 fn init_tracing() {
     use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -49,8 +53,20 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // 第二实例启动：把主窗口拉到前台，立刻退出第二实例进程。
+            // disk 转发暂未走 argv（前端没有 CLI 入口），按需后续扩展。
+            use tauri::Manager;
+            tracing::info!("[single-instance] 检测到第二实例，将主窗口聚焦后让第二实例退出");
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .manage(DiskScanner::new())
+        .manage(Arc::new(ScanSessionRegistry::new()))
         .manage(scan_cache_db)
         .manage(migration_db)
         .manage(space_history_db)
@@ -76,6 +92,8 @@ pub fn run() {
             commands::get_scan_capabilities,
             commands::is_elevated,
             commands::restart_as_admin,
+            commands::request_admin_rescan,
+            commands::consume_pending_scan_intent,
             commands::exit_app,
             commands::get_space_history,
             commands::find_duplicates,

@@ -124,7 +124,7 @@ const usageDescription = computed(() => {
   box-shadow: var(--shadow-xs);
   cursor: pointer;
   overflow: hidden;
-  transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base), background var(--transition-base);
+  transition: transform var(--transition-base), border-color var(--transition-base), background var(--transition-base);
 }
 
 .card-glow {
