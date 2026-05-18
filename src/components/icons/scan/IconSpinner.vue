@@ -5,26 +5,14 @@
     viewBox="0 0 24 24" 
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
-    :class="['icon', 'icon-spinning', className]"
+    :class="['icon', className, 'icon-spinning']"
     :aria-label="label || '加载中'"
     :aria-hidden="!label"
     role="img"
   >
-    <path 
-      d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"
-      stroke="currentColor" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      opacity="0.3"
-    />
-    <path 
-      d="M12 2v4"
-      stroke="currentColor" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
+    <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+    <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+    <path d="M12 22a10 10 0 0 1-10-10" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
   </svg>
 </template>
 

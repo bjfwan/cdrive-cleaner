@@ -212,4 +212,21 @@ impl IndexedScanResult {
     pub fn large_files_iter(&self) -> impl Iterator<Item = &FileInfo> {
         self.large_files.iter()
     }
+
+    /// 返回根目录的直接子目录列表。
+    pub fn root_children(&self) -> &[DirectoryNode] {
+        &self.root_children
+    }
+
+    /// 返回指定路径下的直接子目录列表。
+    pub fn children_of(&self, path: &str) -> Option<&[DirectoryNode]> {
+        self.children_by_path
+            .get(&normalized_path_key_str(path))
+            .map(|v| v.as_slice())
+    }
+
+    /// 返回扫描的总大小。
+    pub fn total_size(&self) -> u64 {
+        self.total_size
+    }
 }

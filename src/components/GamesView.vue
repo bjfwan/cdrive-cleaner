@@ -6,6 +6,7 @@ import { formatBytes } from '../utils/format';
 import { useCart } from '../composables/useCart';
 import { useToast } from '../composables/useToast';
 import VirtualList from './VirtualList.vue';
+import { IconScanEmpty } from './icons';
 
 interface Props {
   availableDisks: DiskInfo[];
@@ -219,7 +220,7 @@ defineExpose({ reload: load });
     </section>
 
     <section v-else-if="!activeLibrary?.installed" class="placeholder">
-      <div class="placeholder-icon">⌁</div>
+      <div class="placeholder-icon"><IconScanEmpty :size="28" /></div>
       <h3>未检测到 {{ platformLabel(activePlatform) }}</h3>
       <p>如果确实安装了，请确保启动器至少完成过一次登录，然后点上面的“重新检测”。</p>
     </section>

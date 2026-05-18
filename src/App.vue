@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, provide, re
 import { invoke } from '@tauri-apps/api/core';
 import appIcon from './assets/app-icon.png';
 import ConfirmDialog from './components/ConfirmDialog.vue';
-import { IconDeepScan, IconHistory, IconSettings } from './components/icons';
+import { IconClose, IconDeepScan, IconHistory, IconSettings } from './components/icons';
 import Toast from './components/Toast.vue';
 import Cart from './components/Cart.vue';
 import Workspace from './components/Workspace.vue';
@@ -212,8 +212,7 @@ watch(
 
 function checkFirstLaunch() {
   const onboardingDone = localStorage.getItem('cdrive-cleaner-onboarding-completed');
-  const legacyShown = localStorage.getItem('cdrive-cleaner-welcome-shown');
-  if (!onboardingDone && !legacyShown) {
+  if (!onboardingDone) {
     showOnboarding.value = true;
   }
 }
@@ -224,6 +223,8 @@ function closeWelcome() {
 
 function closeOnboarding() {
   showOnboarding.value = false;
+  localStorage.setItem('cdrive-cleaner-onboarding-completed', 'true');
+  localStorage.setItem('cdrive-cleaner-welcome-shown', 'true');
 }
 
 async function loadDisks() {
@@ -1005,11 +1006,12 @@ async function resumePendingScanIntent() {
       @close="closeSettings"
       @save="onSettingsSaved"
       @restart-onboarding="showOnboarding = true"
+      @show-about="showWelcome = true"
     />
 
     <div v-if="showHistory" class="modal-overlay" @click="closeHistory">
       <div class="modal-content" @click.stop>
-        <button class="modal-close" @click="closeHistory">✕</button>
+        <button class="modal-close" @click="closeHistory"><IconClose :size="16" /></button>
         <History />
       </div>
     </div>

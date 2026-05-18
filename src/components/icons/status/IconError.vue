@@ -10,22 +10,9 @@
     :aria-hidden="!label"
     role="img"
   >
-    <circle 
-      cx="12" 
-      cy="12" 
-      r="10"
-      stroke="currentColor" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-    <path 
-      d="M15 9l-6 6M9 9l6 6"
-      stroke="currentColor" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
+    <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="1.75" />
+    <path d="M15 9l-6 6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+    <path d="M9 9l6 6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
   </svg>
 </template>
 

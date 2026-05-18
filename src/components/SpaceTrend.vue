@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { formatBytes } from '../utils/format';
+import { IconClose } from './icons';
 
 interface DiskSnapshot {
   id: number;
@@ -292,7 +293,7 @@ function formatTimestamp(value: string): string {
                 <button :class="{ active: range === 30 }" @click="range = 30">30 天</button>
                 <button :class="{ active: range === 0 }" @click="range = 0">全部</button>
               </div>
-              <button class="trend-close" @click="closeDetail" aria-label="关闭">✕</button>
+              <button class="trend-close" @click="closeDetail" aria-label="关闭"><IconClose :size="16" /></button>
             </header>
 
             <div class="trend-modal-body">

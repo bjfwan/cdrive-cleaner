@@ -10,20 +10,8 @@
     :aria-hidden="!label"
     role="img"
   >
-    <path 
-      d="M12 3L4 6v6c0 5.5 3.5 10 8 11 4.5-1 8-5.5 8-11V6l-8-3z"
-      stroke="currentColor" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-    <path 
-      d="M9 12l2 2 4-4"
-      stroke="currentColor" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
   </svg>
 </template>
 
@@ -31,7 +19,7 @@
 import type { IconProps } from '../types'
 
 withDefaults(defineProps<IconProps>(), {
-  size: 20,
+  size: 24,
   className: '',
   label: '',
   spinning: false

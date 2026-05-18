@@ -10,13 +10,9 @@
     :aria-hidden="!label"
     role="img"
   >
-    <path 
-      d="M7 7h10v10M17 7L7 17"
-      stroke="currentColor" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
+    <rect x="2" y="4" width="8" height="10" rx="2" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 12h7m0 0l-3-3m3 3l-3 3" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="14" y="16" width="8" height="6" rx="1.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
   </svg>
 </template>
 

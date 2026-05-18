@@ -1445,3 +1445,165 @@ pub async fn clean_junk_files(
         .await
         .map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn get_reclaim_opportunities() -> Result<Vec<crate::system_reclaim::ReclaimOpportunity>, String> {
+    crate::system_reclaim::get_reclaim_opportunities()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn execute_reclaim(id: String, force: bool) -> Result<crate::system_reclaim::ReclaimResult, String> {
+    match id.as_str() {
+        "windows_update" => crate::system_reclaim::cleanup_windows_update(force)
+            .await
+            .map_err(|e| e.to_string()),
+        "delivery_optimization" => crate::system_reclaim::cleanup_delivery_optimization()
+            .await
+            .map_err(|e| e.to_string()),
+        "hibernation" => crate::system_reclaim::disable_hibernation()
+            .await
+            .map_err(|e| e.to_string()),
+        "restore_points" => crate::system_reclaim::cleanup_restore_points(!force)
+            .await
+            .map_err(|e| e.to_string()),
+        "pagefile" => Err("pagefile 迁移需要指定目标磁盘，请使用专用接口".into()),
+        _ => Err(format!("未知的回收操作: {}", id)),
+    }
+}
+
+#[tauri::command]
+pub async fn get_known_folders() -> Result<Vec<crate::folder_redirect::KnownFolderInfo>, String> {
+    crate::folder_redirect::get_known_folders()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn relocate_folder(
+    folder_id: String,
+    target_path: String,
+    move_files: bool,
+) -> Result<crate::folder_redirect::RedirectResult, String> {
+    crate::folder_redirect::relocate_known_folder(
+        &folder_id,
+        std::path::Path::new(&target_path),
+        move_files,
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn relocate_temp(target_path: String) -> Result<crate::folder_redirect::RedirectResult, String> {
+    crate::folder_redirect::relocate_temp(std::path::Path::new(&target_path))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+
+#[tauri::command]
+pub fn get_space_breakdown(
+    root_path: String,
+    scanner: tauri::State<'_, DiskScanner>,
+) -> Result<crate::scanner::space_breakdown::SpaceBreakdown, String> {
+    let disk_info = get_disk_info_for_path(&root_path)?;
+    scanner
+        .with_indexed(&root_path, |indexed| {
+            crate::scanner::space_breakdown::analyze_space_breakdown(
+                indexed,
+                disk_info.total_space,
+                disk_info.used_space,
+            )
+        })
+        .ok_or_else(|| "尚未扫描，请先执行深度扫描".to_string())
+}
+
+#[tauri::command]
+pub fn explain_file(path: String) -> Result<crate::scanner::space_breakdown::FileExplanation, String> {
+    Ok(crate::scanner::space_breakdown::explain_path(&path))
+}
+
+#[tauri::command]
+pub fn get_relocatable_programs(
+    root_path: String,
+    scanner: tauri::State<'_, DiskScanner>,
+) -> Result<Vec<crate::scanner::space_breakdown::RelocatableProgram>, String> {
+    scanner
+        .with_indexed(&root_path, |indexed| {
+            crate::scanner::space_breakdown::get_relocatable_programs(indexed)
+        })
+        .ok_or_else(|| "尚未扫描，请先执行深度扫描".to_string())
+}
+
+#[tauri::command]
+pub async fn get_balance_suggestion(
+    root_path: String,
+    scanner: tauri::State<'_, DiskScanner>,
+) -> Result<crate::scanner::space_breakdown::BalanceSuggestion, String> {
+    let disks = get_disk_info().await?;
+    let breakdown = scanner
+        .with_indexed(&root_path, |indexed| {
+            let info = get_disk_info_for_path_inner(&root_path, &disks);
+            crate::scanner::space_breakdown::analyze_space_breakdown(
+                indexed,
+                info.map(|d| d.total_space).unwrap_or(0),
+                info.map(|d| d.used_space).unwrap_or(0),
+            )
+        })
+        .ok_or_else(|| "尚未扫描，请先执行深度扫描".to_string())?;
+    Ok(crate::scanner::space_breakdown::suggest_balance(&disks, &breakdown))
+}
+
+fn get_disk_info_for_path(root_path: &str) -> Result<DiskInfo, String> {
+    let drive = root_path.chars().next().unwrap_or('C').to_ascii_uppercase();
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows::core::PCWSTR;
+        use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+
+        let drive_path = format!("{}:\\", drive);
+        let path_wide: Vec<u16> = std::ffi::OsStr::new(&drive_path)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+
+        let mut total_bytes = 0u64;
+        let mut free_bytes = 0u64;
+        unsafe {
+            GetDiskFreeSpaceExW(
+                PCWSTR(path_wide.as_ptr()),
+                None,
+                Some(&mut total_bytes),
+                Some(&mut free_bytes),
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        Ok(DiskInfo {
+            drive_letter: format!("{}:", drive),
+            label: String::new(),
+            file_system: String::new(),
+            total_space: total_bytes,
+            free_space: free_bytes,
+            used_space: total_bytes.saturating_sub(free_bytes),
+            usage_percent: if total_bytes > 0 {
+                ((total_bytes - free_bytes) as f64 / total_bytes as f64) * 100.0
+            } else {
+                0.0
+            },
+        })
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = drive;
+        Err("仅支持 Windows".to_string())
+    }
+}
+
+fn get_disk_info_for_path_inner<'a>(root_path: &str, disks: &'a [DiskInfo]) -> Option<&'a DiskInfo> {
+    let drive = root_path.chars().next()?.to_ascii_uppercase();
+    let letter = format!("{}:", drive);
+    disks.iter().find(|d| d.drive_letter.eq_ignore_ascii_case(&letter))
+}

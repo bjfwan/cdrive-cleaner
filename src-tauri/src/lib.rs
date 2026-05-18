@@ -1,12 +1,14 @@
 mod commands;
 pub mod database;
 pub mod diagnostics;
+pub mod folder_redirect;
 pub mod games;
 pub mod migration;
 pub mod pending_intent;
 pub mod safety;
 pub mod scanner;
 pub mod session;
+pub mod system_reclaim;
 mod utils;
 mod winfs;
 pub mod junk;
@@ -103,6 +105,15 @@ pub fn run() {
             commands::open_native_migration_ui,
             commands::scan_junk_files,
             commands::clean_junk_files,
+            commands::get_reclaim_opportunities,
+            commands::execute_reclaim,
+            commands::get_known_folders,
+            commands::relocate_folder,
+            commands::relocate_temp,
+            commands::get_space_breakdown,
+            commands::explain_file,
+            commands::get_relocatable_programs,
+            commands::get_balance_suggestion,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

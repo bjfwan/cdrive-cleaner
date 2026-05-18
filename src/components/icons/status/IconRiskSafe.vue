@@ -10,23 +10,8 @@
     :aria-hidden="!label"
     role="img"
   >
-    <circle 
-      cx="12" 
-      cy="12" 
-      r="10"
-      :stroke="color || '#10b981'" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      :fill="color || '#10b981'"
-    />
-    <path 
-      d="M9 12l2 2 4-4"
-      stroke="white" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
+    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.75" />
+    <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
   </svg>
 </template>
 

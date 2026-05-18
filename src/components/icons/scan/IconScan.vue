@@ -10,19 +10,11 @@
     :aria-hidden="!label"
     role="img"
   >
-    <path 
-      d="M3 7V5a2 2 0 0 1 2-2h2M21 7V5a2 2 0 0 0-2-2h-2M3 17v2a2 2 0 0 0 2 2h2M21 17v2a2 2 0 0 1-2 2h-2"
-      stroke="currentColor" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-    <path 
-      d="M7 12h10"
-      stroke="currentColor" 
-      stroke-width="2"
-      stroke-linecap="round"
-    />
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 2v6h6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M14 2l6 6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="17" cy="17" r="4" stroke="currentColor" stroke-width="1.75" />
+    <path d="M20 20l2.5 2.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
   </svg>
 </template>
 
@@ -30,7 +22,7 @@
 import type { IconProps } from '../types'
 
 withDefaults(defineProps<IconProps>(), {
-  size: 20,
+  size: 24,
   className: '',
   label: '',
   spinning: false

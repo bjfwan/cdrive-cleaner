@@ -1,90 +1,78 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 
 const emit = defineEmits<{ close: [] }>();
 
-const step = ref(0);
-const totalSteps = 3;
-const spotlightStyle = ref<Record<string, string>>({});
-const tooltipStyle = ref<Record<string, string>>({});
-const tooltipPlacement = ref<'bottom' | 'top' | 'left' | 'right'>('bottom');
-
-interface StepConfig {
+interface CoachStep {
   target: string;
+  placement: 'top' | 'bottom' | 'left' | 'right';
   title: string;
   description: string;
-  placement: 'bottom' | 'top' | 'left' | 'right';
+  offset?: number;
 }
 
-const steps: StepConfig[] = [
+const steps: CoachStep[] = [
   {
-    target: '.sidebar, .topbar-cta--strong',
+    target: '.topbar-cta--strong',
+    placement: 'bottom',
     title: '选择磁盘，点击扫描',
-    description: '先看看 C 盘现状，3 秒出结果',
-    placement: 'right',
+    description: '先看看 C 盘现状，几秒出结果',
   },
   {
     target: '.workspace-tabs',
-    title: '三个标签，三种清理方式',
-    description: '磁盘：找大目录搬走 · 游戏库：游戏搬盘 · 垃圾清理：安全删临时文件',
     placement: 'bottom',
+    title: '三种清理方式',
+    description: '磁盘：找大目录搬走 · 游戏库：游戏搬盘 · 垃圾清理：删临时文件',
   },
   {
-    target: '.cart-fab',
-    title: '搬运车 + 回滚',
-    description: '选好要搬的，一键执行。所有操作可在历史里撤销。',
-    placement: 'left',
+    target: '.topbar-tool:last-child',
+    placement: 'bottom',
+    title: '设置 + 历史',
+    description: '所有操作可在历史里撤销，设置里切换主题和清理偏好',
   },
 ];
 
-function finish() {
-  localStorage.setItem('cdrive-cleaner-onboarding-completed', 'true');
-  localStorage.setItem('cdrive-cleaner-welcome-shown', 'true');
+const currentStep = ref(0);
+const spotlightStyle = ref<Record<string, string>>({});
+const tooltipStyle = ref<Record<string, string>>({});
+
+const isLast = computed(() => currentStep.value === steps.length - 1);
+const btnLabel = computed(() => (isLast.value ? '开始使用' : '下一步'));
+
+function close() {
   emit('close');
 }
 
 function nextStep() {
-  if (step.value < totalSteps - 1) {
-    step.value++;
-    void positionSpotlight();
+  if (isLast.value) {
+    close();
   } else {
-    finish();
+    currentStep.value++;
+    positionAll();
   }
 }
 
-function positionSpotlight() {
-  const config = steps[step.value];
-  // For step 0 with multiple targets, combine bounding rects
-  const targets = config.target.split(',').map(s => s.trim());
-  let rect: DOMRect | null = null;
-
-  for (const selector of targets) {
-    const el = document.querySelector(selector);
-    if (!el) continue;
-    const r = el.getBoundingClientRect();
-    if (!rect) {
-      rect = new DOMRect(r.x, r.y, r.width, r.height);
-    } else {
-      const minX = Math.min(rect.x, r.x);
-      const minY = Math.min(rect.y, r.y);
-      const maxX = Math.max(rect.x + rect.width, r.x + r.width);
-      const maxY = Math.max(rect.y + rect.height, r.y + r.height);
-      rect = new DOMRect(minX, minY, maxX - minX, maxY - minY);
-    }
+function positionAll() {
+  const config = steps[currentStep.value];
+  if (!config) {
+    close();
+    return;
   }
 
-  if (!rect) {
-    // If target not found (e.g. cart-fab not visible), skip to next or finish
-    if (step.value < totalSteps - 1) {
-      step.value++;
-      void positionSpotlight();
+  const el = document.querySelector(config.target);
+  if (!el) {
+    if (currentStep.value < steps.length - 1) {
+      currentStep.value++;
+      positionAll();
     } else {
-      finish();
+      close();
     }
     return;
   }
 
+  const rect = el.getBoundingClientRect();
   const pad = 8;
+
   spotlightStyle.value = {
     top: `${rect.top - pad}px`,
     left: `${rect.left - pad}px`,
@@ -92,14 +80,11 @@ function positionSpotlight() {
     height: `${rect.height + pad * 2}px`,
   };
 
-  tooltipPlacement.value = config.placement;
-
-  // Position tooltip relative to spotlight
-  const gap = 12;
+  const gap = config.offset ?? 12;
+  const tooltipW = 280;
+  const tooltipH = 130;
   let top = 0;
   let left = 0;
-  const tooltipW = 280;
-  const tooltipH = 140;
 
   switch (config.placement) {
     case 'bottom':
@@ -120,7 +105,6 @@ function positionSpotlight() {
       break;
   }
 
-  // Clamp to viewport
   left = Math.max(12, Math.min(left, window.innerWidth - tooltipW - 12));
   top = Math.max(12, Math.min(top, window.innerHeight - tooltipH - 12));
 
@@ -130,9 +114,13 @@ function positionSpotlight() {
   };
 }
 
+function onResize() {
+  positionAll();
+}
+
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
-    finish();
+    close();
   } else if (e.key === 'Enter' || e.key === 'ArrowRight') {
     nextStep();
   }
@@ -140,86 +128,93 @@ function onKeydown(e: KeyboardEvent) {
 
 onMounted(() => {
   document.addEventListener('keydown', onKeydown);
-  nextTick(() => positionSpotlight());
-  window.addEventListener('resize', positionSpotlight);
+  window.addEventListener('resize', onResize);
+  nextTick(() => positionAll());
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown);
-  window.removeEventListener('resize', positionSpotlight);
+  window.removeEventListener('resize', onResize);
 });
 </script>
 
 <template>
   <Teleport to="body">
-    <div class="onboarding-mask" @click.self="finish">
-      <!-- Spotlight cutout -->
-      <div class="onboarding-spotlight" :style="spotlightStyle"></div>
+    <div class="coach-overlay" @click.self="close">
+      <div class="coach-spotlight" :style="spotlightStyle"></div>
 
-      <!-- Tooltip -->
-      <div class="onboarding-tooltip" :style="tooltipStyle" :data-placement="tooltipPlacement">
-        <div class="onboarding-tooltip-header">
-          <span class="onboarding-step-badge">{{ step + 1 }}/{{ totalSteps }}</span>
-          <button class="onboarding-skip" @click="finish">跳过</button>
+      <div class="coach-tooltip" :style="tooltipStyle">
+        <div class="coach-tooltip-head">
+          <span class="coach-badge">{{ currentStep + 1 }}/{{ steps.length }}</span>
+          <button class="coach-skip" @click="close">跳过引导</button>
         </div>
-        <h4 class="onboarding-tooltip-title">{{ steps[step].title }}</h4>
-        <p class="onboarding-tooltip-desc">{{ steps[step].description }}</p>
-        <button class="onboarding-next-btn" @click="nextStep">
-          {{ step === totalSteps - 1 ? '开始使用' : '下一步' }}
-        </button>
+        <h4 class="coach-title">{{ steps[currentStep].title }}</h4>
+        <p class="coach-desc">{{ steps[currentStep].description }}</p>
+        <div class="coach-foot">
+          <div class="coach-dots">
+            <span
+              v-for="i in steps.length"
+              :key="i"
+              class="coach-dot"
+              :class="{ active: currentStep === i - 1 }"
+            ></span>
+          </div>
+          <button class="coach-next" @click="nextStep">{{ btnLabel }}</button>
+        </div>
       </div>
     </div>
   </Teleport>
 </template>
 
 <style scoped>
-.onboarding-mask {
+.coach-overlay {
   position: fixed;
   inset: 0;
-  z-index: 2000;
-  background: rgba(15, 23, 32, 0.5);
-  animation: onb-fade-in var(--transition-base, 0.2s ease);
+  z-index: 9000;
+  pointer-events: auto;
 }
 
-@keyframes onb-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.onboarding-spotlight {
-  position: absolute;
-  border-radius: var(--radius-md, 12px);
-  box-shadow: 0 0 0 9999px rgba(15, 23, 32, 0.5);
-  background: transparent;
+.coach-spotlight {
+  position: fixed;
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
   pointer-events: none;
-  transition: top 0.35s cubic-bezier(0.16, 1, 0.3, 1),
-              left 0.35s cubic-bezier(0.16, 1, 0.3, 1),
-              width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
-              height 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    top 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    left 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    width 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    height 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.onboarding-tooltip {
-  position: absolute;
+.coach-tooltip {
+  position: fixed;
   width: 280px;
   padding: 1rem 1.2rem;
   border-radius: var(--radius-md, 12px);
   background: var(--color-surface-strong, #fff);
-  border: 1px solid var(--color-border-light, rgba(0,0,0,0.08));
-  box-shadow: 0 20px 40px rgba(15, 23, 32, 0.2);
+  border: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.08));
+  box-shadow: var(--shadow-lg, 0 20px 40px rgba(15, 23, 32, 0.2));
   font-family: var(--font-sans, system-ui);
   pointer-events: auto;
-  transition: top 0.35s cubic-bezier(0.16, 1, 0.3, 1),
-              left 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    top 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    left 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: coach-in 0.25s ease;
 }
 
-.onboarding-tooltip-header {
+@keyframes coach-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.coach-tooltip-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.5rem;
 }
 
-.onboarding-step-badge {
+.coach-badge {
   font-size: 0.7rem;
   font-weight: 700;
   padding: 0.18rem 0.5rem;
@@ -229,23 +224,23 @@ onBeforeUnmount(() => {
   letter-spacing: 0.04em;
 }
 
-.onboarding-skip {
+.coach-skip {
   border: none;
   background: none;
   color: var(--color-text-tertiary, #778391);
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 600;
   cursor: pointer;
   padding: 0.2rem 0.4rem;
-  border-radius: var(--radius-xs, 6px);
-  transition: color var(--transition-fast, 0.1s);
+  border-radius: 6px;
+  transition: color 0.15s;
 }
 
-.onboarding-skip:hover {
+.coach-skip:hover {
   color: var(--color-text-primary, #121923);
 }
 
-.onboarding-tooltip-title {
+.coach-title {
   font-size: 1rem;
   font-weight: 700;
   color: var(--color-text-primary, #121923);
@@ -253,33 +248,56 @@ onBeforeUnmount(() => {
   line-height: 1.2;
 }
 
-.onboarding-tooltip-desc {
+.coach-desc {
   font-size: 0.82rem;
   color: var(--color-text-secondary, #43505c);
   line-height: 1.5;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.85rem;
 }
 
-.onboarding-next-btn {
-  width: 100%;
-  padding: 0.6rem 0;
-  border: none;
-  border-radius: var(--radius-sm, 8px);
+.coach-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.coach-dots {
+  display: flex;
+  gap: 5px;
+}
+
+.coach-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-border-medium, #d1d5db);
+  transition: background 0.2s, transform 0.2s;
+}
+
+.coach-dot.active {
   background: var(--color-highlight, #0f766e);
-  color: var(--color-text-inverse, #f8fafc);
-  font-size: 0.84rem;
+  transform: scale(1.3);
+}
+
+.coach-next {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-highlight, #0f766e);
+  color: var(--color-text-inverse, #fff);
+  font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
-  transition: transform var(--transition-fast, 0.1s), box-shadow var(--transition-fast, 0.1s);
-  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.2);
+  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 6px 14px rgba(15, 118, 110, 0.2);
 }
 
-.onboarding-next-btn:hover {
+.coach-next:hover {
   transform: translateY(-1px);
-  box-shadow: 0 12px 24px rgba(15, 118, 110, 0.28);
+  box-shadow: 0 10px 20px rgba(15, 118, 110, 0.28);
 }
 
-.onboarding-next-btn:active {
-  transform: scale(0.97);
+.coach-next:active {
+  transform: scale(0.96);
 }
 </style>

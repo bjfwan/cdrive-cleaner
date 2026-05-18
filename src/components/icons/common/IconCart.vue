@@ -6,13 +6,19 @@
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     :class="['icon', className]"
-    :aria-label="label || '刷新'"
+    :aria-label="label || '搬运车'"
     :aria-hidden="!label"
     role="img"
   >
-    <path d="M23 4v6h-6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M1 20v-6h6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+    <path 
+      d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"
+      stroke="currentColor" 
+      stroke-width="1.75"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <circle cx="9" cy="21" r="1.5" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="1.75" />
+    <circle cx="20" cy="21" r="1.5" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="1.75" />
   </svg>
 </template>
 

@@ -10,20 +10,8 @@
     :aria-hidden="!label"
     role="img"
   >
-    <path 
-      d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6"
-      stroke="currentColor" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-    <path 
-      d="M12 3v12m0 0l-4-4m4 4l4-4"
-      stroke="currentColor" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v2" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M2 10h4l1.5 2H22l-3 9H4l-2-9z" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
   </svg>
 </template>
 

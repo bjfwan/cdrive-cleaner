@@ -4,6 +4,7 @@ import { useCart } from '../composables/useCart';
 import { formatBytes } from '../utils/format';
 import type { DeleteMode, DiskInfo } from '../types';
 import VirtualList from './VirtualList.vue';
+import { IconCart, IconTruck, IconDelete, IconWarning, IconClose } from './icons';
 
 interface CartProgress {
   current: number;
@@ -34,6 +35,18 @@ const emit = defineEmits<{
 const cart = useCart();
 const { items, totalSize, count, migrateItems, deleteItems, migrateSize, deleteSize } = cart;
 const open = ref(false);
+const fabBounce = ref(false);
+const freedBytes = ref(0);
+
+watch(
+  count,
+  (next, prev) => {
+    if (next > prev) {
+      fabBounce.value = true;
+      setTimeout(() => { fabBounce.value = false; }, 300);
+    }
+  },
+);
 
 watch(
   () => props.busy,
@@ -97,6 +110,7 @@ const primaryDisabled = computed(() => {
 
 function start() {
   if (primaryDisabled.value) return;
+  freedBytes.value = totalSize.value;
   emit('run', { targetDisk: targetDisk.value, deleteMode: deleteMode.value });
 }
 
@@ -118,10 +132,11 @@ function dismissResults() {
     <button
       v-if="count > 0"
       class="cart-fab"
-      :class="{ open }"
+      :class="{ open, bounce: fabBounce }"
       @click="open = !open"
     >
-      <span class="cart-icon">🛒</span>
+      <span class="cart-icon"><IconCart :size="18" /></span>
+      <span class="cart-badge">{{ count }}</span>
       <span class="cart-stats">
         <strong>{{ count }}</strong>
         <small>项 · {{ formatBytes(totalSize) }}</small>
@@ -140,19 +155,19 @@ function dismissResults() {
             <template v-else>{{ count }} 项 · 共 {{ formatBytes(totalSize) }}</template>
           </p>
         </div>
-        <button class="icon-btn" @click="open = false" :disabled="busy" aria-label="关闭">✕</button>
+        <button class="icon-btn" @click="open = false" :disabled="busy" aria-label="关闭"><IconClose :size="16" /></button>
       </header>
 
       <div v-if="!busy && !hasResults && (hasMigrate || hasDelete)" class="segments">
         <div v-if="hasMigrate" class="segment segment-migrate">
-          <span class="segment-icon">🚚</span>
+          <span class="segment-icon"><IconTruck :size="18" /></span>
           <div class="segment-text">
             <strong>搬走 {{ migrateItems.length }} 项</strong>
             <small>{{ formatBytes(migrateSize) }} · 走 junction</small>
           </div>
         </div>
         <div v-if="hasDelete" class="segment segment-delete" :class="{ permanent: deleteMode === 'permanent' }">
-          <span class="segment-icon">{{ deleteMode === 'permanent' ? '⚠️' : '🗑️' }}</span>
+          <span class="segment-icon"><component :is="deleteMode === 'permanent' ? IconWarning : IconDelete" :size="18" /></span>
           <div class="segment-text">
             <strong>清理 {{ deleteItems.length }} 项</strong>
             <small>{{ formatBytes(deleteSize) }} · {{ deleteTargetLabel }}</small>
@@ -171,10 +186,15 @@ function dismissResults() {
       </div>
 
       <div v-else-if="hasResults" class="results-panel">
+        <div class="results-freed">
+          <span class="freed-label">释放空间</span>
+          <strong class="freed-value">{{ formatBytes(freedBytes) }}</strong>
+        </div>
+
         <div class="results-summary">
           <div class="results-stat ok">
             <strong>{{ successCount }}</strong>
-            <small>成功搬走</small>
+            <small>成功</small>
           </div>
           <div class="results-stat fail">
             <strong>{{ failedItems.length }}</strong>
@@ -193,11 +213,20 @@ function dismissResults() {
           </ul>
         </div>
 
-        <button class="dismiss-btn" @click="dismissResults">知道了</button>
+        <button class="dismiss-btn" @click="dismissResults">再来一次</button>
       </div>
 
       <div v-else class="drawer-list-wrap">
+        <div v-if="count === 0" class="drawer-empty">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+            <rect x="8" y="16" width="32" height="24" rx="4" stroke="currentColor" stroke-width="2" fill="none" opacity="0.3" />
+            <path d="M8 20L24 28L40 20" stroke="currentColor" stroke-width="2" fill="none" opacity="0.3" />
+          </svg>
+          <p class="drawer-empty-text">搬运车是空的</p>
+          <p class="drawer-empty-hint">去看看智能建议？</p>
+        </div>
         <VirtualList
+          v-else
           :items="items"
           :item-size="64"
           :buffer="6"
@@ -588,4 +617,102 @@ select {
 .dismiss-btn:hover { transform: translateY(-1px); }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.cart-fab.bounce {
+  animation: fab-bounce 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fab-bounce {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.95); }
+  70% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.cart-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-highlight, #0f766e);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-feature-settings: 'tnum';
+  box-shadow: 0 2px 6px rgba(15, 118, 110, 0.3);
+}
+
+.drawer-item {
+  position: relative;
+  transition: transform var(--transition-fast), background var(--transition-fast);
+}
+
+.drawer-item::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(220, 38, 38, 0.06);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  pointer-events: none;
+}
+
+.drawer-item:hover {
+  transform: translateX(-4px);
+}
+
+.drawer-item:hover::after {
+  opacity: 1;
+}
+
+.drawer-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 3rem 2rem;
+  color: var(--color-text-tertiary);
+}
+
+.drawer-empty-text {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.drawer-empty-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-tertiary);
+}
+
+.results-freed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 1rem 0;
+}
+
+.freed-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-tertiary);
+}
+
+.freed-value {
+  font-size: 2rem;
+  font-weight: 700;
+  font-feature-settings: 'tnum';
+  color: var(--color-highlight, #0f766e);
+  line-height: 1;
+}
 </style>

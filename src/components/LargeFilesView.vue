@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, shallowRef, watchEffect } from 'vue';
+import { computed, ref, shallowRef, watchEffect } from 'vue';
 import { IconFile, IconDocument, IconMigrate } from './icons';
 import type { FileInfo } from '../types';
 import { formatBytes, formatDate } from '../utils/format';
 import VirtualList from './VirtualList.vue';
+import ExplanationTooltip from './ExplanationTooltip.vue';
 
 interface Props {
   files: FileInfo[];
@@ -17,6 +18,16 @@ const props = defineProps<Props>();
 defineEmits<{
   'migrate-file': [file: FileInfo];
 }>();
+
+const tooltipRef = ref<InstanceType<typeof ExplanationTooltip> | null>(null);
+
+function onRowEnter(file: FileInfo, event: MouseEvent) {
+  tooltipRef.value?.show(file.path, event.currentTarget as HTMLElement);
+}
+
+function onRowLeave() {
+  tooltipRef.value?.hide();
+}
 
 // 缓存：当 props.files / props.largeFileThreshold 都没变时直接复用上一次结果。
 const filteredCache = shallowRef<FileInfo[]>([]);
@@ -89,7 +100,7 @@ const filteredFiles = computed(() => filteredCache.value);
           :buffer="6"
           v-slot="{ item: file }"
         >
-          <div :key="(file as FileInfo).path" class="table-row">
+          <div :key="(file as FileInfo).path" class="table-row" @mouseenter="onRowEnter(file as FileInfo, $event)" @mouseleave="onRowLeave">
             <div class="td td-name">
               <IconFile :size="18" />
               <span :title="(file as FileInfo).name">{{ (file as FileInfo).name }}</span>
@@ -113,6 +124,8 @@ const filteredFiles = computed(() => filteredCache.value);
         </VirtualList>
       </div>
     </div>
+
+    <ExplanationTooltip ref="tooltipRef" />
   </div>
 </template>
 

@@ -10,24 +10,10 @@
     :aria-hidden="!label"
     role="img"
   >
-    <circle 
-      cx="12" 
-      cy="12" 
-      r="10"
-      stroke="currentColor" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-    <circle 
-      cx="12" 
-      cy="12" 
-      r="3"
-      stroke="currentColor" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
+    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.75" />
+    <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.75" />
+    <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+    <path d="M14 10l5-5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
   </svg>
 </template>
 
@@ -35,7 +21,7 @@
 import type { IconProps } from '../types'
 
 withDefaults(defineProps<IconProps>(), {
-  size: 20,
+  size: 24,
   className: '',
   label: '',
   spinning: false

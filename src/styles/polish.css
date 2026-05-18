@@ -46,7 +46,7 @@ textarea:focus-visible {
 .records-list,
 .results-failed {
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+  scrollbar-color: var(--color-border-medium) transparent;
 }
 
 /* Long-list virtualization-lite: skip rendering work when off-screen. */

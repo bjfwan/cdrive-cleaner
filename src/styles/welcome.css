@@ -29,10 +29,8 @@
   flex-direction: column;
   overflow: hidden;
   border-radius: var(--radius-xl);
-  background:
-    radial-gradient(circle at top right, rgba(215, 230, 242, 0.8), transparent 32%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 241, 232, 0.94));
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-light);
   box-shadow: var(--shadow-xl);
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -70,9 +68,9 @@
   margin: 0 auto;
   padding: 1rem;
   border-radius: 2rem;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(46, 33, 18, 0.08);
-  box-shadow: 0 22px 44px rgba(26, 20, 14, 0.12);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-md);
   animation: logoFloat 0.36s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
@@ -119,7 +117,7 @@
 .divider {
   height: 1px;
   margin: 0 2.8rem;
-  background: linear-gradient(90deg, transparent, rgba(46, 33, 18, 0.12), transparent);
+  background: var(--color-border-light);
 }
 
 .features-section {
@@ -145,8 +143,8 @@
   gap: 0.95rem;
   padding: 1.1rem;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.68);
-  border: 1px solid rgba(46, 33, 18, 0.08);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
   transition: transform var(--transition-base), background var(--transition-base), border-color var(--transition-base);
   animation: fadeInUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) backwards;
   animation-delay: 0.16s;
@@ -166,7 +164,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: rgba(23, 23, 23, 0.06);
+  background: var(--color-border-light);
 }
 
 .feature-icon.scan {
@@ -205,8 +203,8 @@
   justify-content: flex-end;
   gap: 1rem;
   padding: 1.4rem 2.8rem 1.8rem;
-  border-top: 1px solid rgba(46, 33, 18, 0.08);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(247, 241, 232, 0.72));
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-surface);
   animation: fadeInUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) 0.16s backwards;
 }
 
@@ -226,7 +224,7 @@
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--color-surface-strong);
   color: var(--color-text-secondary);
   border: 1px solid var(--color-border-light);
 }

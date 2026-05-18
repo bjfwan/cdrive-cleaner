@@ -6,6 +6,7 @@ import { formatBytes } from '../utils/format';
 import { useToast } from '../composables/useToast';
 import { useSelectionSet } from '../composables/useSelectionSet';
 import VirtualList from './VirtualList.vue';
+import { IconSuccess } from './icons';
 
 interface DuplicateFile {
   path: string;
@@ -312,7 +313,7 @@ function formatModified(value: string) {
     </div>
 
     <div v-else-if="groups.length === 0 && hasDeepScanned" class="dupe-empty">
-      <div class="dupe-empty-mark">✓</div>
+      <div class="dupe-empty-mark"><IconSuccess :size="28" /></div>
       <h4>没有发现重复文件</h4>
       <p>在 ≥ 100 MB 的大文件里没有找到 size + hash 都一致的副本。</p>
     </div>

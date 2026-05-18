@@ -21,6 +21,7 @@ const emit = defineEmits<{
   'close': [];
   'save': [settings: AppSettings];
   'restart-onboarding': [];
+  'show-about': [];
 }>();
 
 const settings = ref<AppSettings>({
@@ -449,7 +450,7 @@ function onDeleteModeToggle(event: Event) {
               <label>关于</label>
               <span class="setting-description">查看应用信息</span>
             </div>
-            <button class="btn btn-secondary btn-sm" @click="showAbout = true">关于</button>
+            <button class="btn btn-secondary btn-sm" @click="emit('show-about'); emit('close')">关于</button>
           </div>
         </div>
         </div>

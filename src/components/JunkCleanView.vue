@@ -22,6 +22,7 @@ import VirtualList from './VirtualList.vue';
 import { useToast } from '../composables/useToast';
 import { useJunkScanCache } from '../composables/useJunkScanCache';
 import { useSelectionSet } from '../composables/useSelectionSet';
+import { IconSuccess } from './icons';
 
 type Status = 'idle' | 'scanning' | 'scanned' | 'cleaning';
 
@@ -349,7 +350,7 @@ async function rescanFromSkipDialog() {
 }
 
 const confirmTitle = computed(() =>
-  confirmMode.value === 'permanent' ? '⚠️ 永久删除' : '确认清理',
+  confirmMode.value === 'permanent' ? '永久删除' : '确认清理',
 );
 
 const confirmMessage = computed(() => {
@@ -579,7 +580,7 @@ function isGroupActive(category: JunkCategory): boolean {
       v-else-if="status === 'scanned' && result && result.items.length === 0"
       class="junk-empty"
     >
-      <div class="junk-empty-mark">✓</div>
+      <div class="junk-empty-mark"><IconSuccess :size="28" /></div>
       <h4>没有发现垃圾文件</h4>
       <p>系统已经很干净了，可以稍后再来扫描。</p>
     </div>

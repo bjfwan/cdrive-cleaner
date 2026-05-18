@@ -2,16 +2,23 @@
 import { computed, defineAsyncComponent, nextTick, ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { DiskInfo, ScanResult, SmartItem, SmartScanReport } from '../types';
+import type { SpaceBreakdown, BalanceSuggestion, BreakdownItem, BalanceItem, ReclaimOpportunity, KnownFolderInfo, RedirectResult } from '../types/breakdown';
 import { formatBytes, formatNumber } from '../utils/format';
 import { useCart } from '../composables/useCart';
 import { useCountUp } from '../composables/useCountUp';
 import { useToast } from '../composables/useToast';
 import SmartGroupCard from './SmartGroupCard.vue';
 import SpaceTrend from './SpaceTrend.vue';
+import SpaceBreakdownVue from './SpaceBreakdown.vue';
+import BalanceSuggestionVue from './BalanceSuggestion.vue';
+import CleanupResult from './CleanupResult.vue';
+import { IconScanEmpty, IconSuccess, IconClose } from './icons';
 
 const ListView = defineAsyncComponent(() => import('./ListView.vue'));
 const LargeFilesView = defineAsyncComponent(() => import('./LargeFilesView.vue'));
 const DuplicatesView = defineAsyncComponent(() => import('./DuplicatesView.vue'));
+const SystemReclaim = defineAsyncComponent(() => import('./SystemReclaim.vue'));
+const FolderRedirect = defineAsyncComponent(() => import('./FolderRedirect.vue'));
 
 interface Props {
   scanResult: ScanResult | null;
@@ -41,6 +48,26 @@ const browseOpen = ref(false);
 const browseTab = ref<'list' | 'large_files' | 'duplicates'>('list');
 const trendRefreshKey = ref(0);
 
+const breakdown = ref<SpaceBreakdown | null>(null);
+const loadingBreakdown = ref(false);
+const balanceSuggestion = ref<BalanceSuggestion | null>(null);
+const loadingBalance = ref(false);
+const reclaimOpportunities = ref<ReclaimOpportunity[]>([]);
+const loadingReclaim = ref(false);
+const knownFolders = ref<KnownFolderInfo[]>([]);
+const loadingFolders = ref(false);
+const showReclaimPanel = ref(false);
+const showRedirectPanel = ref(false);
+const cleanupResultVisible = ref(false);
+const cleanupResultData = ref({
+  beforeUsed: 0,
+  afterUsed: 0,
+  diskTotal: 0,
+  freedBytes: 0,
+  itemCount: 0,
+  operationType: 'migrate' as 'migrate' | 'delete' | 'reclaim' | 'redirect',
+});
+
 const smartGroups = computed(() => smartReport.value?.groups ?? []);
 // Workspace is mounted under `v-if="activeTab === 'workspace'"` in App.vue,
 // so the tab being inactive already prevents this composable from running
@@ -62,14 +89,15 @@ watch(
   async (next) => {
     if (next && props.hasDeepScanned) {
       await loadSmart();
-      // Defer the trend refresh by a tick so SpaceTrend doesn't re-fetch in the
-      // same microtask as `loadSmart`'s reactive fan-out, which can otherwise
-      // cause its watcher to fire while smartReport is mid-update.
+      void loadBreakdown();
+      void loadBalanceSuggestion();
       void nextTick(() => {
         trendRefreshKey.value += 1;
       });
     } else {
       smartReport.value = null;
+      breakdown.value = null;
+      balanceSuggestion.value = null;
     }
   },
   { immediate: true },
@@ -91,6 +119,118 @@ async function loadSmart() {
     loadingSmart.value = false;
   }
 }
+
+async function loadBreakdown() {
+  if (!props.selectedDisk) return;
+  loadingBreakdown.value = true;
+  try {
+    breakdown.value = await invoke<SpaceBreakdown>('get_space_breakdown', {
+      rootPath: props.selectedDisk,
+    });
+  } catch {
+    breakdown.value = null;
+  } finally {
+    loadingBreakdown.value = false;
+  }
+}
+
+async function loadBalanceSuggestion() {
+  if (!props.selectedDisk || props.availableDisks.length < 2) return;
+  loadingBalance.value = true;
+  try {
+    balanceSuggestion.value = await invoke<BalanceSuggestion>('get_balance_suggestion', {
+      rootPath: props.selectedDisk,
+    });
+  } catch {
+    balanceSuggestion.value = null;
+  } finally {
+    loadingBalance.value = false;
+  }
+}
+
+async function loadReclaimOpportunities() {
+  loadingReclaim.value = true;
+  try {
+    reclaimOpportunities.value = await invoke<ReclaimOpportunity[]>('get_reclaim_opportunities');
+  } catch {
+    reclaimOpportunities.value = [];
+  } finally {
+    loadingReclaim.value = false;
+  }
+}
+
+async function loadKnownFolders() {
+  loadingFolders.value = true;
+  try {
+    knownFolders.value = await invoke<KnownFolderInfo[]>('get_known_folders');
+  } catch {
+    knownFolders.value = [];
+  } finally {
+    loadingFolders.value = false;
+  }
+}
+
+function openReclaimPanel() {
+  showReclaimPanel.value = true;
+  void loadReclaimOpportunities();
+}
+
+function openRedirectPanel() {
+  showRedirectPanel.value = true;
+  void loadKnownFolders();
+}
+
+function onBreakdownMigrate(item: BreakdownItem) {
+  emit('migrate-single', { path: item.path, name: item.name, size: item.size, file_count: 1 });
+}
+
+function onBreakdownNavigate(path: string) {
+  emit('navigate', path);
+}
+
+function onBalanceExecute(items: BalanceItem[]) {
+  const batch = items.map(it => ({
+    path: it.path,
+    name: it.name,
+    size: it.size,
+    file_count: 1,
+    recommendation: 'migrate' as const,
+    source: 'browse' as const,
+  }));
+  cart.addBatch(batch);
+  showToast('已加入搬运车', `${items.length} 项 · 共 ${formatBytes(items.reduce((s, i) => s + i.size, 0))}`, 'info');
+}
+
+function onReclaimed(freedBytes: number) {
+  const diskTotal = props.selectedDiskInfo?.total_space ?? 0;
+  const usedBefore = props.selectedDiskInfo?.used_space ?? 0;
+  cleanupResultData.value = {
+    beforeUsed: usedBefore,
+    afterUsed: usedBefore - freedBytes,
+    diskTotal,
+    freedBytes,
+    itemCount: 1,
+    operationType: 'reclaim',
+  };
+  cleanupResultVisible.value = true;
+}
+
+function onRedirected(result: RedirectResult) {
+  const diskTotal = props.selectedDiskInfo?.total_space ?? 0;
+  const usedBefore = props.selectedDiskInfo?.used_space ?? 0;
+  cleanupResultData.value = {
+    beforeUsed: usedBefore,
+    afterUsed: usedBefore - result.moved_bytes,
+    diskTotal,
+    freedBytes: result.moved_bytes,
+    itemCount: result.moved_files,
+    operationType: 'redirect',
+  };
+  cleanupResultVisible.value = true;
+}
+
+const isElevated = computed(() => false);
+const hasOtherDisks = computed(() => props.availableDisks.length > 1);
 
 function handleMigrate(item: SmartItem) {
   emit('migrate-single', item);
@@ -170,6 +310,8 @@ const heroSubtitle = computed(() => {
           <button class="hero-btn ghost" @click="openBrowse('list')" :disabled="!hasDeepScanned">浏览全部</button>
           <button class="hero-btn ghost" @click="openBrowse('large_files')" :disabled="!hasDeepScanned">大文件</button>
           <button class="hero-btn ghost" @click="openBrowse('duplicates')" :disabled="!hasDeepScanned">重复文件</button>
+          <button class="hero-btn ghost" @click="openReclaimPanel">系统回收</button>
+          <button class="hero-btn ghost" @click="openRedirectPanel">路径重定向</button>
           <button class="hero-btn refresh" @click="loadSmart" :disabled="!hasDeepScanned || loadingSmart">
             {{ loadingSmart ? '分析中…' : '重新分析' }}
           </button>
@@ -179,9 +321,26 @@ const heroSubtitle = computed(() => {
 
     <SpaceTrend :drive="selectedDisk" :refresh-key="trendRefreshKey" />
 
+    <SpaceBreakdownVue
+      v-if="hasDeepScanned"
+      :breakdown="breakdown"
+      :default-savings="smartReport?.default_savings ?? 0"
+      :loading="loadingBreakdown"
+      @migrate-item="onBreakdownMigrate"
+      @navigate="onBreakdownNavigate"
+    />
+
+    <BalanceSuggestionVue
+      v-if="hasDeepScanned && hasOtherDisks"
+      :suggestion="balanceSuggestion"
+      :loading="loadingBalance"
+      :available-disks="availableDisks"
+      @execute="onBalanceExecute"
+    />
+
     <div v-if="!hasDeepScanned" class="empty-state">
       <div class="empty-card">
-        <div class="empty-icon">⌁</div>
+        <div class="empty-icon"><IconScanEmpty :size="28" /></div>
         <h3>{{ selectedDiskInfo ? `开始扫描 ${selectedDiskInfo.drive_letter}` : '选择磁盘开始' }}</h3>
         <p>扫描完成后我会给你一份"今晚能搬走的"清单，全部勾选后一键搬走。</p>
         <button class="hero-btn primary big" @click="emit('start-scan')" :disabled="deepScanning || !selectedDisk">
@@ -197,7 +356,7 @@ const heroSubtitle = computed(() => {
 
     <div v-else-if="smartGroups.length === 0" class="empty-state">
       <div class="empty-card">
-        <div class="empty-icon">✓</div>
+        <div class="empty-icon"><IconSuccess :size="28" /></div>
         <h3>很干净，目前没有明显能省的</h3>
         <p>试试"浏览全部目录"找特定的大目录，或者用 ⌘ K 搜索。</p>
         <button class="hero-btn ghost" @click="openBrowse('list')">浏览全部</button>
@@ -223,7 +382,7 @@ const heroSubtitle = computed(() => {
               <button :class="{ active: browseTab === 'large_files' }" @click="browseTab = 'large_files'">大文件雷达</button>
               <button :class="{ active: browseTab === 'duplicates' }" @click="browseTab = 'duplicates'">重复文件</button>
             </div>
-            <button class="icon-btn" @click="closeBrowse" aria-label="关闭">✕</button>
+            <button class="icon-btn" @click="closeBrowse" aria-label="关闭"><IconClose :size="16" /></button>
           </header>
 
           <div class="browse-body">
@@ -256,6 +415,45 @@ const heroSubtitle = computed(() => {
         </div>
       </div>
     </Teleport>
+
+    <Teleport to="body">
+      <div v-if="showReclaimPanel" class="browse-overlay" @click="showReclaimPanel = false">
+        <div class="browse-panel" @click.stop>
+          <SystemReclaim
+            :opportunities="reclaimOpportunities"
+            :loading="loadingReclaim"
+            :is-elevated="isElevated"
+            @close="showReclaimPanel = false"
+            @reclaimed="onReclaimed"
+          />
+        </div>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div v-if="showRedirectPanel" class="browse-overlay" @click="showRedirectPanel = false">
+        <div class="browse-panel" @click.stop>
+          <FolderRedirect
+            :folders="knownFolders"
+            :available-disks="availableDisks"
+            :loading="loadingFolders"
+            @close="showRedirectPanel = false"
+            @redirected="onRedirected"
+          />
+        </div>
+      </div>
+    </Teleport>
+
+    <CleanupResult
+      :show="cleanupResultVisible"
+      :before-used="cleanupResultData.beforeUsed"
+      :after-used="cleanupResultData.afterUsed"
+      :disk-total="cleanupResultData.diskTotal"
+      :freed-bytes="cleanupResultData.freedBytes"
+      :item-count="cleanupResultData.itemCount"
+      :operation-type="cleanupResultData.operationType"
+      @close="cleanupResultVisible = false"
+    />
   </div>
 </template>
 

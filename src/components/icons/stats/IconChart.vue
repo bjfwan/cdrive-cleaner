@@ -10,13 +10,9 @@
     :aria-hidden="!label"
     role="img"
   >
-    <path 
-      d="M18 20V10M12 20V4M6 20v-6"
-      stroke="currentColor" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
+    <rect x="4" y="13" width="4" height="8" rx="1" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="1.75" />
+    <rect x="10" y="8" width="4" height="13" rx="1" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="1.75" />
+    <rect x="16" y="3" width="4" height="18" rx="1" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="1.75" />
   </svg>
 </template>
 
@@ -24,7 +20,7 @@
 import type { IconProps } from '../types'
 
 withDefaults(defineProps<IconProps>(), {
-  size: 20,
+  size: 24,
   className: '',
   label: '',
   spinning: false

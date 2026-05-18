@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import type { SmartGroup, SmartItem, SmartRisk, SmartCategory, SmartAction } from '../types';
 import { formatBytes } from '../utils/format';
 import { useCart } from '../composables/useCart';
+import ExplanationTooltip from './ExplanationTooltip.vue';
 
 interface Props {
   group: SmartGroup;
@@ -13,6 +14,7 @@ const emit = defineEmits<{ migrate: [item: SmartItem]; reveal: [path: string] }>
 
 const expanded = ref(false);
 const cart = useCart();
+const tooltipRef = ref<InstanceType<typeof ExplanationTooltip> | null>(null);
 
 const categoryMeta: Record<SmartCategory, { label: string; sub: string; tone: string }> = {
   app_cache: { label: '应用缓存', sub: '浏览器、IDE、桌面应用累积的缓存', tone: 'cyan' },
@@ -110,6 +112,14 @@ function deselectAll() {
   for (const it of props.group.items) paths.push(it.path);
   cart.removeBatch(paths);
 }
+
+function onItemEnter(item: SmartItem, event: MouseEvent) {
+  tooltipRef.value?.show(item.path, event.currentTarget as HTMLElement);
+}
+
+function onItemLeave() {
+  tooltipRef.value?.hide();
+}
 </script>
 
 <template>
@@ -140,6 +150,8 @@ function deselectAll() {
         class="item"
         :data-risk="item.risk"
         :class="{ checked: isItemChecked(item.path), blocked: item.risk === 'blocked' }"
+        @mouseenter="onItemEnter(item, $event)"
+        @mouseleave="onItemLeave"
       >
         <button class="item-check" @click="toggleItem(item)" :disabled="item.risk === 'blocked'">
           <svg v-if="isItemChecked(item.path)" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -162,6 +174,8 @@ function deselectAll() {
     <button v-if="remainingCount > 0" class="expand" @click="expanded = !expanded">
       {{ expanded ? '收起' : `展开剩余 ${remainingCount} 项` }}
     </button>
+
+    <ExplanationTooltip ref="tooltipRef" />
   </section>
 </template>
 

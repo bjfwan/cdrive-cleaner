@@ -6,17 +6,11 @@
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     :class="['icon', className]"
-    :aria-label="label || '展开'"
+    :aria-label="label || '向下'"
     :aria-hidden="!label"
     role="img"
   >
-    <path 
-      d="M6 9l6 6 6-6"
-      stroke="currentColor" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
+    <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
   </svg>
 </template>
 
@@ -24,7 +18,7 @@
 import type { IconProps } from '../types'
 
 withDefaults(defineProps<IconProps>(), {
-  size: 16,
+  size: 24,
   className: '',
   label: '',
   spinning: false

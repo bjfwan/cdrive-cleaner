@@ -6,27 +6,13 @@
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     :class="['icon', className]"
-    :aria-label="label || '未知'"
+    :aria-label="label || '未知风险'"
     :aria-hidden="!label"
     role="img"
   >
-    <circle 
-      cx="12" 
-      cy="12" 
-      r="10"
-      :stroke="color || '#9ca3af'" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      :fill="color || '#9ca3af'"
-    />
-    <path 
-      d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"
-      stroke="white" 
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
+    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.75" />
+    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="12" cy="17" r="0.5" fill="currentColor" stroke="currentColor" stroke-width="1" />
   </svg>
 </template>
 
