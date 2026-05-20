@@ -97,6 +97,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::scan_disk_deep,
             commands::get_directory_snapshot,
+            commands::get_large_files,
             commands::analyze_smart_groups,
             commands::reveal_in_explorer,
             commands::cancel_scan,
@@ -131,6 +132,7 @@ pub fn run() {
             commands::execute_reclaim,
             commands::get_known_folders,
             commands::relocate_folder,
+            commands::restore_folder,
             commands::relocate_temp,
             commands::get_space_breakdown,
             commands::explain_file,

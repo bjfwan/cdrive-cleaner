@@ -403,6 +403,22 @@ pub fn get_directory_snapshot(
 }
 
 #[tauri::command]
+pub fn get_large_files(
+    root_path: String,
+    path: Option<String>,
+    scanner: tauri::State<'_, DiskScanner>,
+) -> Result<Vec<FileInfo>, String> {
+    scanner
+        .with_indexed(&root_path, |indexed| {
+            indexed
+                .large_files_for_path_public(path.as_deref().unwrap_or(&root_path))
+                .into_iter()
+                .collect::<Vec<_>>()
+        })
+        .ok_or_else(|| "尚未扫描，请先执行深度扫描".to_string())
+}
+
+#[tauri::command]
 pub fn analyze_smart_groups(
     root_path: String,
     scanner: tauri::State<'_, DiskScanner>,
@@ -1248,10 +1264,10 @@ pub async fn delete_duplicate_files(
             }
             Err(err) => {
                 overall_success = false;
-                errors.push(crate::migration::delete::DeleteError {
-                    path: path.clone(),
-                    error: err.to_string(),
-                });
+                errors.push(crate::migration::delete::DeleteError::new(
+                    path.clone(),
+                    err.to_string(),
+                ));
             }
         }
     }
@@ -1585,6 +1601,21 @@ pub async fn relocate_folder(
     }
 
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn restore_folder(
+    folder_id: String,
+    app: tauri::AppHandle,
+) -> Result<crate::folder_redirect::RedirectResult, String> {
+    let app_handle = app.clone();
+    let cb: crate::folder_redirect::RedirectProgressCallback = std::sync::Arc::new(move |p| {
+        let _ = tauri::Emitter::emit(&app_handle, "redirect-progress", p);
+    });
+
+    crate::folder_redirect::restore_known_folder(&folder_id, Some(cb))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

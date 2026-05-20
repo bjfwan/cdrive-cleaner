@@ -3,6 +3,20 @@ use serde::Serialize;
 use std::path::Path;
 use tokio::process::Command;
 
+#[cfg(target_os = "windows")]
+fn hidden_command(program: &str) -> Command {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut command = std::process::Command::new(program);
+    command.creation_flags(CREATE_NO_WINDOW);
+    Command::from(command)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn hidden_command(program: &str) -> Command {
+    Command::new(program)
+}
+
 #[derive(Serialize, Clone)]
 pub struct ReclaimResult {
     pub success: bool,
@@ -98,7 +112,7 @@ pub async fn cleanup_windows_update(force: bool) -> Result<ReclaimResult> {
         args.push("/ResetBase");
     }
 
-    let output = Command::new("Dism.exe")
+    let output = hidden_command("Dism.exe")
         .args(&args)
         .output()
         .await
@@ -216,7 +230,7 @@ pub async fn disable_hibernation() -> Result<ReclaimResult> {
     let hiberfil = Path::new(r"C:\hiberfil.sys");
     let size = file_size(hiberfil);
 
-    let output = Command::new("powercfg")
+    let output = hidden_command("powercfg")
         .args(["-h", "off"])
         .output()
         .await
@@ -241,7 +255,7 @@ pub async fn enable_hibernation() -> Result<ReclaimResult> {
         bail!("需要管理员权限");
     }
 
-    let output = Command::new("powercfg")
+    let output = hidden_command("powercfg")
         .args(["-h", "on"])
         .output()
         .await
@@ -272,7 +286,7 @@ pub async fn cleanup_restore_points(keep_latest: bool) -> Result<ReclaimResult> 
         vec!["delete", "shadows", "/for=C:", "/all", "/quiet"]
     };
 
-    let output = Command::new("vssadmin")
+    let output = hidden_command("vssadmin")
         .args(&args)
         .output()
         .await
@@ -460,7 +474,7 @@ pub async fn get_reclaim_opportunities() -> Result<Vec<ReclaimOpportunity>> {
 }
 
 async fn estimate_vss_size() -> u64 {
-    let output = Command::new("vssadmin")
+    let output = hidden_command("vssadmin")
         .args(["list", "shadowstorage"])
         .output()
         .await;

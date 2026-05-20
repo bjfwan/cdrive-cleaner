@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { KnownFolderInfo, RedirectResult } from '../types/breakdown';
@@ -7,6 +7,7 @@ import type { DiskInfo } from '../types';
 import { formatBytes } from '../utils/format';
 import { useToast } from '../composables/useToast';
 import { IconSpinner, IconFolder } from './icons';
+import DiskSelect from './DiskSelect.vue';
 
 interface Props {
   folders: KnownFolderInfo[];
@@ -17,13 +18,14 @@ interface Props {
 const props = defineProps<Props>();
 const emit = defineEmits<{
   'close': [];
-  'redirected': [result: RedirectResult];
+  'redirected': [result: RedirectResult, action: 'redirect' | 'restore'];
 }>();
 
 const showToast = useToast();
 const targetDisk = ref('');
 const executingId = ref<string | null>(null);
-const completedIds = ref<Map<string, { success: boolean; movedBytes: number }>>(new Map());
+const restoringId = ref<string | null>(null);
+const completedIds = ref<Map<string, { success: boolean; movedBytes: number; movedFiles: number; message: string }>>(new Map());
 const executingAll = ref(false);
 const redirectProgress = ref<RedirectProgress | null>(null);
 let unlistenRedirectProgress: UnlistenFn | null = null;
@@ -51,11 +53,19 @@ const alreadyRedirected = computed(() =>
   props.folders.filter(f => !f.is_on_system_drive || !f.is_default_location)
 );
 
-onMounted(() => {
-  if (nonSystemDisks.value.length > 0 && !targetDisk.value) {
-    targetDisk.value = `${nonSystemDisks.value[0].drive_letter}\\`;
-  }
-});
+watch(
+  nonSystemDisks,
+  (next) => {
+    if (next.length === 0) {
+      targetDisk.value = '';
+      return;
+    }
+    if (!next.some((disk) => `${disk.drive_letter}\\` === targetDisk.value)) {
+      targetDisk.value = `${next[0].drive_letter}\\`;
+    }
+  },
+  { immediate: true },
+);
 
 onBeforeUnmount(() => {
   if (unlistenRedirectProgress) {
@@ -110,18 +120,64 @@ async function redirectFolder(folder: KnownFolderInfo) {
     completedIds.value.set(folder.id, {
       success: result.success,
       movedBytes: result.moved_bytes,
+      movedFiles: result.moved_files,
+      message: result.message,
     });
     if (result.success) {
       showToast(`${folder.display_name} 已迁移`, `搬了 ${result.moved_files} 个文件`, 'success');
-      emit('redirected', result);
+      emit('redirected', result, 'redirect');
     } else {
       showToast('迁移失败', result.message, 'error');
     }
   } catch (err) {
-    completedIds.value.set(folder.id, { success: false, movedBytes: 0 });
+    completedIds.value.set(folder.id, { success: false, movedBytes: 0, movedFiles: 0, message: String(err) });
     showToast('操作失败', String(err), 'error');
   } finally {
     executingId.value = null;
+    redirectProgress.value = null;
+    if (unlistenRedirectProgress) {
+      unlistenRedirectProgress();
+      unlistenRedirectProgress = null;
+    }
+  }
+}
+
+async function restoreFolder(folder: KnownFolderInfo) {
+  restoringId.value = folder.id;
+  redirectProgress.value = {
+    folder_id: folder.id,
+    folder_name: folder.display_name,
+    source_path: folder.current_path,
+    target_path: folder.default_path,
+    status: 'preparing',
+    progress_percent: 0,
+    moved_files: 0,
+    moved_bytes: 0,
+  };
+  try {
+    if (unlistenRedirectProgress) {
+      unlistenRedirectProgress();
+      unlistenRedirectProgress = null;
+    }
+    unlistenRedirectProgress = await listen<RedirectProgress>('redirect-progress', (event) => {
+      if (event.payload.folder_id === folder.id) {
+        redirectProgress.value = event.payload;
+      }
+    });
+
+    const result = await invoke<RedirectResult>('restore_folder', {
+      folderId: folder.id,
+    });
+    if (result.success) {
+      showToast(`${folder.display_name} 已还原`, result.message, 'success');
+      emit('redirected', result, 'restore');
+    } else {
+      showToast('还原失败', result.message, 'error');
+    }
+  } catch (err) {
+    showToast('还原失败', String(err), 'error');
+  } finally {
+    restoringId.value = null;
     redirectProgress.value = null;
     if (unlistenRedirectProgress) {
       unlistenRedirectProgress();
@@ -163,11 +219,7 @@ async function redirectAll() {
       <template v-else>
         <div class="redirect-target">
           <label>目标磁盘</label>
-          <select v-model="targetDisk" class="redirect-select">
-            <option v-for="disk in nonSystemDisks" :key="disk.drive_letter" :value="`${disk.drive_letter}\\`">
-              {{ disk.drive_letter }} ({{ disk.label || 'Local' }}) · {{ formatBytes(disk.free_space) }} 可用
-            </option>
-          </select>
+          <DiskSelect v-model="targetDisk" :disks="nonSystemDisks" placeholder="选择目标磁盘" size="sm" />
         </div>
 
         <div v-if="redirectProgress" class="redirect-progress">
@@ -206,7 +258,16 @@ async function redirectAll() {
             <span class="redirect-cell path">{{ folder.current_path }}</span>
             <span class="redirect-cell size">{{ formatBytes(folder.size_bytes) }}</span>
             <span class="redirect-cell status done-badge">✓ 已重定向</span>
-            <span class="redirect-cell"></span>
+            <span class="redirect-cell action">
+              <button
+                class="redirect-btn restore"
+                :disabled="executingId !== null || restoringId !== null"
+                @click="restoreFolder(folder)"
+              >
+                <IconSpinner v-if="restoringId === folder.id" :size="14" />
+                <span v-else>还原</span>
+              </button>
+            </span>
           </div>
 
           <div
@@ -223,8 +284,12 @@ async function redirectAll() {
             <span class="redirect-cell size">{{ formatBytes(folder.size_bytes) }}</span>
             <span class="redirect-cell status">
               <template v-if="completedIds.has(folder.id)">
-                <span v-if="completedIds.get(folder.id)?.success" class="redirect-done-label">✓ 已迁移</span>
-                <span v-else class="redirect-fail-label">✕ 失败</span>
+                <span v-if="completedIds.get(folder.id)?.success" class="redirect-done-label">
+                  ✓ 已迁移 · {{ formatBytes(completedIds.get(folder.id)?.movedBytes || 0) }}
+                </span>
+                <span v-else class="redirect-fail-label" :title="completedIds.get(folder.id)?.message">
+                  ✕ 失败 · {{ completedIds.get(folder.id)?.message || '请查看提示' }}
+                </span>
               </template>
               <template v-else>
                 在 C 盘
@@ -234,7 +299,7 @@ async function redirectAll() {
               <button
                 v-if="!completedIds.has(folder.id)"
                 class="redirect-btn"
-                :disabled="executingId !== null || !targetDisk"
+                :disabled="executingId !== null || restoringId !== null || !targetDisk"
                 @click="redirectFolder(folder)"
               >
                 <IconSpinner v-if="executingId === folder.id" :size="14" />
@@ -313,11 +378,26 @@ async function redirectAll() {
 .redirect-body {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
   padding: 1rem 1.2rem 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+.redirect-body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.redirect-body::-webkit-scrollbar-track {
+  background: var(--color-bg-tertiary);
+}
+
+.redirect-body::-webkit-scrollbar-thumb {
+  background: var(--color-border-medium);
+  border-radius: 999px;
+  border: 2px solid var(--color-bg-tertiary);
 }
 
 .redirect-loading {
@@ -355,17 +435,6 @@ async function redirectAll() {
   font-weight: 700;
   color: var(--color-text-secondary);
   flex-shrink: 0;
-}
-
-.redirect-select {
-  flex: 1;
-  padding: 0.5rem 0.75rem;
-  border-radius: 10px;
-  border: 1px solid var(--color-border-medium);
-  background: var(--color-surface);
-  color: var(--color-text-primary);
-  font-size: 0.84rem;
-  cursor: pointer;
 }
 
 .redirect-progress {
@@ -498,6 +567,9 @@ async function redirectAll() {
 .redirect-cell.status {
   font-size: 0.78rem;
   color: var(--color-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .done-badge {

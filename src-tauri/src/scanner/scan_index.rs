@@ -62,6 +62,7 @@ fn path_starts_with(candidate: &Path, prefix: &Path) -> bool {
 pub struct IndexedScanResult {
     root_path: String,
     total_size: u64,
+    system_reserved_bytes: u64,
     total_files: usize,
     total_dirs: usize,
     scan_duration_ms: u64,
@@ -81,6 +82,7 @@ impl IndexedScanResult {
         let mut indexed = Self {
             root_path: result.root_path.clone(),
             total_size: result.total_size,
+            system_reserved_bytes: result.system_reserved_bytes,
             total_files: result.total_files,
             total_dirs: result.total_dirs,
             scan_duration_ms: result.scan_duration_ms,
@@ -105,6 +107,7 @@ impl IndexedScanResult {
             return Some(ScanResult {
                 root_path: self.root_path.clone(),
                 total_size: self.total_size,
+                system_reserved_bytes: self.system_reserved_bytes,
                 total_files: self.total_files,
                 total_dirs: self.total_dirs,
                 scan_duration_ms: self.scan_duration_ms,
@@ -131,11 +134,12 @@ impl IndexedScanResult {
         Some(ScanResult {
             root_path: node.path.clone(),
             total_size: node.size,
+            system_reserved_bytes: 0,
             total_files: node.file_count,
             total_dirs: node.dir_count.saturating_sub(1),
             scan_duration_ms: self.scan_duration_ms,
             directories,
-            large_files: self.large_files_for_path(path),
+            large_files: self.large_files_for_path_public(path),
             inaccessible_count: self.inaccessible_count,
             scan_backend: self.scan_backend.clone(),
             root_file_id: self.root_file_id,
@@ -147,7 +151,7 @@ impl IndexedScanResult {
         })
     }
 
-    fn large_files_for_path(&self, path: &str) -> Vec<FileInfo> {
+    pub fn large_files_for_path_public(&self, path: &str) -> Vec<FileInfo> {
         let current = Path::new(path);
         let mut filtered: Vec<FileInfo> = self
             .large_files

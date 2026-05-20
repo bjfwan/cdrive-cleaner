@@ -35,6 +35,7 @@ const scanCapabilities = shallowRef<ScanCapabilities | null>(null);
 const error = ref<string>('');
 const navigationStack = ref<string[]>([]);
 const hasDeepScanned = ref(false);
+const rootScanResult = shallowRef<ScanResult | null>(null);
 const loadingScanCapabilities = ref(false);
 const showAdminRestartConfirm = ref(false);
 
@@ -68,7 +69,7 @@ const appSettings = ref<AppSettings>(getSettings());
 const cart = useCart();
 
 let deepScanResult: ScanResult | null = null;
-let deepScanCache = new Map<string, ScanResult>();
+const deepScanCache = new Map<string, ScanResult>();
 const DEEP_SCAN_CACHE_MAX = 8;
 const driveSessions = new Map<string, { root: ScanResult; navStack: string[] }>();
 
@@ -203,7 +204,10 @@ watch(
     const session = driveSessions.get(path);
     if (session) {
       deepScanResult = session.root;
-      deepScanCache = new Map([[path, session.root]]);
+      rootScanResult.value = session.root;
+      deepScanCache.clear();
+      setDeepScanCacheEntry(path, session.root);
+
       navigationStack.value = session.navStack.length > 0 ? [...session.navStack] : [path];
       hasDeepScanned.value = true;
       const currentPath = navigationStack.value[navigationStack.value.length - 1];
@@ -263,13 +267,16 @@ async function loadDisks() {
 
 function resetDeepState() {
   deepScanResult = null;
-  deepScanCache = new Map();
+  rootScanResult.value = null;
+  deepScanCache.clear();
   hasDeepScanned.value = false;
 }
 
 function setRootSnapshot(result: ScanResult) {
   deepScanResult = result;
-  deepScanCache = new Map([[selectedDisk.value, result]]);
+  rootScanResult.value = result;
+  deepScanCache.clear();
+  setDeepScanCacheEntry(selectedDisk.value, result);
   hasDeepScanned.value = true;
   driveSessions.set(selectedDisk.value, {
     root: result,
@@ -377,11 +384,11 @@ async function startDeepScan() {
     }
 
     const diskUsed = selectedDiskInfo.value?.used_space;
-    const missing = diskUsed === undefined ? undefined : Math.max(diskUsed - rootSnapshot.total_size, 0);
+    const reserved = rootSnapshot.system_reserved_bytes ?? (diskUsed === undefined ? 0 : Math.max(diskUsed - rootSnapshot.total_size, 0));
 
     showToastNotification(
       '扫描完成',
-      `${formatScanBackendLabel(rootSnapshot.scan_backend)} · ${rootSnapshot.total_files.toLocaleString()} 个文件 · 扫描到 ${formatBytes(rootSnapshot.total_size)}${diskUsed === undefined ? '' : ` · 磁盘已用 ${formatBytes(diskUsed)} · 漏算 ${formatBytes(missing ?? 0)}`}`,
+      `${formatScanBackendLabel(rootSnapshot.scan_backend)} · ${rootSnapshot.total_files.toLocaleString()} 个文件 · 普通文件 ${formatBytes(rootSnapshot.total_size)}${diskUsed === undefined ? '' : ` · 磁盘已用 ${formatBytes(diskUsed)} · 系统保留 ${formatBytes(reserved)}`}`,
       'success',
     );
   } catch (err) {
@@ -1020,6 +1027,7 @@ async function resumePendingScanIntent() {
           <Workspace
             v-if="activeTab === 'workspace'"
             :scan-result="scanResult"
+            :root-scan-result="rootScanResult"
             :selected-disk="selectedDisk"
             :selected-disk-info="selectedDiskInfo ?? null"
             :available-disks="disks"
@@ -1086,7 +1094,7 @@ async function resumePendingScanIntent() {
 
     <CommandPalette
       :show="showCommandPalette"
-      :scan-result="scanResult"
+      :scan-result="rootScanResult ?? scanResult"
       @close="showCommandPalette = false"
       @jump="navigateToPath"
     />
@@ -1098,7 +1106,7 @@ async function resumePendingScanIntent() {
       :selected-items="[]"
       :available-disks="disks.filter((d) => `${d.drive_letter}\\` !== selectedDisk)"
       @close="closeMigrateDialog"
-      @migrated="(p) => { closeMigrateDialog(); refreshAfterMigration(p); }"
+      @migrated="(p) => { refreshAfterMigration(p); }"
     />
 
     <ConfirmDialog

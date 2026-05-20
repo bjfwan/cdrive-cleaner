@@ -17,6 +17,21 @@ pub enum DeleteMode {
 pub struct DeleteError {
     pub path: String,
     pub error: String,
+    pub reason: String,
+    pub suggestion: String,
+}
+
+impl DeleteError {
+    pub fn new(path: impl Into<String>, error: impl Into<String>) -> Self {
+        let error = error.into();
+        let (reason, suggestion) = classify_delete_error(&error);
+        Self {
+            path: path.into(),
+            error,
+            reason,
+            suggestion,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -102,10 +117,7 @@ fn delete_path_blocking(
             mode,
             deleted_size: 0,
             deleted_files: 0,
-            errors: vec![DeleteError {
-                path: path.to_string_lossy().to_string(),
-                error: "路径不存在".to_string(),
-            }],
+            errors: vec![DeleteError::new(path.to_string_lossy().to_string(), "路径不存在")],
             duration_ms: start.elapsed().as_millis() as u64,
         });
     }
@@ -178,10 +190,11 @@ fn delete_to_recycle(path: &Path, tracker: &DeleteTracker, errors: &mut Vec<Dele
         }
         Err(err) => {
             tracker.error_count.fetch_add(1, Ordering::Relaxed);
-            errors.push(DeleteError {
-                path: path.to_string_lossy().to_string(),
-                error: format!("移入回收站失败: {}", err),
-            });
+            errors.push(DeleteError::new(
+                path.to_string_lossy().to_string(),
+                format!("移入回收站失败: {}", err),
+            ));
+
             tracing::warn!(
                 "[delete] recycle failed path={} error={}",
                 path.display(),
@@ -196,10 +209,11 @@ fn delete_permanently(path: &Path, tracker: &DeleteTracker, errors: &mut Vec<Del
         Ok(m) => m,
         Err(err) => {
             tracker.error_count.fetch_add(1, Ordering::Relaxed);
-            errors.push(DeleteError {
-                path: path.to_string_lossy().to_string(),
-                error: format!("读取元数据失败: {}", err),
-            });
+            errors.push(DeleteError::new(
+                path.to_string_lossy().to_string(),
+                format!("读取元数据失败: {}", err),
+            ));
+
             return;
         }
     };
@@ -225,10 +239,10 @@ fn delete_single_file(path: &Path, tracker: &DeleteTracker, errors: &mut Vec<Del
         }
         Err(err) => {
             tracker.error_count.fetch_add(1, Ordering::Relaxed);
-            errors.push(DeleteError {
-                path: path.to_string_lossy().to_string(),
-                error: err.to_string(),
-            });
+            errors.push(DeleteError::new(
+                path.to_string_lossy().to_string(),
+                err.to_string(),
+            ));
         }
     }
 }
@@ -242,10 +256,11 @@ fn delete_directory_recursive(
         Ok(rd) => rd,
         Err(err) => {
             tracker.error_count.fetch_add(1, Ordering::Relaxed);
-            errors.push(DeleteError {
-                path: path.to_string_lossy().to_string(),
-                error: format!("读取目录失败: {}", err),
-            });
+            errors.push(DeleteError::new(
+                path.to_string_lossy().to_string(),
+                format!("读取目录失败: {}", err),
+            ));
+
             return;
         }
     };
@@ -255,10 +270,11 @@ fn delete_directory_recursive(
             Ok(e) => e,
             Err(err) => {
                 tracker.error_count.fetch_add(1, Ordering::Relaxed);
-                errors.push(DeleteError {
-                    path: path.to_string_lossy().to_string(),
-                    error: format!("枚举项失败: {}", err),
-                });
+                errors.push(DeleteError::new(
+                    path.to_string_lossy().to_string(),
+                    format!("枚举项失败: {}", err),
+                ));
+
                 continue;
             }
         };
@@ -268,10 +284,11 @@ fn delete_directory_recursive(
             Ok(ft) => ft,
             Err(err) => {
                 tracker.error_count.fetch_add(1, Ordering::Relaxed);
-                errors.push(DeleteError {
-                    path: child.to_string_lossy().to_string(),
-                    error: err.to_string(),
-                });
+                errors.push(DeleteError::new(
+                    child.to_string_lossy().to_string(),
+                    err.to_string(),
+                ));
+
                 continue;
             }
         };
@@ -287,10 +304,10 @@ fn delete_directory_recursive(
     let _ = clear_readonly(path);
     if let Err(err) = fs::remove_dir(path) {
         tracker.error_count.fetch_add(1, Ordering::Relaxed);
-        errors.push(DeleteError {
-            path: path.to_string_lossy().to_string(),
-            error: format!("移除目录失败: {}", err),
-        });
+        errors.push(DeleteError::new(
+            path.to_string_lossy().to_string(),
+            format!("移除目录失败: {}", err),
+        ));
     }
 }
 
@@ -330,6 +347,69 @@ fn clear_readonly(path: &Path) -> std::io::Result<()> {
         fs::set_permissions(path, perms)?;
     }
     Ok(())
+}
+
+fn classify_delete_error(error: &str) -> (String, String) {
+    let lower = error.to_ascii_lowercase();
+    if lower.contains("some operations were aborted")
+        || lower.contains("operation was aborted")
+        || lower.contains("aborted")
+    {
+        return (
+            "Windows 回收站操作被中断".to_string(),
+            "常见原因是文件正在被浏览器、系统服务或安全软件占用；关闭相关程序后重试，或改用永久删除。".to_string(),
+        );
+    }
+    if lower.contains("being used")
+        || lower.contains("in use")
+        || lower.contains("sharing violation")
+        || error.contains("正在使用")
+        || error.contains("另一个程序")
+        || error.contains("占用")
+    {
+        return (
+            "文件正在被其他程序占用".to_string(),
+            "关闭 Chrome、Edge、VS Code、Windsurf 或相关后台程序后重新扫描并清理。".to_string(),
+        );
+    }
+    if lower.contains("access is denied")
+        || lower.contains("permission denied")
+        || lower.contains("unauthorized")
+        || lower.contains("os error 5")
+        || error.contains("拒绝访问")
+        || error.contains("权限")
+    {
+        return (
+            "权限不足或系统保护".to_string(),
+            "请确认已用管理员身份运行；系统保护目录和杀毒软件占用的文件可能仍会被 Windows 拦截。".to_string(),
+        );
+    }
+    if lower.contains("directory not empty") || error.contains("目录不是空的") {
+        return (
+            "目录内仍有未删除内容".to_string(),
+            "通常是目录中部分文件被占用，先处理失败文件后再重试删除目录。".to_string(),
+        );
+    }
+    if lower.contains("not found")
+        || lower.contains("cannot find")
+        || error.contains("找不到")
+        || error.contains("路径不存在")
+    {
+        return (
+            "文件已不存在".to_string(),
+            "可能已被系统、浏览器或上一轮清理移除，重新扫描后列表会刷新。".to_string(),
+        );
+    }
+    if lower.contains("too long") || error.contains("路径太长") || error.contains("文件名太长") {
+        return (
+            "路径过长".to_string(),
+            "可尝试永久删除，或在资源管理器中缩短上级目录名称后再处理。".to_string(),
+        );
+    }
+    (
+        "Windows 未返回明确原因".to_string(),
+        "建议关闭相关应用后重试；如果仍失败，可查看详情中的系统错误文本。".to_string(),
+    )
 }
 
 fn start_progress_reporter(

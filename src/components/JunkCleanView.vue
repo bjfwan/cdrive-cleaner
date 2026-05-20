@@ -7,7 +7,8 @@ import 'element-plus/es/components/collapse/style/css';
 import 'element-plus/es/components/collapse-item/style/css';
 import 'element-plus/es/components/checkbox/style/css';
 import 'element-plus/es/components/tag/style/css';
-import type { JunkScanResult, JunkItem, JunkCleanResult, JunkCategory } from '../types/junk';
+import type { JunkScanResult, JunkItem, JunkCleanResult, JunkCategory, JunkCleanError } from '../types/junk';
+
 import { CATEGORY_LABELS, CMD_SCAN_JUNK, CMD_CLEAN_JUNK } from '../types/junk';
 import { formatBytes } from '../utils/format';
 import IconSpinner from './icons/scan/IconSpinner.vue';
@@ -56,6 +57,7 @@ const lastCategories = ref<JunkCategory[] | null>(null);
 const scanProgress = ref<JunkScanProgress | null>(null);
 const cleanProgress = ref<JunkCleanProgress | null>(null);
 const lastCleanResult = ref<JunkCleanResult | null>(null);
+const showAllCleanErrors = ref(false);
 const cache = useJunkScanCache();
 let unlistenProgress: UnlistenFn | null = null;
 let unlistenCleanProgress: UnlistenFn | null = null;
@@ -77,6 +79,19 @@ interface GroupSummary {
   checkedSize: number;
   all: boolean;
   some: boolean;
+}
+
+interface CleanErrorView {
+  path: string;
+  error: string;
+  reason: string;
+  suggestion: string;
+}
+
+interface CleanErrorGroup {
+  reason: string;
+  suggestion: string;
+  count: number;
 }
 
 // 按 path 分类的索引：path -> { item, group }
@@ -166,6 +181,94 @@ const totalCleanableLabel = computed(() => {
   if (!result.value) return '';
   return formatBytes(result.value.total_size);
 });
+
+const cleanErrors = computed<CleanErrorView[]>(() =>
+  (lastCleanResult.value?.errors ?? []).map((err) => ({
+    path: err.path,
+    error: err.error,
+    reason: cleanErrorReason(err),
+    suggestion: cleanErrorSuggestion(err),
+  })),
+);
+
+const cleanErrorGroups = computed<CleanErrorGroup[]>(() => {
+  const map = new Map<string, CleanErrorGroup>();
+  for (const err of cleanErrors.value) {
+    const key = `${err.reason}\n${err.suggestion}`;
+    const existing = map.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      map.set(key, { reason: err.reason, suggestion: err.suggestion, count: 1 });
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.count - a.count);
+});
+
+const visibleCleanErrors = computed(() =>
+  showAllCleanErrors.value ? cleanErrors.value : cleanErrors.value.slice(0, 8),
+);
+
+const hiddenCleanErrorCount = computed(() =>
+  Math.max(0, cleanErrors.value.length - visibleCleanErrors.value.length),
+);
+
+const cleanResultTone = computed<'success' | 'warning' | 'danger'>(() => {
+  const r = lastCleanResult.value;
+  if (!r || cleanErrors.value.length === 0) return 'success';
+  if (r.cleaned_count > 0 || r.cleaned_size > 0) return 'warning';
+  return 'danger';
+});
+
+const cleanResultTitle = computed(() => {
+  const r = lastCleanResult.value;
+  if (!r) return '';
+  if (cleanErrors.value.length === 0) return '清理完成';
+  if (r.cleaned_count > 0 || r.cleaned_size > 0) return '部分清理完成';
+  return '清理未完成';
+});
+
+const cleanResultDescription = computed(() => {
+  const r = lastCleanResult.value;
+  if (!r) return '';
+  const failed = cleanErrors.value.length;
+  if (failed === 0) {
+    return `已处理 ${r.cleaned_count} 个文件，释放 ${formatBytes(r.cleaned_size)}。`;
+  }
+  return `已处理 ${r.cleaned_count} 个文件，释放 ${formatBytes(r.cleaned_size)}；${failed} 个路径未能处理。`;
+});
+
+function cleanErrorReason(err: JunkCleanError): string {
+  if (err.reason) return err.reason;
+  const text = `${err.error} ${err.path}`.toLowerCase();
+  if (text.includes('some operations were aborted') || text.includes('operation was aborted')) {
+    return 'Windows 回收站操作被中断';
+  }
+  if (text.includes('being used') || text.includes('in use') || text.includes('sharing violation') || text.includes('正在使用') || text.includes('占用')) {
+    return '文件正在被其他程序占用';
+  }
+  if (text.includes('access is denied') || text.includes('permission denied') || text.includes('拒绝访问') || text.includes('权限')) {
+    return '权限不足或系统保护';
+  }
+  if (text.includes('directory not empty') || text.includes('目录不是空的')) {
+    return '目录内仍有未删除内容';
+  }
+  if (text.includes('not found') || text.includes('路径不存在') || text.includes('找不到')) {
+    return '文件已不存在';
+  }
+  return 'Windows 未返回明确原因';
+}
+
+function cleanErrorSuggestion(err: JunkCleanError): string {
+  if (err.suggestion) return err.suggestion;
+  const reason = cleanErrorReason(err);
+  if (reason === 'Windows 回收站操作被中断') return '关闭相关程序后重试，或改用永久删除。';
+  if (reason === '文件正在被其他程序占用') return '关闭 Chrome、Edge、VS Code、Windsurf 或相关后台程序后重新扫描并清理。';
+  if (reason === '权限不足或系统保护') return '确认已用管理员身份运行；系统保护目录可能仍会被 Windows 拦截。';
+  if (reason === '目录内仍有未删除内容') return '先处理失败文件后再重试删除目录。';
+  if (reason === '文件已不存在') return '重新扫描后列表会刷新。';
+  return '建议关闭相关应用后重试；如果仍失败，可查看系统详情。';
+}
 
 function rebuildItemIndex(items: JunkItem[]) {
   itemIndex.clear();
@@ -432,6 +535,7 @@ async function performClean() {
   confirmOpen.value = false;
   if (paths.length === 0) return;
   lastCleanResult.value = null;
+  showAllCleanErrors.value = false;
   status.value = 'cleaning';
   cleanProgress.value = {
     current_path: '',
@@ -472,11 +576,11 @@ async function performClean() {
     } else if (r.cleaned_count > 0) {
       showToast(
         '部分清理失败',
-        `${r.failed_count} 项失败，已释放 ${formatBytes(r.cleaned_size)}`,
+        `${r.errors.length || r.failed_count} 项失败，已释放 ${formatBytes(r.cleaned_size)}`,
         'warning',
       );
     } else {
-      showToast('清理失败', `${r.failed_count} 项均失败`, 'error');
+      showToast('清理失败', `${r.errors.length || r.failed_count} 项均失败`, 'error');
     }
   } catch (err) {
     showToast('清理失败', String(err), 'error');
@@ -682,21 +786,58 @@ function isGroupActive(category: JunkCategory): boolean {
       </ElCollapse>
     </template>
 
-    <div v-if="status === 'scanned' && lastCleanResult && lastCleanResult.errors.length > 0" class="junk-errors">
-      <div class="junk-errors-head">
-        <strong>未能处理的项目</strong>
-        <span>{{ lastCleanResult.errors.length }} 项</span>
-      </div>
-      <div class="junk-errors-list">
-        <div v-for="err in lastCleanResult.errors.slice(0, 5)" :key="err.path" class="junk-error-item">
-          <div class="junk-error-path">{{ err.path }}</div>
-          <div class="junk-error-text">{{ err.error }}</div>
+    <div
+      v-if="status === 'scanned' && lastCleanResult"
+      class="junk-clean-result"
+      :class="`junk-clean-result--${cleanResultTone}`"
+    >
+      <div class="junk-clean-result-head">
+        <div>
+          <strong>{{ cleanResultTitle }}</strong>
+          <span>{{ cleanResultDescription }}</span>
         </div>
+        <button
+          v-if="cleanErrors.length > 8"
+          type="button"
+          class="junk-clean-toggle"
+          @click="showAllCleanErrors = !showAllCleanErrors"
+        >
+          {{ showAllCleanErrors ? '收起' : `查看全部 ${cleanErrors.length} 项` }}
+        </button>
+      </div>
+
+      <div v-if="cleanErrorGroups.length > 0" class="junk-error-groups">
+        <div
+          v-for="group in cleanErrorGroups"
+          :key="`${group.reason}-${group.suggestion}`"
+          class="junk-error-group"
+        >
+          <div>
+            <strong>{{ group.reason }}</strong>
+            <span>{{ group.count }} 项</span>
+          </div>
+          <small>{{ group.suggestion }}</small>
+        </div>
+      </div>
+
+      <div v-if="cleanErrors.length > 0" class="junk-errors-list">
+        <div
+          v-for="err in visibleCleanErrors"
+          :key="`${err.path}-${err.error}`"
+          class="junk-error-item"
+        >
+          <div class="junk-error-path">{{ err.path }}</div>
+          <div class="junk-error-reason">{{ err.reason }}</div>
+          <div class="junk-error-text">系统详情：{{ err.error }}</div>
+        </div>
+      </div>
+      <div v-if="hiddenCleanErrorCount > 0" class="junk-error-more">
+        还有 {{ hiddenCleanErrorCount }} 项未显示，点右上角查看全部。
       </div>
     </div>
 
     <div
-      v-else-if="status === 'scanned' && result && result.items.length === 0"
+      v-if="status === 'scanned' && result && result.items.length === 0"
       class="junk-empty"
     >
       <div class="junk-empty-mark"><IconSuccess :size="28" /></div>
@@ -705,7 +846,7 @@ function isGroupActive(category: JunkCategory): boolean {
     </div>
 
     <footer
-      v-if="status !== 'idle' && status !== 'scanning' && result && result.items.length > 0"
+      v-if="status === 'scanned' && result && result.items.length > 0"
       class="junk-foot"
     >
       <div class="junk-foot-stats">
@@ -715,14 +856,14 @@ function isGroupActive(category: JunkCategory): boolean {
       <div class="junk-foot-actions">
         <button
           class="junk-btn junk-btn--primary"
-          :disabled="selectedCount === 0 || status === 'cleaning'"
+          :disabled="selectedCount === 0"
           @click="openConfirm('recycle')"
         >
           清理到回收站
         </button>
         <button
           class="junk-btn junk-btn--danger"
-          :disabled="selectedCount === 0 || status === 'cleaning'"
+          :disabled="selectedCount === 0"
           @click="openConfirm('permanent')"
         >
           永久删除
@@ -1005,9 +1146,9 @@ function isGroupActive(category: JunkCategory): boolean {
   min-height: 64px;
 }
 
-.junk-errors {
-  border: 1px solid rgba(220, 38, 38, 0.16);
-  background: rgba(220, 38, 38, 0.04);
+.junk-clean-result {
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  background: rgba(15, 118, 110, 0.05);
   border-radius: var(--radius-md);
   padding: 0.9rem 1rem;
   display: flex;
@@ -1015,33 +1156,109 @@ function isGroupActive(category: JunkCategory): boolean {
   gap: 0.65rem;
 }
 
-.junk-errors-head {
+.junk-clean-result--warning {
+  border-color: rgba(245, 158, 11, 0.24);
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.junk-clean-result--danger {
+  border-color: rgba(220, 38, 38, 0.2);
+  background: rgba(220, 38, 38, 0.05);
+}
+
+.junk-clean-result-head {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
   align-items: center;
 }
 
-.junk-errors-head strong {
+.junk-clean-result-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.16rem;
+}
+
+.junk-clean-result-head strong {
   color: var(--color-text-primary);
   font-size: 0.88rem;
 }
 
-.junk-errors-head span {
+.junk-clean-result-head span {
   color: var(--color-text-tertiary);
   font-size: 0.78rem;
+}
+
+.junk-clean-toggle {
+  border: 1px solid var(--color-border-medium);
+  background: var(--color-surface-strong);
+  color: var(--color-text-secondary);
+  padding: 0.32rem 0.65rem;
+  border-radius: var(--radius-xs);
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.junk-error-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.55rem;
+}
+
+.junk-error-group {
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid rgba(15, 23, 32, 0.06);
+}
+
+[data-theme="dark"] .junk-error-group {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.junk-error-group div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.junk-error-group strong {
+  color: var(--color-text-primary);
+  font-size: 0.8rem;
+}
+
+.junk-error-group span {
+  color: var(--color-warning);
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.junk-error-group small {
+  display: block;
+  margin-top: 0.22rem;
+  color: var(--color-text-tertiary);
+  font-size: 0.74rem;
+  line-height: 1.35;
 }
 
 .junk-errors-list {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+  max-height: 180px;
+  overflow: auto;
 }
 
 .junk-error-item {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  padding: 0.35rem 0;
+  border-top: 1px solid rgba(15, 23, 32, 0.06);
 }
 
 .junk-error-path {
@@ -1050,10 +1267,21 @@ function isGroupActive(category: JunkCategory): boolean {
   word-break: break-all;
 }
 
+.junk-error-reason {
+  font-size: 0.76rem;
+  color: var(--color-warning);
+  font-weight: 700;
+}
+
 .junk-error-text {
   font-size: 0.76rem;
   color: var(--color-text-tertiary);
   word-break: break-word;
+}
+
+.junk-error-more {
+  color: var(--color-text-tertiary);
+  font-size: 0.75rem;
 }
 
 .junk-row {

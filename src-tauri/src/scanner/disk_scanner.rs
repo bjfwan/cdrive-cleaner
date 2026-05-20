@@ -518,17 +518,19 @@ impl DiskScanner {
             format!("query_disk_usage path={}", path.display()),
         );
         let disk_usage = Self::get_disk_usage(path);
+        let mut system_reserved_bytes = 0;
         match disk_usage {
             Some((_, disk_used, _)) => {
                 disk_usage_timer.finish_with(format!("disk_used={disk_used}"));
                 let missing = disk_used.saturating_sub(scanned_size);
+                system_reserved_bytes = missing;
                 let missing_pct = if disk_used > 0 {
                     missing as f64 / disk_used as f64 * 100.0
                 } else {
                     0.0
                 };
                 tracing::info!(
-                    "磁盘已用: {:.2} GB | 扫描到: {:.2} GB | 漏算量: {:.2} GB ({:.1}%) (系统保留/无权限文件)",
+                    "磁盘已用: {:.2} GB | 扫描到普通文件: {:.2} GB | 系统保留/卷元数据差额: {:.2} GB ({:.1}%)",
                     disk_used as f64 / 1024.0 / 1024.0 / 1024.0,
                     scanned_size as f64 / 1024.0 / 1024.0 / 1024.0,
                     missing as f64 / 1024.0 / 1024.0 / 1024.0,
@@ -582,6 +584,7 @@ impl DiskScanner {
             return Ok(ScanResult {
                 root_path,
                 total_size: scanned_size,
+                system_reserved_bytes,
                 total_files: scanned_files,
                 total_dirs: scanned_dirs,
                 scan_duration_ms: duration.as_millis() as u64,
@@ -601,6 +604,7 @@ impl DiskScanner {
         Ok(ScanResult {
             root_path,
             total_size: scanned_size,
+            system_reserved_bytes,
             total_files: scanned_files,
             total_dirs: scanned_dirs,
             scan_duration_ms: duration.as_millis() as u64,

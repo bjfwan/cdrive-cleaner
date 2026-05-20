@@ -625,17 +625,19 @@ fn scan_path_once(
         format!("query_disk_usage path={}", path.display()),
     );
     let disk_used = get_disk_used_bytes(path);
+    let mut system_reserved_bytes = 0;
     match disk_used {
         Some(bytes) => {
             disk_usage_timer.finish_with(format!("disk_used={bytes}"));
             let missing = bytes.saturating_sub(scanned_size);
+            system_reserved_bytes = missing;
             let missing_pct = if bytes > 0 {
                 missing as f64 / bytes as f64 * 100.0
             } else {
                 0.0
             };
             tracing::info!(
-                "磁盘已用: {:.2} GB | 扫描到: {:.2} GB | 漏算量: {:.2} GB ({:.1}%) (系统保留/无权限文件)",
+                "磁盘已用: {:.2} GB | 扫描到普通文件: {:.2} GB | 系统保留/卷元数据差额: {:.2} GB ({:.1}%)",
                 bytes as f64 / 1024.0 / 1024.0 / 1024.0,
                 scanned_size as f64 / 1024.0 / 1024.0 / 1024.0,
                 missing as f64 / 1024.0 / 1024.0 / 1024.0,
@@ -673,6 +675,7 @@ fn scan_path_once(
         result: ScanResult {
             root_path: path.to_string_lossy().to_string(),
             total_size: scanned_size,
+            system_reserved_bytes,
             total_files: scanned_files,
             total_dirs: scanned_dirs,
             scan_duration_ms: duration.as_millis() as u64,

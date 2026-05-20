@@ -25,6 +25,7 @@ export interface SpaceBreakdown {
   disk_total: number;
   disk_used: number;
   disk_free: number;
+  system_reserved_bytes: number;
   categories: BreakdownCategory[];
   actionable_total: number;
   non_actionable_total: number;

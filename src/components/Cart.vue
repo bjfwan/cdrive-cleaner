@@ -5,6 +5,7 @@ import { formatBytes } from '../utils/format';
 import type { DeleteMode, DiskInfo } from '../types';
 import VirtualList from './VirtualList.vue';
 import { IconCart, IconTruck, IconDelete, IconWarning, IconClose } from './icons';
+import DiskSelect from './DiskSelect.vue';
 
 interface CartProgress {
   current: number;
@@ -67,7 +68,13 @@ const targetDisk = ref<string>('');
 watch(
   targetOptions,
   (next) => {
-    if (!targetDisk.value && next.length > 0) targetDisk.value = `${next[0].drive_letter}\\`;
+    if (next.length === 0) {
+      targetDisk.value = '';
+      return;
+    }
+    if (!next.some((disk) => `${disk.drive_letter}\\` === targetDisk.value)) {
+      targetDisk.value = `${next[0].drive_letter}\\`;
+    }
   },
   { immediate: true },
 );
@@ -252,11 +259,7 @@ function dismissResults() {
       <footer v-if="!busy && !hasResults" class="drawer-foot">
         <template v-if="hasMigrate">
           <label class="label">目标磁盘</label>
-          <select v-model="targetDisk" :disabled="busy">
-            <option v-for="d in targetOptions" :key="d.drive_letter" :value="`${d.drive_letter}\\`">
-              {{ d.drive_letter }} · {{ d.label || 'Local Disk' }} (可用 {{ formatBytes(d.free_space) }})
-            </option>
-          </select>
+          <DiskSelect v-model="targetDisk" :disks="targetOptions" placeholder="选择目标磁盘" :disabled="busy" placement="top" />
         </template>
 
         <div v-if="hasDelete && !hasMigrate" class="delete-hint" :class="{ danger: deleteMode === 'permanent' }">
@@ -390,16 +393,6 @@ function dismissResults() {
   color: var(--color-text-tertiary);
   margin-bottom: 0.4rem;
 }
-select {
-  width: 100%;
-  padding: 0.65rem 0.85rem;
-  border-radius: 12px;
-  border: 1px solid var(--color-border-medium);
-  background: var(--color-surface-strong);
-  font-size: 0.9rem;
-  color: var(--color-text-primary);
-}
-
 .actions { display: flex; gap: 0.55rem; margin-top: 0.85rem; }
 .ghost, .primary {
   flex: 1;

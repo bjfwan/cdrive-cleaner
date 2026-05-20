@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-pub const CACHE_SCHEMA_VERSION: u32 = 1;
+pub const CACHE_SCHEMA_VERSION: u32 = 2;
 
 /// 清理规则版本号，预留给清理规则升级。
 pub const RULE_VERSION: u32 = 1;

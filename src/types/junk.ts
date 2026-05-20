@@ -27,12 +27,19 @@ export interface JunkScanResult {
   scan_duration_ms: number;
 }
 
+export interface JunkCleanError {
+  path: string;
+  error: string;
+  reason?: string;
+  suggestion?: string;
+}
+
 export interface JunkCleanResult {
   success: boolean;
   cleaned_size: number;
   cleaned_count: number;
   failed_count: number;
-  errors: { path: string; error: string }[];
+  errors: JunkCleanError[];
   duration_ms: number;
 }
 

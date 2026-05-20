@@ -41,6 +41,8 @@ pub struct DirectoryNode {
 pub struct ScanResult {
     pub root_path: String,
     pub total_size: u64,
+    #[serde(default)]
+    pub system_reserved_bytes: u64,
     pub total_files: usize,
     pub total_dirs: usize,
     pub scan_duration_ms: u64,

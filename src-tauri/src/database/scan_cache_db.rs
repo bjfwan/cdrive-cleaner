@@ -35,7 +35,13 @@ impl CachedScanResult {
     /// 回退到 `result_json`（JSON，兼容老缓存）。
     pub fn deserialize_result<T: DeserializeOwned>(&self) -> Result<T> {
         if let Some(ref blob) = self.result_blob {
-            return bincode::deserialize(blob).map_err(|e| anyhow::anyhow!("bincode: {e}"));
+            match bincode::deserialize(blob) {
+                Ok(result) => return Ok(result),
+                Err(err) if !self.result_json.is_empty() => {
+                    tracing::warn!("[scan-cache] bincode deserialize failed id={} disk_path={} scan_type={} blob_bytes={} err={}; falling back to json", self.id, self.disk_path, self.scan_type, blob.len(), err);
+                }
+                Err(err) => return Err(anyhow::anyhow!("bincode: {err}")),
+            }
         }
         serde_json::from_str(&self.result_json).map_err(|e| anyhow::anyhow!("json: {e}"))
     }
@@ -129,18 +135,15 @@ impl ScanCacheDb {
         let blob: Option<Vec<u8>> = if result_json.is_empty() || result_json == "{}" {
             None
         } else {
-            serde_json::from_str::<serde_json::Value>(result_json)
-                .ok()
-                .and_then(|_| {
-                    // 先反序列化为 ScanResult 再序列化为 bincode
-                    use crate::scanner::file_info::ScanResult;
-                    serde_json::from_str::<ScanResult>(result_json)
-                        .ok()
-                        .and_then(|sr| bincode::serialize(&sr).ok())
-                })
+            use crate::scanner::file_info::ScanResult;
+            let sr = serde_json::from_str::<ScanResult>(result_json)
+                .map_err(|e| anyhow::anyhow!("scan cache json self-check failed: {e}"))?;
+            bincode::serialize(&sr).ok().and_then(|blob| {
+                let _: ScanResult = bincode::deserialize(&blob).ok()?;
+                Some(blob)
+            })
         };
-        // 有 blob 时清空 result_json 节省空间；无 blob 时保留原 json（兼容占位/回退）
-        let stored_json = if blob.is_some() { "" } else { result_json };
+        let stored_json = result_json;
         conn.execute(
             "INSERT INTO scan_cache (
                  disk_path, scan_type, result_json, file_count, total_size, created_at,

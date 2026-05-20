@@ -10,6 +10,20 @@ use windows::Win32::UI::Shell::{
     FOLDERID_Videos, SHGetKnownFolderPath, SHSetKnownFolderPath, KNOWN_FOLDER_FLAG,
 };
 
+#[cfg(target_os = "windows")]
+fn hidden_command(program: &str) -> Command {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut command = std::process::Command::new(program);
+    command.creation_flags(CREATE_NO_WINDOW);
+    Command::from(command)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn hidden_command(program: &str) -> Command {
+    Command::new(program)
+}
+
 #[derive(Serialize, Clone)]
 pub struct KnownFolderInfo {
     pub id: String,
@@ -107,17 +121,28 @@ fn get_known_folder_path(folder_id: &windows::core::GUID) -> Result<PathBuf> {
 }
 
 fn dir_size_blocking(path: &Path) -> u64 {
+    dir_stats_blocking(path).0
+}
+
+fn dir_stats_blocking(path: &Path) -> (u64, u64) {
     if !path.exists() {
-        return 0;
+        return (0, 0);
     }
-    jwalk::WalkDir::new(path)
+    let mut size = 0u64;
+    let mut count = 0u64;
+    for entry in jwalk::WalkDir::new(path)
         .skip_hidden(false)
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file())
-        .filter_map(|e| e.metadata().ok())
-        .map(|m| m.len())
-        .sum()
+    {
+        if entry.file_type().is_file() {
+            if let Ok(metadata) = entry.metadata() {
+                size = size.saturating_add(metadata.len());
+                count = count.saturating_add(1);
+            }
+        }
+    }
+    (size, count)
 }
 
 fn is_on_c_drive(path: &str) -> bool {
@@ -270,6 +295,21 @@ pub async fn relocate_known_folder(
     let current = get_known_folder_path(&def.folder_id)?;
     let target = target_path_for(target_path, def);
 
+    if current
+        .to_string_lossy()
+        .eq_ignore_ascii_case(&target.to_string_lossy())
+    {
+        return Ok(RedirectResult {
+            success: true,
+            moved_files: 0,
+            moved_bytes: 0,
+            source_path: current.to_string_lossy().to_string(),
+            target_path: target.to_string_lossy().to_string(),
+            requires_reboot: false,
+            message: format!("{} 已经位于 {}", def.display_name, target.display()),
+        });
+    }
+
     emit_redirect_progress(
         on_progress.as_ref(),
         def.id,
@@ -292,6 +332,7 @@ pub async fn relocate_known_folder(
     if move_files {
         let source_str = current.to_string_lossy().to_string();
         let target_str = target.to_string_lossy().to_string();
+        let (source_bytes_before, source_files_before) = dir_stats_blocking(&current);
 
         emit_redirect_progress(
             on_progress.as_ref(),
@@ -305,7 +346,7 @@ pub async fn relocate_known_folder(
             0,
         );
 
-        let output = Command::new("robocopy")
+        let output = hidden_command("robocopy")
             .args([
                 &source_str,
                 &target_str,
@@ -321,10 +362,22 @@ pub async fn relocate_known_folder(
             .await
             .context("无法执行 robocopy")?;
 
+        let code = output.status.code().unwrap_or(16);
+        if code >= 8 {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Err(anyhow!(
+                "robocopy 迁移失败，退出码 {}: {}{}",
+                code,
+                stderr,
+                stdout
+            ));
+        }
+
         let stdout = String::from_utf8_lossy(&output.stdout);
         let (files, bytes) = parse_robocopy_summary(&stdout);
-        moved_files = files;
-        moved_bytes = bytes;
+        moved_files = if files > 0 { files } else { source_files_before };
+        moved_bytes = if bytes > 0 { bytes } else { source_bytes_before };
         emit_redirect_progress(
             on_progress.as_ref(),
             def.id,
@@ -496,6 +549,27 @@ pub async fn rollback_known_folder_redirect(
         duration_ms: start.elapsed().as_millis() as u64,
         error: None,
     })
+}
+
+pub async fn restore_known_folder(
+    folder_id: &str,
+    on_progress: Option<RedirectProgressCallback>,
+) -> Result<RedirectResult> {
+    if folder_id == "temp" {
+        let temp_default = format!(
+            "{}\\AppData\\Local\\Temp",
+            std::env::var("USERPROFILE").unwrap_or_else(|_| r"C:\Users\User".into())
+        );
+        return relocate_temp(Path::new(&temp_default)).await;
+    }
+
+    let defs = known_folder_defs();
+    let def = defs
+        .iter()
+        .find(|d| d.id == folder_id)
+        .context("未知的 folder_id")?;
+    let default_path = PathBuf::from(default_path_for(def.default_relative));
+    relocate_known_folder(folder_id, &default_path, true, on_progress).await
 }
 
 /// 重定向 TEMP/TMP 环境变量

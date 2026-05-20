@@ -9,6 +9,8 @@ use crate::migration::delete::{delete_path, DeleteMode, DeleteProgressCallback};
 pub struct JunkCleanError {
     pub path: String,
     pub error: String,
+    pub reason: String,
+    pub suggestion: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -131,15 +133,23 @@ pub async fn clean_junk_paths(
                         errors.push(JunkCleanError {
                             path: e.path,
                             error: e.error,
+                            reason: e.reason,
+                            suggestion: e.suggestion,
                         });
                     }
                     failed_count += 1;
                 }
             }
             Err(e) => {
+                let error = crate::migration::delete::DeleteError::new(
+                    current_path.clone(),
+                    e.to_string(),
+                );
                 errors.push(JunkCleanError {
-                    path: current_path.clone(),
-                    error: e.to_string(),
+                    path: error.path,
+                    error: error.error,
+                    reason: error.reason,
+                    suggestion: error.suggestion,
                 });
                 failed_count += 1;
             }

@@ -22,6 +22,7 @@ const FolderRedirect = defineAsyncComponent(() => import('./FolderRedirect.vue')
 
 interface Props {
   scanResult: ScanResult | null;
+  rootScanResult: ScanResult | null;
   selectedDisk: string;
   selectedDiskInfo: DiskInfo | null;
   availableDisks: DiskInfo[];
@@ -69,6 +70,7 @@ const cleanupResultData = ref({
 });
 
 const smartGroups = computed(() => smartReport.value?.groups ?? []);
+const browseScanResult = computed(() => props.rootScanResult ?? props.scanResult);
 // Workspace is mounted under `v-if="activeTab === 'workspace'"` in App.vue,
 // so the tab being inactive already prevents this composable from running
 // (effectScope dispose cancels the raf). We still gate raf on the browse
@@ -216,7 +218,12 @@ function onReclaimed(freedBytes: number) {
   cleanupResultVisible.value = true;
 }
 
-function onRedirected(result: RedirectResult) {
+function onRedirected(result: RedirectResult, action: 'redirect' | 'restore') {
+  void loadKnownFolders();
+  if (action === 'restore') {
+    return;
+  }
+
   const diskTotal = props.selectedDiskInfo?.total_space ?? 0;
   const usedBefore = props.selectedDiskInfo?.used_space ?? 0;
   cleanupResultData.value = {
@@ -395,11 +402,11 @@ const heroSubtitle = computed(() => {
 
           <div class="browse-body">
             <ListView
-              v-if="browseTab === 'list' && scanResult"
-              :directories="scanResult.directories"
-              :total-size="scanResult.total_size"
+              v-if="browseTab === 'list' && browseScanResult"
+              :directories="browseScanResult.directories"
+              :total-size="browseScanResult.total_size"
               :deep-scanning="deepScanning"
-              :current-path="scanResult.root_path"
+              :current-path="browseScanResult.root_path"
               :has-deep-scanned="hasDeepScanned"
               @navigate="emit('navigate', $event)"
               @migrate-dir="onListMigrate"
@@ -407,8 +414,8 @@ const heroSubtitle = computed(() => {
               @batch-migrate="onListBatchMigrate"
             />
             <LargeFilesView
-              v-else-if="browseTab === 'large_files' && scanResult"
-              :files="scanResult.large_files"
+              v-else-if="browseTab === 'large_files' && browseScanResult"
+              :files="browseScanResult.large_files"
               :deep-scanning="deepScanning"
               :has-deep-scanned="hasDeepScanned"
               :large-file-threshold="largeFileThreshold"
@@ -642,7 +649,7 @@ const heroSubtitle = computed(() => {
   position: fixed; inset: 0;
   background: rgba(15, 23, 32, 0.36);
   display: flex;
-  z-index: 1800;
+  z-index: 2200;
   animation: fadeIn 0.2s ease;
 }
 .browse-panel {
@@ -695,6 +702,6 @@ const heroSubtitle = computed(() => {
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .reclaim-overlay {
-  z-index: 1900;
+  z-index: 2210;
 }
 </style>

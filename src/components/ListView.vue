@@ -60,9 +60,40 @@ type Row = DirRow | FileRow;
 
 const loadingFiles = shallowRef(false);
 const currentFiles = shallowRef<FileInfo[]>([]);
+const viewPath = shallowRef('');
+const pathHistory = shallowRef<string[]>([]);
 const selectedDirs = useSelectionSet<string>();
 const selectedFiles = useSelectionSet<string>();
 let fileLoadRequestId = 0;
+
+const normalizedRootPath = computed(() => normalizePath(props.currentPath));
+const activePath = computed(() => viewPath.value || props.currentPath);
+const activeNode = computed(() => findDirectory(activePath.value));
+const visibleDirectories = computed(() => {
+  if (!activePath.value || normalizePath(activePath.value) === normalizedRootPath.value) {
+    return props.directories;
+  }
+  return activeNode.value?.children ?? [];
+});
+const activeTotalSize = computed(() => activeNode.value?.size ?? props.totalSize);
+const canGoBack = computed(() => normalizePath(activePath.value) !== normalizedRootPath.value);
+const pathHint = computed(() => activePath.value || props.currentPath);
+
+function normalizePath(path: string) {
+  return path.replace(/[\\/]+$/, '').toLowerCase();
+}
+
+function findDirectory(path: string): DirectoryNode | null {
+  const target = normalizePath(path);
+  if (!target || target === normalizedRootPath.value) return null;
+  const stack = [...props.directories];
+  while (stack.length > 0) {
+    const dir = stack.pop()!;
+    if (normalizePath(dir.path) === target) return dir;
+    if (dir.children?.length) stack.push(...dir.children);
+  }
+  return null;
+}
 
 function isDirSelectable(dir: DirectoryNode) {
   return !dir.is_symlink && (!props.deepScanning || dir.has_children);
@@ -70,7 +101,7 @@ function isDirSelectable(dir: DirectoryNode) {
 
 // 将 directories + currentFiles 合并为统一行结构，供 VirtualList 渲染。
 const rows = computed<Row[]>(() => {
-  const dirs = props.directories;
+  const dirs = visibleDirectories.value;
   const files = currentFiles.value;
   const total = dirs.length + files.length;
   const out: Row[] = new Array(total);
@@ -97,7 +128,7 @@ const rows = computed<Row[]>(() => {
 
 const selectableDirCount = computed(() => {
   let n = 0;
-  for (const d of props.directories) if (isDirSelectable(d)) n += 1;
+  for (const d of visibleDirectories.value) if (isDirSelectable(d)) n += 1;
   return n;
 });
 
@@ -121,7 +152,7 @@ function selectedItems(): Array<DirectoryNode | FileInfo> {
   const items: Array<DirectoryNode | FileInfo> = [];
   const dirSet = selectedDirs.value;
   const fileSet = selectedFiles.value;
-  for (const dir of props.directories) {
+  for (const dir of visibleDirectories.value) {
     if (dirSet.has(dir.path)) items.push(dir);
   }
   for (const file of currentFiles.value) {
@@ -140,7 +171,7 @@ function toggleFileSelection(file: FileInfo) {
 
 function selectAll() {
   const dirKeys: string[] = [];
-  for (const d of props.directories) {
+  for (const d of visibleDirectories.value) {
     if (isDirSelectable(d)) dirKeys.push(d.path);
   }
   selectedDirs.addAll(dirKeys);
@@ -164,8 +195,24 @@ function handleBatchMigrate() {
 }
 
 function handleItemClick(dir: DirectoryNode) {
-  if (!props.hasDeepScanned) return;
-  emit('navigate', dir.path);
+  if (!props.hasDeepScanned || dir.is_symlink) return;
+  if (normalizePath(dir.path) === normalizePath(activePath.value)) return;
+  pathHistory.value = [...pathHistory.value, activePath.value || props.currentPath];
+  viewPath.value = dir.path;
+}
+
+function goBack() {
+  if (!canGoBack.value) return;
+  const history = [...pathHistory.value];
+  const previous = history.pop() ?? props.currentPath;
+  pathHistory.value = history;
+  viewPath.value = previous;
+}
+
+function goRoot() {
+  if (!canGoBack.value) return;
+  pathHistory.value = [];
+  viewPath.value = props.currentPath;
 }
 
 async function loadDirectoryFiles(path: string) {
@@ -191,7 +238,17 @@ async function loadDirectoryFiles(path: string) {
 }
 
 watch(
-  () => [props.currentPath, props.totalSize] as const,
+  () => [props.currentPath, props.directories] as const,
+  ([newPath]) => {
+    viewPath.value = newPath;
+    pathHistory.value = [];
+    clearSelection();
+  },
+  { immediate: true },
+);
+
+watch(
+  () => [activePath.value, activeTotalSize.value] as const,
   ([newPath]) => {
     void loadDirectoryFiles(newPath);
     clearSelection();
@@ -253,16 +310,27 @@ function fileSelected(path: string): boolean {
 }
 
 function pctText(size: number): string {
-  return props.totalSize ? ((size / props.totalSize) * 100).toFixed(1) : '0.0';
+  return activeTotalSize.value ? ((size / activeTotalSize.value) * 100).toFixed(1) : '0.0';
 }
 
 function pctWidth(size: number): string {
-  return props.totalSize ? ((size / props.totalSize) * 100) + '%' : '0%';
+  return activeTotalSize.value ? ((size / activeTotalSize.value) * 100) + '%' : '0%';
 }
 </script>
 
 <template>
   <div class="list-view">
+    <div class="list-pathbar">
+      <div class="list-path-actions">
+        <button class="path-btn" :disabled="!canGoBack" @click="goBack">返回上层</button>
+        <button class="path-btn ghost" :disabled="!canGoBack" @click="goRoot">根目录</button>
+      </div>
+      <div class="list-path-text">
+        <span>当前浏览</span>
+        <strong>{{ pathHint }}</strong>
+      </div>
+    </div>
+
     <div v-if="rows.length === 0 && !loadingFiles" class="empty">
       <component :is="ICON_FOLDER" class="empty-icon" :size="44" />
       <h3>此目录目前没有内容</h3>
@@ -464,6 +532,78 @@ function pctWidth(size: number): string {
   flex: 1;
   min-height: 0;
   height: 100%;
+}
+
+.list-pathbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.8rem 1rem;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-xs);
+}
+
+.list-path-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-shrink: 0;
+}
+
+.path-btn {
+  border: 1px solid transparent;
+  border-radius: 0.8rem;
+  padding: 0.55rem 0.8rem;
+  background: var(--color-accent-primary);
+  color: var(--color-text-inverse);
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: opacity var(--transition-fast), transform var(--transition-base), background var(--transition-base);
+}
+
+.path-btn.ghost {
+  background: rgba(46, 33, 18, 0.06);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-light);
+}
+
+.path-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.path-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.list-path-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.16rem;
+  min-width: 0;
+}
+
+.list-path-text span {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.list-path-text strong {
+  max-width: min(54vw, 720px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+  font-size: 0.88rem;
 }
 
 .batch-toolbar {

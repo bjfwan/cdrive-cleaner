@@ -12,6 +12,7 @@ pub struct SpaceBreakdown {
     pub disk_total: u64,
     pub disk_used: u64,
     pub disk_free: u64,
+    pub system_reserved_bytes: u64,
     pub categories: Vec<BreakdownCategory>,
     pub actionable_total: u64,
     pub non_actionable_total: u64,
@@ -158,11 +159,123 @@ fn explain_engine() -> &'static ExplainEngine {
     })
 }
 
+fn drive_relative_path(trimmed: &str) -> Option<&str> {
+    let bytes = trimmed.as_bytes();
+    if bytes.len() < 2 || bytes[1] != b':' {
+        return None;
+    }
+    if bytes.len() == 2 {
+        return Some("");
+    }
+    if bytes.get(2) != Some(&b'\\') {
+        return None;
+    }
+    Some(&trimmed[3..])
+}
+
+fn fixed_explanation(
+    path: &str,
+    explanation: &str,
+    app_name: Option<&str>,
+    safe_to_delete: bool,
+    will_regenerate: bool,
+) -> FileExplanation {
+    FileExplanation {
+        path: path.to_string(),
+        explanation: explanation.to_string(),
+        app_name: app_name.map(str::to_string),
+        safe_to_delete,
+        will_regenerate,
+    }
+}
+
+fn known_windows_path_explanation(path: &str, trimmed: &str) -> Option<FileExplanation> {
+    let rel = drive_relative_path(trimmed)?;
+    match rel {
+        "windows" => Some(fixed_explanation(
+            path,
+            "Windows 系统目录，包含系统组件、驱动和服务文件，不建议手动删除或搬迁",
+            Some("Windows"),
+            false,
+            false,
+        )),
+        "pagefile.sys" => Some(fixed_explanation(
+            path,
+            "Windows 虚拟内存分页文件，由系统管理，不应手动删除",
+            Some("Windows"),
+            false,
+            false,
+        )),
+        "hiberfil.sys" => Some(fixed_explanation(
+            path,
+            "Windows 休眠文件，可通过关闭休眠释放空间，不应直接删除",
+            Some("Windows"),
+            false,
+            false,
+        )),
+        "swapfile.sys" => Some(fixed_explanation(
+            path,
+            "Windows 应用交换文件，由系统管理，不应手动删除",
+            Some("Windows"),
+            false,
+            false,
+        )),
+        "$recycle.bin" => Some(fixed_explanation(
+            path,
+            "Windows 回收站数据，可通过清空回收站释放空间",
+            Some("Windows"),
+            false,
+            false,
+        )),
+        "system volume information" => Some(fixed_explanation(
+            path,
+            "系统还原点和卷影副本数据，由 Windows 保护和管理",
+            Some("Windows"),
+            false,
+            false,
+        )),
+        "recovery" => Some(fixed_explanation(
+            path,
+            "Windows 恢复环境文件，用于系统修复和重置",
+            Some("Windows"),
+            false,
+            false,
+        )),
+        "boot" | "efi" => Some(fixed_explanation(
+            path,
+            "系统启动文件目录，删除或迁移可能导致无法启动",
+            Some("Windows"),
+            false,
+            false,
+        )),
+        "$windows.~bt" | "$windows.~ws" | "$winreagent" | "$sysreset" | "windows.old" => {
+            Some(fixed_explanation(
+                path,
+                "Windows 升级或重置残留目录，建议通过系统清理功能处理",
+                Some("Windows"),
+                false,
+                false,
+            ))
+        }
+        "perflogs" => Some(fixed_explanation(
+            path,
+            "Windows 性能监视器日志目录，通常体积很小",
+            Some("Windows"),
+            false,
+            false,
+        )),
+        _ => None,
+    }
+}
+
 
 /// 给任意路径生成一句话解释。
 pub fn explain_path(path: &str) -> FileExplanation {
     let path_lower = path.to_ascii_lowercase().replace('/', "\\");
     let trimmed = path_lower.trim_end_matches('\\');
+    if let Some(explanation) = known_windows_path_explanation(path, trimmed) {
+        return explanation;
+    }
     if trimmed == "c:\\program files" {
         return FileExplanation {
             path: path.to_string(),
@@ -260,6 +373,7 @@ const CATEGORY_META: &[CategoryMeta] = &[
     CategoryMeta { id: "dev_tools", label: "开发工具", description: "node_modules、包管理缓存等", actionable: "full", color: "#d97706" },
     CategoryMeta { id: "temp", label: "临时文件", description: "系统/用户临时文件、日志、崩溃转储", actionable: "full", color: "#ef4444" },
     CategoryMeta { id: "games", label: "游戏", description: "Steam / Epic / Game Pass 游戏库", actionable: "full", color: "#ec4899" },
+    CategoryMeta { id: "system_reserved", label: "系统保留/卷元数据", description: "NTFS 元数据、MFT/USN、卷影副本和分配簇差额", actionable: "none", color: "#64748b" },
     CategoryMeta { id: "other", label: "其他", description: "未分类的文件和目录", actionable: "unknown", color: "#9ca3af" },
 ];
 
@@ -549,9 +663,14 @@ pub fn analyze_space_breakdown(indexed: &IndexedScanResult, disk_total: u64, dis
     let mut categories = Vec::new();
     let mut actionable_total: u64 = 0;
     let mut non_actionable_total: u64 = 0;
+    let system_reserved_bytes = disk_used.saturating_sub(indexed.total_size());
 
     for meta in CATEGORY_META {
-        let size = bucket_sizes.get(meta.id).copied().unwrap_or(0);
+        let size = if meta.id == "system_reserved" {
+            system_reserved_bytes
+        } else {
+            bucket_sizes.get(meta.id).copied().unwrap_or(0)
+        };
         let items = buckets.remove(meta.id).unwrap_or_default();
         let percentage = if disk_used > 0 {
             (size as f64 / disk_used as f64) * 100.0
@@ -559,9 +678,18 @@ pub fn analyze_space_breakdown(indexed: &IndexedScanResult, disk_total: u64, dis
             0.0
         };
 
-        let top_items: Vec<BreakdownItem> = items
-            .iter()
-            .map(|(path, name, sz, is_dir)| {
+        let top_items: Vec<BreakdownItem> = if meta.id == "system_reserved" && size > 0 {
+            vec![BreakdownItem {
+                path: disk_path.clone(),
+                name: "卷级系统保留空间".to_string(),
+                size,
+                item_type: "directory".to_string(),
+                can_migrate: false,
+                can_delete: false,
+                explanation: "这部分不属于普通目录树，通常来自 NTFS 元数据、MFT/USN 日志、卷影副本、还原点或簇分配差额。".to_string(),
+            }]
+        } else {
+            items.iter().map(|(path, name, sz, is_dir)| {
                 let expl = explain_path(path);
                 BreakdownItem {
                     path: path.to_string(),
@@ -573,8 +701,9 @@ pub fn analyze_space_breakdown(indexed: &IndexedScanResult, disk_total: u64, dis
                     can_delete: expl.safe_to_delete,
                     explanation: expl.explanation,
                 }
-            })
-            .collect();
+            }).collect()
+        };
+        let item_count = top_items.len();
 
         match meta.actionable {
             "full" => actionable_total += size,
@@ -588,7 +717,7 @@ pub fn analyze_space_breakdown(indexed: &IndexedScanResult, disk_total: u64, dis
             description: meta.description.to_string(),
             size,
             percentage,
-            item_count: items.len(),
+            item_count,
             actionable: meta.actionable.to_string(),
             color: meta.color.to_string(),
             top_items,
@@ -602,6 +731,7 @@ pub fn analyze_space_breakdown(indexed: &IndexedScanResult, disk_total: u64, dis
         disk_total,
         disk_used,
         disk_free: disk_total.saturating_sub(disk_used),
+        system_reserved_bytes,
         categories,
         actionable_total,
         non_actionable_total,
@@ -878,6 +1008,24 @@ mod tests {
         );
         assert!(result.explanation.contains("Chrome"));
         assert!(result.safe_to_delete);
+    }
+
+    #[test]
+    fn explain_path_returns_known_windows_system_paths() {
+        let paths = [
+            "C:\\Windows",
+            "C:\\pagefile.sys",
+            "C:\\hiberfil.sys",
+            "C:\\System Volume Information",
+            "C:\\$Recycle.Bin",
+        ];
+
+        for path in paths {
+            let result = explain_path(path);
+            assert_ne!(result.explanation, "未识别的文件或目录", "path: {path}");
+            assert_eq!(result.app_name.as_deref(), Some("Windows"), "path: {path}");
+            assert!(!result.safe_to_delete, "path: {path}");
+        }
     }
 
     #[test]

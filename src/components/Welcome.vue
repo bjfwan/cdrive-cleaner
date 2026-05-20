@@ -12,7 +12,7 @@ const emit = defineEmits<{ close: [] }>();
 
       <img :src="appIcon" alt="" class="welcome-logo" />
       <h2 class="welcome-title">CDrive Cleaner</h2>
-      <p class="welcome-version">v0.1.6</p>
+      <p class="welcome-version">v0.1.7</p>
 
       <ul class="welcome-features">
         <li>
@@ -51,7 +51,7 @@ const emit = defineEmits<{ close: [] }>();
   align-items: center;
   justify-content: center;
   background: var(--modal-backdrop, rgba(15, 23, 32, 0.4));
-  z-index: 2000;
+  z-index: 2300;
   animation: welcome-fade 0.2s ease;
 }
 

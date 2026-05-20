@@ -44,19 +44,17 @@ const isVolumeRoot = computed(() => /^[A-Za-z]:\\$/.test(props.currentPath));
 const showVolumeGap = computed(
   () => diskUsedBytes.value !== null && isVolumeRoot.value && props.currentPath === props.result.root_path,
 );
-const missingBytes = computed(() => {
+const reservedBytes = computed(() => {
   if (!showVolumeGap.value || diskUsedBytes.value === null) {
     return null;
   }
-  const scanned = props.result.total_size ?? 0;
-  const used = diskUsedBytes.value;
-  return Math.max(used - scanned, 0);
+  return props.result.system_reserved_bytes ?? Math.max(diskUsedBytes.value - (props.result.total_size ?? 0), 0);
 });
-const missingPercent = computed(() => {
-  if (!showVolumeGap.value || diskUsedBytes.value === null || missingBytes.value === null) {
+const reservedPercent = computed(() => {
+  if (!showVolumeGap.value || diskUsedBytes.value === null || reservedBytes.value === null) {
     return null;
   }
-  return diskUsedBytes.value > 0 ? (missingBytes.value / diskUsedBytes.value) * 100 : 0;
+  return diskUsedBytes.value > 0 ? (reservedBytes.value / diskUsedBytes.value) * 100 : 0;
 });
 
 const sortedDirectories = computed(() => {
@@ -156,10 +154,10 @@ function closeMigrateDialog() {
         </div>
 
         <div class="metric-card">
-          <span class="metric-label">漏算量</span>
-          <strong>{{ missingBytes === null ? '--' : formatBytes(missingBytes) }}</strong>
+          <span class="metric-label">系统保留/卷元数据</span>
+          <strong>{{ reservedBytes === null ? '--' : formatBytes(reservedBytes) }}</strong>
           <span class="metric-note">
-            {{ missingPercent === null ? '仅在卷根对比' : `已用 - 扫描到 · 约 ${missingPercent.toFixed(1)}% · 含系统保留/无权限` }}
+            {{ reservedPercent === null ? '仅在卷根对比' : `卷级已用 - 普通文件 · 约 ${reservedPercent.toFixed(1)}% · 不归入可迁移目录` }}
           </span>
         </div>
 

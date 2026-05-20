@@ -82,9 +82,21 @@
               <span class="record-dot">·</span>
               <span class="record-time">{{ formatDate((record as MigrationRecord).created_at) }}</span>
             </div>
-            <div class="record-badge" :class="(record as MigrationRecord).status">
-              <span class="badge-dot"></span>
-              <span>{{ statusLabel(record as MigrationRecord) }}</span>
+            <div class="record-header-actions">
+              <div class="record-badge" :class="(record as MigrationRecord).status">
+                <span class="badge-dot"></span>
+                <span>{{ statusLabel(record as MigrationRecord) }}</span>
+              </div>
+              <button
+                v-if="canRollback(record as MigrationRecord)"
+                @click="confirmRollback(record as MigrationRecord)"
+                class="rollback-btn"
+                :disabled="rollingBack === (record as MigrationRecord).id"
+              >
+                <IconRollback :size="16" />
+                <span v-if="rollingBack !== (record as MigrationRecord).id">回滚</span>
+                <span v-else>回滚中...</span>
+              </button>
             </div>
           </div>
 
@@ -111,18 +123,6 @@
               <IconDocument :size="16" />
               <span>{{ (record as MigrationRecord).link_type }}</span>
             </div>
-          </div>
-
-          <div v-if="canRollback(record as MigrationRecord)" class="record-actions">
-            <button
-              @click="confirmRollback(record as MigrationRecord)"
-              class="rollback-btn"
-              :disabled="rollingBack === (record as MigrationRecord).id"
-            >
-              <IconRollback :size="16" />
-              <span v-if="rollingBack !== (record as MigrationRecord).id">回滚</span>
-              <span v-else>回滚中...</span>
-            </button>
           </div>
         </div>
       </VirtualList>
@@ -491,6 +491,13 @@ onMounted(() => {
   font-weight: 700;
 }
 
+.record-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
 .record-id {
   color: var(--color-text-primary);
 }
@@ -630,7 +637,7 @@ onMounted(() => {
   padding: 1rem;
   background: rgba(18, 18, 18, 0.34);
   backdrop-filter: blur(18px);
-  z-index: 2000;
+  z-index: 2450;
 }
 
 .modal-dialog {

@@ -72,6 +72,7 @@ export interface FileInfo {
 export interface ScanResult {
   root_path: string;
   total_size: number;
+  system_reserved_bytes?: number;
   total_files: number;
   total_dirs: number;
   scan_duration_ms: number;

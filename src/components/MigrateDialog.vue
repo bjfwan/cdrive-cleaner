@@ -5,6 +5,7 @@ import type { DirectoryNode, FileInfo, DiskInfo, MigrationSafety, MigrationResul
 import { formatBytes, formatNumber, formatSpeed, formatDuration as formatTime } from '../utils/format';
 import { getSettings } from '../utils/settings';
 import { useToast } from '../composables/useToast';
+import DiskSelect from './DiskSelect.vue';
 
 const showToast = useToast();
 
@@ -63,6 +64,13 @@ function scheduleSafetyAnalysis() {
   safetyDebounceTimer = setTimeout(() => analyzeSafety(), 300);
 }
 
+function clearSafetyDebounce() {
+  if (safetyDebounceTimer) {
+    clearTimeout(safetyDebounceTimer);
+    safetyDebounceTimer = null;
+  }
+}
+
 function loadDefaultTargetDisk() {
   const settings = getSettings();
   const defaultTargetExists = props.availableDisks.some((disk) => `${disk.drive_letter}\\` === settings.defaultTargetDisk);
@@ -76,6 +84,7 @@ function loadDefaultTargetDisk() {
 
 async function analyzeSafety() {
   if (!itemPath.value) return;
+  clearSafetyDebounce();
 
   const requestId = ++safetyRequestId;
   const path = itemPath.value;
@@ -84,7 +93,9 @@ async function analyzeSafety() {
   const { createSymlink } = getSettings();
 
   analyzingSafety.value = true;
-  safetyAnalysis.value = null;
+  if (!safetyAnalysis.value) {
+    safetyAnalysis.value = null;
+  }
 
   try {
     const { invoke } = await import('@tauri-apps/api/core');
@@ -225,10 +236,7 @@ function stopProgressTimer() {
 function close() {
   stopProgressTimer();
   safetyRequestId++;
-  if (safetyDebounceTimer) {
-    clearTimeout(safetyDebounceTimer);
-    safetyDebounceTimer = null;
-  }
+  clearSafetyDebounce();
   targetDisk.value = '';
   migrating.value = false;
   migrationError.value = '';
@@ -414,12 +422,12 @@ async function startBatchMigration() {
 </script>
 
 <template>
-  <div v-if="show" class="overlay" @click="close">
+  <div v-if="show" class="overlay" @click.self="!migrating && close()">
     <div class="dialog" @click.stop>
       <div v-if="!migrationSuccess" class="content">
         <div class="header">
           <h3>{{ itemName }}</h3>
-          <button class="close-btn" @click="close">
+          <button class="close-btn" @click="close" :disabled="migrating">
             <IconClose :size="20" />
           </button>
         </div>
@@ -466,16 +474,7 @@ async function startBatchMigration() {
           
           <div class="form-section">
             <label class="form-label">目标磁盘</label>
-            <select class="form-select" v-model="targetDisk" :disabled="migrating">
-              <option value="">选择目标磁盘...</option>
-              <option 
-                v-for="disk in availableDisks" 
-                :key="disk.drive_letter"
-                :value="disk.drive_letter + '\\'"
-              >
-                {{ disk.drive_letter }} - {{ disk.label }} (可用: {{ formatBytes(disk.free_space) }})
-              </option>
-            </select>
+            <DiskSelect v-model="targetDisk" :disks="availableDisks" placeholder="选择目标磁盘..." :disabled="migrating" />
           </div>
           
           <div v-if="!isBatchMode && safetyAnalysis" class="safety-analysis" :class="riskLevelClass">
@@ -518,7 +517,7 @@ async function startBatchMigration() {
             </div>
           </div>
           
-          <div v-if="analyzingSafety" class="analyzing">
+          <div v-if="analyzingSafety && !safetyAnalysis" class="analyzing">
             <svg class="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="30 10"/>
             </svg>
@@ -687,8 +686,8 @@ async function startBatchMigration() {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2100;
-  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 2400;
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: auto;
 }
 
@@ -710,7 +709,7 @@ async function startBatchMigration() {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: slideIn 0.24s cubic-bezier(0.16, 1, 0.3, 1);
   font-family: var(--font-sans);
 }
 
@@ -772,9 +771,15 @@ async function startBatchMigration() {
   transform: scale(1.05);
 }
 
+.close-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .body {
   padding: 2rem;
-  overflow-y: auto;
+  overflow-y: scroll;
   flex: 1;
   min-height: 0;
 }
@@ -841,35 +846,6 @@ async function startBatchMigration() {
   font-weight: 600;
   color: var(--color-text-primary);
   margin-bottom: 0.5rem;
-}
-
-.form-select {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  font-size: 0.9375rem;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid var(--color-border-medium);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-primary);
-  cursor: pointer;
-  transition: all var(--transition-base);
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%235a5a5a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 1rem center;
-  padding-right: 2.75rem;
-  box-shadow: var(--shadow-sm);
-}
-
-.form-select:hover {
-  border-color: var(--color-border-strong);
-  background: rgba(255, 255, 255, 0.95);
-}
-
-.form-select:focus {
-  outline: none;
-  border-color: var(--color-accent-primary);
-  box-shadow: 0 0 0 3px rgba(139, 115, 85, 0.08);
 }
 
 .warning {
@@ -1302,25 +1278,8 @@ async function startBatchMigration() {
   border-radius: var(--radius-md);
   padding: 1.25rem;
   margin-bottom: 1.5rem;
-  transition: all var(--transition-base);
-  animation: slideDown 0.3s ease-out;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    max-height: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-    margin-bottom: 0;
-  }
-  to {
-    opacity: 1;
-    max-height: 500px;
-    padding-top: 1.25rem;
-    padding-bottom: 1.25rem;
-    margin-bottom: 1.5rem;
-  }
+  min-height: 8rem;
+  transition: background var(--transition-base), border-color var(--transition-base);
 }
 
 .safety-analysis.risk-safe {
@@ -1448,13 +1407,14 @@ async function startBatchMigration() {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
-  padding: 1rem 1.25rem;
+  min-height: 8rem;
+  padding: 1.25rem;
   background: rgba(139, 115, 85, 0.04);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   margin-bottom: 1.5rem;
   font-size: 0.875rem;
   color: var(--color-text-tertiary);
-  border: 1px solid var(--color-border-light);
+  border: 1.5px solid var(--color-border-medium);
 }
 
 .analyzing .spinner {
@@ -1530,17 +1490,6 @@ async function startBatchMigration() {
 [data-theme="dark"] .panel-header,
 [data-theme="dark"] .panel-footer {
   background: rgba(255, 255, 255, 0.03);
-}
-
-[data-theme="dark"] .form-select {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: var(--color-border-medium);
-  color: var(--color-text-primary);
-}
-
-[data-theme="dark"] .form-select:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--color-border-strong);
 }
 
 [data-theme="dark"] .batch-result-item {

@@ -8,6 +8,7 @@ import type { DiskInfo, CacheEntry, CacheInfo, AppSettings } from '../types';
 import { formatBytes, formatDate } from '../utils/format';
 import { getSettings, saveSettings as persistSettings } from '../utils/settings';
 import { useToast } from '../composables/useToast';
+import DiskSelect from './DiskSelect.vue';
 
 const showToast = useToast();
 
@@ -317,21 +318,15 @@ async function exportDiagnostics() {
               <label for="target-disk">默认目标磁盘</label>
               <span class="setting-description">迁移文件时的默认目标位置</span>
             </div>
-            <select 
-              id="target-disk" 
-              v-model="settings.defaultTargetDisk" 
-              class="setting-select"
-              @click.stop
-            >
-              <option value="">每次选择</option>
-              <option 
-                v-for="disk in availableDisks" 
-                :key="disk.drive_letter"
-                :value="disk.drive_letter + '\\'"
-              >
-                {{ disk.drive_letter }} - {{ disk.label }} ({{ formatBytes(disk.free_space) }} 可用)
-              </option>
-            </select>
+            <DiskSelect
+              id="target-disk"
+              v-model="settings.defaultTargetDisk"
+              class="setting-disk-select"
+              :disks="availableDisks"
+              placeholder="每次选择"
+              empty-label="每次选择"
+              include-empty
+            />
           </div>
 
           <div class="setting-item">
@@ -541,8 +536,8 @@ async function exportDiagnostics() {
 
           <div class="setting-item">
             <div class="setting-label">
-              <label>鍏充簬</label>
-              <span class="setting-description">鏌ョ湅搴旂敤淇℃伅</span>
+              <label>关于</label>
+              <span class="setting-description">查看应用信息</span>
             </div>
             <button class="btn btn-secondary btn-sm" @click="emit('show-about'); emit('close')">关于</button>
           </div>
@@ -686,7 +681,7 @@ async function exportDiagnostics() {
         </button>
         <img :src="appIcon" alt="应用图标" class="about-icon" />
         <h3 class="about-title">CDrive Cleaner</h3>
-        <p class="about-version">v0.1.6</p>
+        <p class="about-version">v0.1.7</p>
         <p class="about-desc">
           一键扫描、智能搬运、安全回滚——为 C 盘瘦身的桌面工具。
         </p>
@@ -722,7 +717,7 @@ async function exportDiagnostics() {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
+  z-index: 2300;
   animation: settingsOverlayIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: auto;
 }
@@ -948,38 +943,10 @@ async function exportDiagnostics() {
   line-height: 1.5;
 }
 
-.setting-select {
+.setting-disk-select {
+  width: min(100%, 320px);
   min-width: 260px;
-  padding: 0.75rem 1rem;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: var(--color-text-primary);
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid var(--color-border-medium);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--transition-base);
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%235a5a5a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 1rem center;
-  padding-right: 2.75rem;
-  box-shadow: var(--shadow-sm);
-  pointer-events: auto;
-  position: relative;
-  z-index: 10;
-}
-
-.setting-select:hover {
-  border-color: var(--color-border-strong);
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: var(--shadow-md);
-}
-
-.setting-select:focus {
-  outline: none;
-  border-color: var(--color-accent-primary);
-  box-shadow: 0 0 0 3px rgba(139, 115, 85, 0.08);
+  flex-shrink: 0;
 }
 
 .threshold-input-group {
@@ -1359,7 +1326,7 @@ async function exportDiagnostics() {
     gap: 1rem;
   }
 
-  .setting-select,
+  .setting-disk-select,
   .threshold-input-group {
     width: 100%;
   }
@@ -1641,7 +1608,7 @@ async function exportDiagnostics() {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2100;
+  z-index: 2400;
   animation: settingsOverlayIn 0.2s ease;
 }
 
@@ -1766,26 +1733,13 @@ async function exportDiagnostics() {
   background: rgba(255, 255, 255, 0.12);
 }
 
-[data-theme="dark"] .setting-select,
 [data-theme="dark"] .setting-input {
   background: rgba(255, 255, 255, 0.04);
   color: var(--color-text-primary);
 }
 
-[data-theme="dark"] .setting-select {
-  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 1rem center;
-}
-
-[data-theme="dark"] .setting-select:hover,
 [data-theme="dark"] .setting-input:hover {
   background: rgba(255, 255, 255, 0.08);
-}
-
-[data-theme="dark"] .setting-select option {
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
 }
 
 [data-theme="dark"] .panel-footer {

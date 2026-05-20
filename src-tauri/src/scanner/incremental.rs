@@ -111,6 +111,40 @@ fn path_points_to_directory(path: &Path) -> bool {
 }
 
 #[cfg(windows)]
+fn get_disk_used_bytes(path: &Path) -> Option<u64> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+
+    let path_str = path.to_string_lossy().to_string();
+    let mut wide_path: Vec<u16> = path_str.encode_utf16().collect();
+    wide_path.push(0);
+
+    let mut free_bytes_available = 0u64;
+    let mut total_bytes = 0u64;
+    let mut total_free_bytes = 0u64;
+
+    unsafe {
+        if GetDiskFreeSpaceExW(
+            PCWSTR(wide_path.as_ptr()),
+            Some(&mut free_bytes_available),
+            Some(&mut total_bytes),
+            Some(&mut total_free_bytes),
+        )
+        .is_ok()
+        {
+            Some(total_bytes.saturating_sub(total_free_bytes))
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn get_disk_used_bytes(_path: &Path) -> Option<u64> {
+    None
+}
+
+#[cfg(windows)]
 fn normalized_path_key(path: &Path) -> String {
     let mut text = path
         .to_string_lossy()
@@ -1514,6 +1548,7 @@ async fn scan_incremental_internal(
         root_file_id: cached_root_file_id,
         usn_journal_id: cached_usn_journal_id,
         usn_next_usn: cached_usn_next_usn,
+        system_reserved_bytes: cached_system_reserved_bytes,
         total_files: cached_total_files,
         ..
     } = cached_result;
@@ -1810,10 +1845,14 @@ async fn scan_incremental_internal(
         new_total_size,
         large_files.len()
     ));
+    let system_reserved_bytes = get_disk_used_bytes(path)
+        .map(|disk_used| disk_used.saturating_sub(new_total_size))
+        .unwrap_or(cached_system_reserved_bytes);
 
     Ok(ScanResult {
         root_path: cached_root_path,
         total_size: new_total_size,
+        system_reserved_bytes,
         total_files: new_total_files,
         total_dirs: new_total_dirs,
         scan_duration_ms,
