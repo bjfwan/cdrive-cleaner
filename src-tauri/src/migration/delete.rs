@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -50,6 +50,7 @@ struct DeleteTracker {
     deleted_size: AtomicU64,
     deleted_files: AtomicUsize,
     error_count: AtomicUsize,
+    should_stop: AtomicBool,
     current_file: Mutex<String>,
 }
 
@@ -124,6 +125,7 @@ fn delete_path_blocking(
         }
     }
 
+    tracker.should_stop.store(true, Ordering::Relaxed);
     if let Some(handle) = reporter {
         let _ = handle.join();
     }
@@ -338,8 +340,6 @@ fn start_progress_reporter(
 ) -> Option<std::thread::JoinHandle<()>> {
     let callback = callback.clone()?;
     let tracker = Arc::clone(tracker);
-    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let stop_clone = Arc::clone(&stop);
 
     let handle = std::thread::spawn(move || loop {
         std::thread::sleep(PROGRESS_EMIT_INTERVAL);
@@ -359,15 +359,14 @@ fn start_progress_reporter(
             error_count,
         });
 
-        if stop_clone.load(Ordering::Relaxed) {
+        if tracker.should_stop.load(Ordering::Relaxed) {
             break;
         }
 
         if total_files > 0 && deleted_files >= total_files {
-            stop_clone.store(true, Ordering::Relaxed);
+            tracker.should_stop.store(true, Ordering::Relaxed);
         }
     });
 
-    let _ = stop;
     Some(handle)
 }

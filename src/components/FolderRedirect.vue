@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { KnownFolderInfo, RedirectResult } from '../types/breakdown';
 import type { DiskInfo } from '../types';
 import { formatBytes } from '../utils/format';
@@ -24,6 +25,19 @@ const targetDisk = ref('');
 const executingId = ref<string | null>(null);
 const completedIds = ref<Map<string, { success: boolean; movedBytes: number }>>(new Map());
 const executingAll = ref(false);
+const redirectProgress = ref<RedirectProgress | null>(null);
+let unlistenRedirectProgress: UnlistenFn | null = null;
+
+interface RedirectProgress {
+  folder_id: string;
+  folder_name: string;
+  source_path: string;
+  target_path: string;
+  status: string;
+  progress_percent: number;
+  moved_files: number;
+  moved_bytes: number;
+}
 
 const nonSystemDisks = computed(() =>
   props.availableDisks.filter(d => d.drive_letter !== 'C:')
@@ -43,16 +57,54 @@ onMounted(() => {
   }
 });
 
+onBeforeUnmount(() => {
+  if (unlistenRedirectProgress) {
+    unlistenRedirectProgress();
+    unlistenRedirectProgress = null;
+  }
+});
+
+function targetPathFor(folder: KnownFolderInfo): string {
+  if (targetDisk.value) {
+    const root = targetDisk.value.replace(/[\\/]+$/, '');
+    const suggestedName = folder.suggested_target_path?.split(/[\\/]+/).filter(Boolean).pop();
+    return `${root}\\${suggestedName || folder.id}`;
+  }
+  if (folder.suggested_target_path) return folder.suggested_target_path;
+  const root = (targetDisk.value || 'D:\\').replace(/[\\/]+$/, '');
+  return `${root}\\${folder.id}`;
+}
+
 async function redirectFolder(folder: KnownFolderInfo) {
   if (!targetDisk.value) {
     showToast('请选择目标磁盘', '', 'warning');
     return;
   }
   executingId.value = folder.id;
+  redirectProgress.value = {
+    folder_id: folder.id,
+    folder_name: folder.display_name,
+    source_path: folder.current_path,
+    target_path: targetPathFor(folder),
+    status: 'preparing',
+    progress_percent: 0,
+    moved_files: 0,
+    moved_bytes: 0,
+  };
   try {
+    if (unlistenRedirectProgress) {
+      unlistenRedirectProgress();
+      unlistenRedirectProgress = null;
+    }
+    unlistenRedirectProgress = await listen<RedirectProgress>('redirect-progress', (event) => {
+      if (event.payload.folder_id === folder.id) {
+        redirectProgress.value = event.payload;
+      }
+    });
+
     const result = await invoke<RedirectResult>('relocate_folder', {
       folderId: folder.id,
-      targetPath: targetDisk.value,
+      targetPath: targetPathFor(folder),
       moveFiles: true,
     });
     completedIds.value.set(folder.id, {
@@ -70,6 +122,11 @@ async function redirectFolder(folder: KnownFolderInfo) {
     showToast('操作失败', String(err), 'error');
   } finally {
     executingId.value = null;
+    redirectProgress.value = null;
+    if (unlistenRedirectProgress) {
+      unlistenRedirectProgress();
+      unlistenRedirectProgress = null;
+    }
   }
 }
 
@@ -111,6 +168,20 @@ async function redirectAll() {
               {{ disk.drive_letter }} ({{ disk.label || 'Local' }}) · {{ formatBytes(disk.free_space) }} 可用
             </option>
           </select>
+        </div>
+
+        <div v-if="redirectProgress" class="redirect-progress">
+          <div class="redirect-progress-meta">
+            <span>{{ redirectProgress.folder_name }}</span>
+            <span>{{ redirectProgress.progress_percent.toFixed(0) }}%</span>
+          </div>
+          <div class="redirect-progress-track">
+            <div
+              class="redirect-progress-bar"
+              :style="{ width: `${redirectProgress.progress_percent}%` }"
+            ></div>
+          </div>
+          <div class="redirect-progress-path">{{ redirectProgress.target_path }}</div>
         </div>
 
         <div v-if="redirectableFolders.length === 0 && alreadyRedirected.length === 0" class="redirect-empty">
@@ -295,6 +366,48 @@ async function redirectAll() {
   color: var(--color-text-primary);
   font-size: 0.84rem;
   cursor: pointer;
+}
+
+.redirect-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary);
+}
+
+.redirect-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.redirect-progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-border-light);
+  overflow: hidden;
+}
+
+.redirect-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-highlight);
+  transition: width var(--transition-base);
+}
+
+.redirect-progress-path {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .redirect-empty {

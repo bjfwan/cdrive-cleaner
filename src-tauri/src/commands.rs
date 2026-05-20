@@ -811,7 +811,8 @@ pub async fn rollback_migration(
         .get_migration_by_id(migration_id)
         .map_err(|e| e.to_string())?
         .ok_or("Migration record not found")?;
-    if record.status != "active" {
+    let is_known_folder_redirect = record.link_type.starts_with("KnownFolderRedirect");
+    if record.status != "active" && !(record.status == "redirected" && is_known_folder_redirect) {
         return Err("Migration is not active".to_string());
     }
     tracing::info!(
@@ -819,14 +820,22 @@ pub async fn rollback_migration(
         migration_id, record.source_path, record.target_path
     );
 
-    let migrator = FileMigrator::new();
-    let result = migrator
-        .rollback(
-            std::path::Path::new(&record.source_path),
-            std::path::Path::new(&record.target_path),
-        )
-        .await
-        .map_err(|e| e.to_string())?;
+    let source = std::path::Path::new(&record.source_path);
+    let target = std::path::Path::new(&record.target_path);
+    let result = if is_known_folder_redirect {
+        let folder_id =
+            crate::folder_redirect::folder_id_from_redirect_record(&record.link_type, source, target)
+                .ok_or_else(|| "Cannot identify known folder for redirect rollback".to_string())?;
+        crate::folder_redirect::rollback_known_folder_redirect(&folder_id, source, target, None)
+            .await
+            .map_err(|e| e.to_string())?
+    } else {
+        let migrator = FileMigrator::new();
+        migrator
+            .rollback(source, target)
+            .await
+            .map_err(|e| e.to_string())?
+    };
     if !result.success {
         tracing::warn!(
             "[migration] rollback failed id={} source={} target={} error={:?}",
@@ -1490,10 +1499,16 @@ pub async fn scan_junk_files(
 
 #[tauri::command]
 pub async fn clean_junk_files(
+    app: tauri::AppHandle,
     paths: Vec<String>,
     to_recycle_bin: bool,
 ) -> Result<crate::junk::cleaner::JunkCleanResult, String> {
-    crate::junk::cleaner::clean_junk_paths(paths, to_recycle_bin)
+    let app_handle = app.clone();
+    let cb: crate::junk::cleaner::JunkCleanProgressCallback = std::sync::Arc::new(move |p| {
+        let _ = tauri::Emitter::emit(&app_handle, "junk-clean-progress", p);
+    });
+
+    crate::junk::cleaner::clean_junk_paths(paths, to_recycle_bin, Some(cb))
         .await
         .map_err(|e| e.to_string())
 }
@@ -1537,14 +1552,39 @@ pub async fn relocate_folder(
     folder_id: String,
     target_path: String,
     move_files: bool,
+    app: tauri::AppHandle,
+    migration_db: tauri::State<'_, MigrationDb>,
 ) -> Result<crate::folder_redirect::RedirectResult, String> {
-    crate::folder_redirect::relocate_known_folder(
+    let app_handle = app.clone();
+    let cb: crate::folder_redirect::RedirectProgressCallback = std::sync::Arc::new(move |p| {
+        let _ = tauri::Emitter::emit(&app_handle, "redirect-progress", p);
+    });
+
+    let result = crate::folder_redirect::relocate_known_folder(
         &folder_id,
         std::path::Path::new(&target_path),
         move_files,
+        Some(cb),
     )
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+
+    if result.success && (result.moved_bytes > 0 || result.moved_files > 0) {
+        if let Err(err) = migration_db.insert_redirect_record(
+            &folder_id,
+            &result.source_path,
+            &result.target_path,
+            result.moved_bytes,
+        ) {
+            tracing::warn!(
+                "[folder-redirect] failed to insert history folder_id={} target={} error={err}",
+                folder_id,
+                target_path
+            );
+        }
+    }
+
+    Ok(result)
 }
 
 #[tauri::command]

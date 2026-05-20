@@ -21,11 +21,33 @@ use scanner::DiskScanner;
 use session::ScanSessionRegistry;
 use std::sync::Arc;
 
+static LOG_GUARD: std::sync::OnceLock<tracing_appender::non_blocking::WorkerGuard> =
+    std::sync::OnceLock::new();
+
 fn init_tracing() {
     use tracing_subscriber::{fmt, prelude::*, EnvFilter};
     // 默认 info 级别，可用 RUST_LOG 环境变量覆盖。
     // 例：`set RUST_LOG=cdrive_cleaner_lib=debug,info` 看本 crate debug，其它默认 info。
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    if let Ok(log_dir) = utils::get_logs_dir() {
+        let file_appender = tracing_appender::rolling::daily(log_dir, "cdrive-cleaner.log");
+        let (file_writer, guard) = tracing_appender::non_blocking(file_appender);
+        let _ = LOG_GUARD.set(guard);
+        let _ = tracing_subscriber::registry()
+            .with(filter)
+            .with(fmt::layer().with_target(true).with_level(true))
+            .with(
+                fmt::layer()
+                    .with_writer(file_writer)
+                    .with_ansi(false)
+                    .with_target(true)
+                    .with_level(true),
+            )
+            .try_init();
+        return;
+    }
+
     let _ = tracing_subscriber::registry()
         .with(filter)
         .with(fmt::layer().with_target(true).with_level(true))
@@ -114,6 +136,7 @@ pub fn run() {
             commands::explain_file,
             commands::get_relocatable_programs,
             commands::get_balance_suggestion,
+            diagnostics::export_diagnostic_bundle,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

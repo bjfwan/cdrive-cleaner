@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -194,6 +194,7 @@ pub fn scan_junk_blocking(
         perf_records.push(perf);
     }
 
+    let items = dedupe_items_by_path(items);
     let total_size: u64 = items.iter().map(|i| i.size).sum();
     let total_count = items.len();
 
@@ -208,6 +209,52 @@ pub fn scan_junk_blocking(
         skipped_rules,
         scan_duration_ms: start.elapsed().as_millis() as u64,
     })
+}
+
+fn dedupe_items_by_path(items: Vec<JunkItem>) -> Vec<JunkItem> {
+    let mut deduped: Vec<JunkItem> = Vec::with_capacity(items.len());
+    let mut seen: HashMap<String, usize> = HashMap::new();
+
+    for item in items {
+        let key = normalize_path_key(&item.path);
+        if let Some(&idx) = seen.get(&key) {
+            if should_replace_item(&deduped[idx], &item) {
+                deduped[idx] = item;
+            }
+        } else {
+            seen.insert(key, deduped.len());
+            deduped.push(item);
+        }
+    }
+
+    deduped
+}
+
+fn normalize_path_key(path: &str) -> String {
+    let normalized = path.replace('/', "\\");
+    normalized.trim_end_matches('\\').to_ascii_lowercase()
+}
+
+fn should_replace_item(existing: &JunkItem, candidate: &JunkItem) -> bool {
+    let existing_risk = risk_rank(existing.risk_level);
+    let candidate_risk = risk_rank(candidate.risk_level);
+    if candidate_risk != existing_risk {
+        return candidate_risk > existing_risk;
+    }
+
+    if candidate.default_selected != existing.default_selected {
+        return !candidate.default_selected;
+    }
+
+    candidate.rule_id.len() > existing.rule_id.len()
+}
+
+fn risk_rank(risk: JunkRiskLevel) -> u8 {
+    match risk {
+        JunkRiskLevel::Safe => 0,
+        JunkRiskLevel::Caution => 1,
+        JunkRiskLevel::Risky => 2,
+    }
 }
 
 /// Per-rule timing record collected during the scan; used only for diagnostics.

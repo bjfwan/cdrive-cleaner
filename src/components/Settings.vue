@@ -81,6 +81,7 @@ const isCheckingElevation = ref(true);
 const cacheInfo = ref<CacheInfo | null>(null);
 const loadingCache = ref(false);
 const activeTab = ref<'general' | 'cache'>('general');
+const exportingDiagnostics = ref(false);
 
 onMounted(() => {
   loadSettings();
@@ -233,6 +234,20 @@ function getScanTypeLabel(scanType: string): string {
 function onDeleteModeToggle(event: Event) {
   const target = event.target as HTMLInputElement;
   settings.value.defaultDeleteMode = target.checked ? 'permanent' : 'recycle';
+}
+
+async function exportDiagnostics() {
+  if (exportingDiagnostics.value) return;
+  exportingDiagnostics.value = true;
+  try {
+    const path = await invoke<string>('export_diagnostic_bundle');
+    await invoke('reveal_in_explorer', { path });
+    showToast('诊断包已导出', path, 'success');
+  } catch (err) {
+    showToast('诊断包导出失败', String(err), 'error');
+  } finally {
+    exportingDiagnostics.value = false;
+  }
 }
 </script>
 
@@ -516,8 +531,18 @@ function onDeleteModeToggle(event: Event) {
 
           <div class="setting-item">
             <div class="setting-label">
-              <label>关于</label>
-              <span class="setting-description">查看应用信息</span>
+              <label>诊断日志</label>
+              <span class="setting-description">导出本地日志和环境信息，便于反馈问题</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" :disabled="exportingDiagnostics" @click="exportDiagnostics">
+              {{ exportingDiagnostics ? '导出中' : '导出诊断包' }}
+            </button>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label">
+              <label>鍏充簬</label>
+              <span class="setting-description">鏌ョ湅搴旂敤淇℃伅</span>
             </div>
             <button class="btn btn-secondary btn-sm" @click="emit('show-about'); emit('close')">关于</button>
           </div>
@@ -661,7 +686,7 @@ function onDeleteModeToggle(event: Event) {
         </button>
         <img :src="appIcon" alt="应用图标" class="about-icon" />
         <h3 class="about-title">CDrive Cleaner</h3>
-        <p class="about-version">v0.1.4</p>
+        <p class="about-version">v0.1.6</p>
         <p class="about-desc">
           一键扫描、智能搬运、安全回滚——为 C 盘瘦身的桌面工具。
         </p>

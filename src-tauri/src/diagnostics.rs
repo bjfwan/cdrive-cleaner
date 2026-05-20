@@ -1,5 +1,7 @@
 use anyhow::{anyhow, Context, Result};
+use chrono::Local;
 use serde::Serialize;
+use serde_json::json;
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
@@ -7,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use std::time::SystemTime;
 
 use crate::database::ScanCacheDb;
 use crate::scanner::{
@@ -481,4 +484,76 @@ async fn run_deep_scan_pass(
         wall_start,
         &result,
     ))
+}
+
+#[tauri::command]
+pub fn export_diagnostic_bundle() -> Result<String, String> {
+    export_diagnostic_bundle_inner()
+        .map(|path| path.to_string_lossy().to_string())
+        .map_err(|e| e.to_string())
+}
+
+fn export_diagnostic_bundle_inner() -> Result<PathBuf> {
+    let now = Local::now();
+    let app_data_dir = crate::utils::get_app_data_dir()?;
+    let logs_dir = crate::utils::get_logs_dir()?;
+    let diagnostics_dir = crate::utils::get_diagnostics_dir()?;
+    let bundle_path = diagnostics_dir.join(format!(
+        "cdrive-cleaner-diagnostics-{}.zip",
+        now.format("%Y%m%d-%H%M%S")
+    ));
+
+    let file = fs::File::create(&bundle_path)?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = zip::write::FileOptions::default()
+        .compression_method(zip::CompressionMethod::Stored);
+
+    let mut included_logs = Vec::new();
+    for path in recent_log_files(&logs_dir) {
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if let Ok(bytes) = fs::read(&path) {
+            zip.start_file(format!("logs/{name}"), options)?;
+            zip.write_all(&bytes)?;
+            included_logs.push(name.to_string());
+        }
+    }
+
+    let report = json!({
+        "app": "CDrive Cleaner",
+        "version": env!("CARGO_PKG_VERSION"),
+        "generated_at": now.to_rfc3339(),
+        "os": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+        "elevated": crate::commands::is_elevated(),
+        "app_data_dir": app_data_dir.to_string_lossy(),
+        "logs_dir": logs_dir.to_string_lossy(),
+        "included_logs": included_logs,
+    });
+    zip.start_file("environment.json", options)?;
+    zip.write_all(serde_json::to_string_pretty(&report)?.as_bytes())?;
+    zip.finish()?;
+
+    tracing::info!("[diagnostics] exported bundle path={}", bundle_path.display());
+    Ok(bundle_path)
+}
+
+fn recent_log_files(logs_dir: &Path) -> Vec<PathBuf> {
+    let mut files: Vec<(PathBuf, SystemTime)> = fs::read_dir(logs_dir)
+        .ok()
+        .into_iter()
+        .flat_map(|entries| entries.filter_map(|entry| entry.ok()))
+        .filter_map(|entry| {
+            let metadata = entry.metadata().ok()?;
+            if !metadata.is_file() {
+                return None;
+            }
+            let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+            Some((entry.path(), modified))
+        })
+        .collect();
+
+    files.sort_by(|a, b| b.1.cmp(&a.1));
+    files.into_iter().take(10).map(|(path, _)| path).collect()
 }

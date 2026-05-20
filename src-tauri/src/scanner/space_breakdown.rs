@@ -162,6 +162,25 @@ fn explain_engine() -> &'static ExplainEngine {
 /// 给任意路径生成一句话解释。
 pub fn explain_path(path: &str) -> FileExplanation {
     let path_lower = path.to_ascii_lowercase().replace('/', "\\");
+    let trimmed = path_lower.trim_end_matches('\\');
+    if trimmed == "c:\\program files" {
+        return FileExplanation {
+            path: path.to_string(),
+            explanation: "Program Files 是 64 位应用安装目录集合根，请选择具体应用目录而不是整体搬迁".to_string(),
+            app_name: Some("Windows".to_string()),
+            safe_to_delete: false,
+            will_regenerate: false,
+        };
+    }
+    if trimmed == "c:\\program files (x86)" {
+        return FileExplanation {
+            path: path.to_string(),
+            explanation: "Program Files (x86) 是 32 位应用安装目录集合根，请选择具体应用目录而不是整体搬迁".to_string(),
+            app_name: Some("Windows".to_string()),
+            safe_to_delete: false,
+            will_regenerate: false,
+        };
+    }
     let engine = explain_engine();
 
     // 1) AC automaton: O(path_length) for all `contains` rules
@@ -549,7 +568,8 @@ pub fn analyze_space_breakdown(indexed: &IndexedScanResult, disk_total: u64, dis
                     name: name.to_string(),
                     size: *sz,
                     item_type: if *is_dir { "directory".to_string() } else { "file".to_string() },
-                    can_migrate: meta.actionable == "full" || meta.actionable == "partial",
+                    can_migrate: (meta.actionable == "full" || meta.actionable == "partial")
+                        && !is_collection_root(path),
                     can_delete: expl.safe_to_delete,
                     explanation: expl.explanation,
                 }
@@ -587,6 +607,18 @@ pub fn analyze_space_breakdown(indexed: &IndexedScanResult, disk_total: u64, dis
         non_actionable_total,
         analysis_duration_ms: started.elapsed().as_millis() as u64,
     }
+}
+
+fn is_collection_root(path: &str) -> bool {
+    let normalized = path
+        .to_ascii_lowercase()
+        .replace('/', "\\")
+        .trim_end_matches('\\')
+        .to_string();
+    matches!(
+        normalized.as_str(),
+        "c:\\program files" | "c:\\program files (x86)" | "c:\\programdata" | "c:\\users"
+    )
 }
 
 /// 扫描 Program Files 下的一级子目录，返回可搬家程序列表。

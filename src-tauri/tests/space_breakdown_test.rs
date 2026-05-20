@@ -64,3 +64,16 @@ fn test_explain_temp_file() {
     let result = explain_path(r"C:\Users\test\AppData\Local\Temp\setup.tmp");
     assert!(result.safe_to_delete);
 }
+
+#[test]
+fn test_explain_program_files_root() {
+    let result = explain_path(r"C:\Program Files");
+    assert!(result.explanation.contains("Program Files"));
+    assert!(!result.safe_to_delete);
+    assert!(!result.will_regenerate);
+
+    let result_x86 = explain_path(r"C:\Program Files (x86)\");
+    assert!(result_x86.explanation.contains("Program Files (x86)"));
+    assert!(!result_x86.safe_to_delete);
+    assert!(!result_x86.will_regenerate);
+}

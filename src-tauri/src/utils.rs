@@ -30,3 +30,15 @@ pub fn get_migrations_db_path() -> Result<PathBuf> {
 pub fn get_space_history_db_path() -> Result<PathBuf> {
     Ok(get_app_data_dir()?.join("space_history.db"))
 }
+
+pub fn get_logs_dir() -> Result<PathBuf> {
+    let dir = get_app_data_dir()?.join("logs");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+pub fn get_diagnostics_dir() -> Result<PathBuf> {
+    let dir = get_app_data_dir()?.join("diagnostics");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}

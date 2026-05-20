@@ -1,6 +1,7 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use tokio::process::Command;
 use windows::core::PWSTR;
 use windows::Win32::Foundation::HANDLE;
@@ -15,6 +16,7 @@ pub struct KnownFolderInfo {
     pub display_name: String,
     pub current_path: String,
     pub default_path: String,
+    pub suggested_target_path: String,
     pub size_bytes: u64,
     pub is_on_system_drive: bool,
     pub is_default_location: bool,
@@ -25,9 +27,25 @@ pub struct RedirectResult {
     pub success: bool,
     pub moved_files: u64,
     pub moved_bytes: u64,
+    pub source_path: String,
+    pub target_path: String,
     pub requires_reboot: bool,
     pub message: String,
 }
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RedirectProgress {
+    pub folder_id: String,
+    pub folder_name: String,
+    pub source_path: String,
+    pub target_path: String,
+    pub status: String,
+    pub progress_percent: f64,
+    pub moved_files: u64,
+    pub moved_bytes: u64,
+}
+
+pub type RedirectProgressCallback = std::sync::Arc<dyn Fn(RedirectProgress) + Send + Sync>;
 
 struct FolderDef {
     id: &'static str,
@@ -111,6 +129,80 @@ fn default_path_for(relative: &str) -> String {
     format!("{}\\{}", user_profile, relative)
 }
 
+fn target_path_for(base: &Path, def: &FolderDef) -> PathBuf {
+    let base_str = base.to_string_lossy();
+    let trimmed = base_str.trim_end_matches(['\\', '/']);
+    let is_drive_root = trimmed.len() == 2 && trimmed.as_bytes().get(1) == Some(&b':');
+    let base_name = base
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
+
+    if is_drive_root {
+        return PathBuf::from(format!("{}\\{}", trimmed, def.default_relative));
+    }
+
+    if !base_name.eq_ignore_ascii_case(def.default_relative) {
+        base.join(def.default_relative)
+    } else {
+        base.to_path_buf()
+    }
+}
+
+fn suggested_target_path(def: &FolderDef) -> String {
+    for drive in 'D'..='Z' {
+        let root = format!("{}:\\", drive);
+        if Path::new(&root).exists() {
+            return target_path_for(Path::new(&root), def)
+                .to_string_lossy()
+                .to_string();
+        }
+    }
+    target_path_for(Path::new("D:\\"), def)
+        .to_string_lossy()
+        .to_string()
+}
+
+fn path_is_drive_root(path: &Path) -> bool {
+    let path = path.to_string_lossy();
+    let trimmed = path.trim_end_matches(['\\', '/']);
+    trimmed.len() == 2 && trimmed.as_bytes().get(1) == Some(&b':')
+}
+
+fn safe_size_blocking(path: &Path, def: Option<&FolderDef>) -> u64 {
+    if path_is_drive_root(path) {
+        return def
+            .map(|d| dir_size_blocking(&target_path_for(path, d)))
+            .unwrap_or(0);
+    }
+    dir_size_blocking(path)
+}
+
+fn emit_redirect_progress(
+    callback: Option<&RedirectProgressCallback>,
+    folder_id: &str,
+    folder_name: &str,
+    source_path: &Path,
+    target_path: &Path,
+    status: &str,
+    progress_percent: f64,
+    moved_files: u64,
+    moved_bytes: u64,
+) {
+    if let Some(callback) = callback {
+        callback(RedirectProgress {
+            folder_id: folder_id.to_string(),
+            folder_name: folder_name.to_string(),
+            source_path: source_path.to_string_lossy().to_string(),
+            target_path: target_path.to_string_lossy().to_string(),
+            status: status.to_string(),
+            progress_percent,
+            moved_files,
+            moved_bytes,
+        });
+    }
+}
+
 /// 获取所有 Known Folder 信息（含 TEMP）
 pub async fn get_known_folders() -> Result<Vec<KnownFolderInfo>> {
     tokio::task::spawn_blocking(|| {
@@ -121,13 +213,15 @@ pub async fn get_known_folders() -> Result<Vec<KnownFolderInfo>> {
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_default();
             let default = default_path_for(def.default_relative);
-            let size = dir_size_blocking(Path::new(&current));
+            let size = safe_size_blocking(Path::new(&current), Some(&def));
+            let suggested_target_path = suggested_target_path(&def);
 
             folders.push(KnownFolderInfo {
                 id: def.id.into(),
                 display_name: def.display_name.into(),
                 current_path: current.clone(),
                 default_path: default.clone(),
+                suggested_target_path,
                 size_bytes: size,
                 is_on_system_drive: is_on_c_drive(&current),
                 is_default_location: current.eq_ignore_ascii_case(&default),
@@ -148,6 +242,7 @@ pub async fn get_known_folders() -> Result<Vec<KnownFolderInfo>> {
             display_name: "临时文件夹".into(),
             current_path: temp_path.clone(),
             default_path: temp_default.clone(),
+            suggested_target_path: r"D:\Temp".to_string(),
             size_bytes: temp_size,
             is_on_system_drive: is_on_c_drive(&temp_path),
             is_default_location: temp_path.eq_ignore_ascii_case(&temp_default),
@@ -164,6 +259,7 @@ pub async fn relocate_known_folder(
     folder_id: &str,
     target_path: &Path,
     move_files: bool,
+    on_progress: Option<RedirectProgressCallback>,
 ) -> Result<RedirectResult> {
     let defs = known_folder_defs();
     let def = defs
@@ -172,7 +268,19 @@ pub async fn relocate_known_folder(
         .context("未知的 folder_id")?;
 
     let current = get_known_folder_path(&def.folder_id)?;
-    let target = target_path.to_path_buf();
+    let target = target_path_for(target_path, def);
+
+    emit_redirect_progress(
+        on_progress.as_ref(),
+        def.id,
+        def.display_name,
+        &current,
+        &target,
+        "preparing",
+        5.0,
+        0,
+        0,
+    );
 
     if !target.exists() {
         std::fs::create_dir_all(&target).context("创建目标目录失败")?;
@@ -184,6 +292,18 @@ pub async fn relocate_known_folder(
     if move_files {
         let source_str = current.to_string_lossy().to_string();
         let target_str = target.to_string_lossy().to_string();
+
+        emit_redirect_progress(
+            on_progress.as_ref(),
+            def.id,
+            def.display_name,
+            &current,
+            &target,
+            "moving",
+            20.0,
+            0,
+            0,
+        );
 
         let output = Command::new("robocopy")
             .args([
@@ -205,7 +325,30 @@ pub async fn relocate_known_folder(
         let (files, bytes) = parse_robocopy_summary(&stdout);
         moved_files = files;
         moved_bytes = bytes;
+        emit_redirect_progress(
+            on_progress.as_ref(),
+            def.id,
+            def.display_name,
+            &current,
+            &target,
+            "moving",
+            80.0,
+            moved_files,
+            moved_bytes,
+        );
     }
+
+    emit_redirect_progress(
+        on_progress.as_ref(),
+        def.id,
+        def.display_name,
+        &current,
+        &target,
+        "applying",
+        90.0,
+        moved_files,
+        moved_bytes,
+    );
 
     let guid = def.folder_id;
     let target_clone = target.clone();
@@ -232,16 +375,126 @@ pub async fn relocate_known_folder(
     .await
     .context("spawn_blocking 失败")??;
 
+    emit_redirect_progress(
+        on_progress.as_ref(),
+        def.id,
+        def.display_name,
+        &current,
+        &target,
+        "done",
+        100.0,
+        moved_files,
+        moved_bytes,
+    );
+
     Ok(RedirectResult {
         success: true,
         moved_files,
         moved_bytes,
+        source_path: current.to_string_lossy().to_string(),
+        target_path: target.to_string_lossy().to_string(),
         requires_reboot: false,
         message: format!(
             "{} 已重定向到 {}",
             def.display_name,
             target.display()
         ),
+    })
+}
+
+pub fn folder_id_from_redirect_record(
+    link_type: &str,
+    source_path: &Path,
+    target_path: &Path,
+) -> Option<String> {
+    if let Some((prefix, id)) = link_type.split_once(':') {
+        if prefix == "KnownFolderRedirect" && !id.trim().is_empty() {
+            return Some(id.trim().to_string());
+        }
+    }
+
+    let source = source_path.to_string_lossy();
+    let target = target_path.to_string_lossy();
+    known_folder_defs()
+        .into_iter()
+        .find(|def| {
+            let default = default_path_for(def.default_relative);
+            source.eq_ignore_ascii_case(&default)
+                || target.ends_with(def.default_relative)
+                || source.ends_with(def.default_relative)
+        })
+        .map(|def| def.id.to_string())
+}
+
+pub async fn rollback_known_folder_redirect(
+    folder_id: &str,
+    source_path: &Path,
+    target_path: &Path,
+    on_progress: Option<RedirectProgressCallback>,
+) -> Result<crate::migration::file_migrator::RollbackResult> {
+    let start = Instant::now();
+    let defs = known_folder_defs();
+    let def = defs
+        .iter()
+        .find(|d| d.id == folder_id)
+        .ok_or_else(|| anyhow!("未知的 folder_id: {folder_id}"))?;
+
+    let current = get_known_folder_path(&def.folder_id)?;
+    if !current
+        .to_string_lossy()
+        .eq_ignore_ascii_case(&target_path.to_string_lossy())
+    {
+        return Ok(crate::migration::file_migrator::RollbackResult {
+            success: false,
+            source_path: source_path.to_string_lossy().to_string(),
+            target_path: target_path.to_string_lossy().to_string(),
+            duration_ms: start.elapsed().as_millis() as u64,
+            error: Some(format!(
+                "Known folder current path changed: {}",
+                current.display()
+            )),
+        });
+    }
+
+    if !current.exists() {
+        return Ok(crate::migration::file_migrator::RollbackResult {
+            success: false,
+            source_path: source_path.to_string_lossy().to_string(),
+            target_path: target_path.to_string_lossy().to_string(),
+            duration_ms: start.elapsed().as_millis() as u64,
+            error: Some("Target not found".to_string()),
+        });
+    }
+
+    emit_redirect_progress(
+        on_progress.as_ref(),
+        def.id,
+        def.display_name,
+        &current,
+        source_path,
+        "restoring",
+        10.0,
+        0,
+        0,
+    );
+
+    let restored = relocate_known_folder(folder_id, source_path, true, on_progress).await?;
+    if !restored.success {
+        return Ok(crate::migration::file_migrator::RollbackResult {
+            success: false,
+            source_path: source_path.to_string_lossy().to_string(),
+            target_path: target_path.to_string_lossy().to_string(),
+            duration_ms: start.elapsed().as_millis() as u64,
+            error: Some(restored.message),
+        });
+    }
+
+    Ok(crate::migration::file_migrator::RollbackResult {
+        success: true,
+        source_path: source_path.to_string_lossy().to_string(),
+        target_path: target_path.to_string_lossy().to_string(),
+        duration_ms: start.elapsed().as_millis() as u64,
+        error: None,
     })
 }
 
@@ -277,6 +530,8 @@ pub async fn relocate_temp(target_path: &Path) -> Result<RedirectResult> {
         success: true,
         moved_files: 0,
         moved_bytes: 0,
+        source_path: String::new(),
+        target_path: target_str.clone(),
         requires_reboot: true,
         message: format!("TEMP/TMP 已设置为 {}，需要重启才能完全生效", target_str),
     })

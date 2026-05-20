@@ -35,14 +35,30 @@ interface JunkScanProgress {
   found_size: number;
 }
 
+interface JunkCleanProgress {
+  current_path: string;
+  completed_items: number;
+  total_items: number;
+  cleaned_size: number;
+  total_size: number;
+  current_deleted_files: number;
+  current_total_files: number;
+  current_file: string;
+  progress_percent: number;
+  error_count: number;
+}
+
 const status = ref<Status>('idle');
 const result = shallowRef<JunkScanResult | null>(null);
 const checked = useSelectionSet<string>();
 const activeCollapse = ref<string[]>([]);
 const lastCategories = ref<JunkCategory[] | null>(null);
 const scanProgress = ref<JunkScanProgress | null>(null);
+const cleanProgress = ref<JunkCleanProgress | null>(null);
+const lastCleanResult = ref<JunkCleanResult | null>(null);
 const cache = useJunkScanCache();
 let unlistenProgress: UnlistenFn | null = null;
+let unlistenCleanProgress: UnlistenFn | null = null;
 
 const showToast = useToast();
 
@@ -178,11 +194,14 @@ function applyDefaultExpansion() {
   activeCollapse.value = top3;
 }
 
-async function startScan(categories: JunkCategory[] | null = lastCategories.value) {
+async function startScan(categories: JunkCategory[] | null = lastCategories.value, keepCleanResult = false) {
   if (status.value === 'scanning' || status.value === 'cleaning') return;
 
   const cached = cache.get(categories);
   if (cached) {
+    if (!keepCleanResult) {
+      lastCleanResult.value = null;
+    }
     result.value = cached.result;
     rebuildItemIndex(cached.result.items);
     applyDefaultSelection(cached.result.items);
@@ -203,6 +222,10 @@ async function startScan(categories: JunkCategory[] | null = lastCategories.valu
   activeCollapse.value = [];
   lastCategories.value = categories;
   scanProgress.value = null;
+  cleanProgress.value = null;
+  if (!keepCleanResult) {
+    lastCleanResult.value = null;
+  }
 
   try {
     if (unlistenProgress) {
@@ -267,6 +290,10 @@ onBeforeUnmount(() => {
   if (unlistenProgress) {
     unlistenProgress();
     unlistenProgress = null;
+  }
+  if (unlistenCleanProgress) {
+    unlistenCleanProgress();
+    unlistenCleanProgress = null;
   }
 });
 
@@ -404,12 +431,38 @@ async function performClean() {
   const toRecycleBin = confirmMode.value === 'recycle';
   confirmOpen.value = false;
   if (paths.length === 0) return;
+  lastCleanResult.value = null;
   status.value = 'cleaning';
+  cleanProgress.value = {
+    current_path: '',
+    completed_items: 0,
+    total_items: paths.length,
+    cleaned_size: 0,
+    total_size: paths.reduce((sum, path) => sum + sizeOfPath(path), 0),
+    current_deleted_files: 0,
+    current_total_files: 0,
+    current_file: '',
+    progress_percent: 0,
+    error_count: 0,
+  };
+
+  try {
+    if (unlistenCleanProgress) {
+      unlistenCleanProgress();
+      unlistenCleanProgress = null;
+    }
+    unlistenCleanProgress = await listen<JunkCleanProgress>('junk-clean-progress', (e) => {
+      cleanProgress.value = e.payload;
+    });
+  } catch {
+    void 0;
+  }
   try {
     const r = await invoke<JunkCleanResult>(CMD_CLEAN_JUNK, {
       paths,
       toRecycleBin,
     });
+    lastCleanResult.value = r;
     if (r.success) {
       showToast(
         '清理完成',
@@ -433,7 +486,11 @@ async function performClean() {
     selectedSizeAcc = 0;
     selectedSizeRef.value = 0;
     cache.clear();
-    await startScan();
+    if (unlistenCleanProgress) {
+      unlistenCleanProgress();
+      unlistenCleanProgress = null;
+    }
+    await startScan(lastCategories.value, true);
   }
 }
 
@@ -520,6 +577,30 @@ function isGroupActive(category: JunkCategory): boolean {
       </div>
     </div>
 
+    <div v-else-if="status === 'cleaning'" class="junk-scanning">
+      <IconSpinner :size="28" />
+      <div class="junk-scanning-copy">
+        <strong>正在清理垃圾文件…</strong>
+        <small v-if="cleanProgress">
+          {{ cleanProgress.current_path || cleanProgress.current_file || '准备中…' }} ·
+          {{ cleanProgress.completed_items }} / {{ cleanProgress.total_items }} 项 ·
+          {{ formatBytes(cleanProgress.cleaned_size) }} / {{ formatBytes(cleanProgress.total_size) }}
+        </small>
+        <small v-else>正在初始化清理任务…</small>
+        <div class="junk-progress" v-if="cleanProgress && cleanProgress.total_items > 0">
+          <div class="junk-progress-track">
+            <div
+              class="junk-progress-bar"
+              :style="{ width: `${cleanProgress.progress_percent.toFixed(1)}%` }"
+            ></div>
+          </div>
+          <span class="junk-progress-text">
+            {{ cleanProgress.completed_items }} / {{ cleanProgress.total_items }}
+          </span>
+        </div>
+      </div>
+    </div>
+
     <template v-else-if="status === 'scanned' && result && result.items.length > 0">
       <div class="junk-toolbar">
         <div class="junk-toolbar-left">
@@ -600,6 +681,19 @@ function isGroupActive(category: JunkCategory): boolean {
         </ElCollapseItem>
       </ElCollapse>
     </template>
+
+    <div v-if="status === 'scanned' && lastCleanResult && lastCleanResult.errors.length > 0" class="junk-errors">
+      <div class="junk-errors-head">
+        <strong>未能处理的项目</strong>
+        <span>{{ lastCleanResult.errors.length }} 项</span>
+      </div>
+      <div class="junk-errors-list">
+        <div v-for="err in lastCleanResult.errors.slice(0, 5)" :key="err.path" class="junk-error-item">
+          <div class="junk-error-path">{{ err.path }}</div>
+          <div class="junk-error-text">{{ err.error }}</div>
+        </div>
+      </div>
+    </div>
 
     <div
       v-else-if="status === 'scanned' && result && result.items.length === 0"
@@ -909,6 +1003,57 @@ function isGroupActive(category: JunkCategory): boolean {
 .junk-list-shell {
   background: var(--color-bg-secondary);
   min-height: 64px;
+}
+
+.junk-errors {
+  border: 1px solid rgba(220, 38, 38, 0.16);
+  background: rgba(220, 38, 38, 0.04);
+  border-radius: var(--radius-md);
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.junk-errors-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.junk-errors-head strong {
+  color: var(--color-text-primary);
+  font-size: 0.88rem;
+}
+
+.junk-errors-head span {
+  color: var(--color-text-tertiary);
+  font-size: 0.78rem;
+}
+
+.junk-errors-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.junk-error-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.junk-error-path {
+  font-size: 0.8rem;
+  color: var(--color-text-primary);
+  word-break: break-all;
+}
+
+.junk-error-text {
+  font-size: 0.76rem;
+  color: var(--color-text-tertiary);
+  word-break: break-word;
 }
 
 .junk-row {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import appIcon from './assets/app-icon.png';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import { IconClose, IconDeepScan, IconHistory, IconSettings } from './components/icons';
@@ -747,7 +748,17 @@ async function runCartDelete(
   mode: DeleteMode,
   failed: Array<{ path: string; name: string; error: string }>,
 ): Promise<boolean> {
+  let unlisten: (() => void) | null = null;
   try {
+    unlisten = await listen<import('./types').DeleteProgress>('delete-progress', (event) => {
+      const p = event.payload;
+      const total = p.total_files || 1;
+      const percent = Math.min(99, Math.round((p.deleted_files / total) * 100));
+      cartProgress.value = {
+        ...cartProgress.value,
+        currentItem: `${item.name} ${percent}%`,
+      };
+    });
     const result = await invoke<DeleteResult>('delete_path', {
       path: item.path,
       mode,
@@ -761,6 +772,8 @@ async function runCartDelete(
   } catch (err) {
     failed.push({ path: item.path, name: item.name, error: humanizeError(String(err)) });
     return false;
+  } finally {
+    if (unlisten) unlisten();
   }
 }
 
@@ -1050,7 +1063,7 @@ async function resumePendingScanIntent() {
     />
 
     <div v-if="showHistory" class="modal-overlay" @click="closeHistory">
-      <div class="modal-content" @click.stop>
+      <div class="modal-content modal-content--history" @click.stop>
         <button class="modal-close" @click="closeHistory"><IconClose :size="16" /></button>
         <History />
       </div>

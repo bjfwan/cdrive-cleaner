@@ -83,6 +83,22 @@ impl MigrationDb {
         Ok(conn.last_insert_rowid())
     }
 
+    pub fn insert_redirect_record(
+        &self,
+        folder_id: &str,
+        source_path: &str,
+        target_path: &str,
+        file_size: u64,
+    ) -> Result<i64> {
+        let conn = self.lock_conn();
+        let link_type = format!("KnownFolderRedirect:{folder_id}");
+        conn.execute(
+            "INSERT INTO migrations (source_path, target_path, link_type, file_size, status) VALUES (?1, ?2, ?3, ?4, ?5)",
+            [source_path, target_path, &link_type, &file_size.to_string(), "redirected"],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
     pub fn get_all_migrations(&self) -> Result<Vec<MigrationRecord>> {
         let conn = self.lock_conn();
         let mut stmt = conn.prepare(

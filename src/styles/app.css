@@ -1349,6 +1349,17 @@
   animation: modal-content-rise var(--transition-base);
 }
 
+.modal-content--history {
+  height: min(85vh, 52rem);
+  max-height: min(85vh, 52rem);
+  padding: 0;
+}
+
+.modal-content--history > .history-container {
+  flex: 1;
+  min-height: 0;
+}
+
 @keyframes modal-content-rise {
   from {
     opacity: 0;

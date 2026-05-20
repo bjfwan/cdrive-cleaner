@@ -26,3 +26,15 @@ async fn each_folder_has_non_empty_current_path() {
         );
     }
 }
+
+#[tokio::test]
+async fn known_folders_have_suggested_target_paths() {
+    let folders = folder_redirect::get_known_folders().await.unwrap();
+    for folder in &folders {
+        assert!(
+            !folder.suggested_target_path.is_empty(),
+            "folder {} has empty suggested_target_path",
+            folder.id
+        );
+    }
+}

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="history-container">
     <div class="history-header">
       <div class="header-content">
@@ -84,7 +84,7 @@
             </div>
             <div class="record-badge" :class="(record as MigrationRecord).status">
               <span class="badge-dot"></span>
-              <span>{{ (record as MigrationRecord).status === 'active' ? '活跃' : '已回滚' }}</span>
+              <span>{{ statusLabel(record as MigrationRecord) }}</span>
             </div>
           </div>
 
@@ -113,7 +113,7 @@
             </div>
           </div>
 
-          <div v-if="(record as MigrationRecord).status === 'active'" class="record-actions">
+          <div v-if="canRollback(record as MigrationRecord)" class="record-actions">
             <button
               @click="confirmRollback(record as MigrationRecord)"
               class="rollback-btn"
@@ -243,6 +243,18 @@ const executeRollback = async () => {
 
 const formatSize = formatBytes
 
+const statusLabel = (record: MigrationRecord) => {
+  if (record.status === 'active') return '活跃'
+  if (record.status === 'rolled_back') return '已回滚'
+  if (record.status === 'deleted') return '已删除'
+  if (record.status === 'redirected') return '已重定向'
+  return record.status
+}
+
+const canRollback = (record: MigrationRecord) => {
+  return record.status === 'active' || record.status === 'redirected'
+}
+
 onMounted(() => {
   loadHistory()
 })
@@ -250,7 +262,7 @@ onMounted(() => {
 
 <style scoped>
 .history-container {
-  height: 100%;
+  flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -431,6 +443,14 @@ onMounted(() => {
   flex: 1;
   min-height: 0;
   padding: 1.3rem 1.8rem 1.8rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.records-list :deep(.vlist) {
+  flex: 1;
+  min-height: 0;
 }
 
 .record-card {
@@ -497,6 +517,16 @@ onMounted(() => {
 .record-badge.rolled_back {
   background: rgba(220, 38, 38, 0.12);
   color: var(--color-error);
+}
+
+.record-badge.deleted {
+  background: rgba(107, 114, 128, 0.14);
+  color: var(--color-text-tertiary);
+}
+
+.record-badge.redirected {
+  background: rgba(59, 130, 246, 0.12);
+  color: #2563eb;
 }
 
 .badge-dot {
@@ -849,6 +879,16 @@ onMounted(() => {
 
 [data-theme="dark"] .record-badge.rolled_back {
   background: rgba(248, 113, 113, 0.15);
+}
+
+[data-theme="dark"] .record-badge.deleted {
+  background: rgba(148, 163, 184, 0.16);
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .record-badge.redirected {
+  background: rgba(96, 165, 250, 0.16);
+  color: #93c5fd;
 }
 
 [data-theme="dark"] .rollback-btn {

@@ -75,6 +75,7 @@ export interface KnownFolderInfo {
   display_name: string;
   current_path: string;
   default_path: string;
+  suggested_target_path: string;
   size_bytes: number;
   is_on_system_drive: boolean;
   is_default_location: boolean;
@@ -84,6 +85,8 @@ export interface RedirectResult {
   success: boolean;
   moved_files: number;
   moved_bytes: number;
+  source_path: string;
+  target_path: string;
   requires_reboot: boolean;
   message: string;
 }

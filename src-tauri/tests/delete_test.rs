@@ -111,6 +111,47 @@ async fn delete_partial_failure_when_file_locked() {
 }
 
 #[tokio::test]
+async fn delete_locked_file_with_progress_does_not_hang() {
+    let ws = TestWorkspace::new("locked-progress");
+    let target = ws.path().join("with-lock");
+    write_file(&target.join("free.txt"), b"free");
+    let locked_path = target.join("locked.bin");
+    write_file(&locked_path, &[9u8; 256]);
+
+    #[cfg(target_os = "windows")]
+    let _lock = {
+        use std::os::windows::fs::OpenOptionsExt;
+        fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&locked_path)
+            .ok()
+    };
+
+    let events = Arc::new(Mutex::new(Vec::<DeleteProgress>::new()));
+    let cb: DeleteProgressCallback = {
+        let events = Arc::clone(&events);
+        Arc::new(move |p| events.lock().unwrap().push(p))
+    };
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        delete_path(&target, DeleteMode::Permanent, Some(cb)),
+    )
+    .await
+    .expect("delete hung")
+    .unwrap();
+
+    if cfg!(target_os = "windows") {
+        assert!(!result.success);
+        assert!(!result.errors.is_empty());
+    } else {
+        assert!(result.success);
+    }
+    assert!(!events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn delete_emits_progress_events() {
     let ws = TestWorkspace::new("progress");
     let target = ws.path().join("many");
