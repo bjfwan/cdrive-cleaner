@@ -106,6 +106,16 @@ copy → verify → backup → create-link → cleanup
 | `CSD_<version>_x64-setup.exe` | NSIS 安装器 | 普通用户首选，体积小、自带 WebView2 拉取 |
 | `CSD_<version>_x64_zh-CN.msi` | MSI 安装包 | 企业批量部署、Group Policy 管控 |
 
+如果安装 `CSD_<version>_x64-setup.exe` 时出现 Windows Defender SmartScreen 提示，先点击 **更多信息**：
+
+![Windows Defender SmartScreen 更多信息](image.png)
+
+展开后点击 **仍要运行** 即可继续安装：
+
+![Windows Defender SmartScreen 仍要运行](image1.png)
+
+这个提示通常是因为安装包还没有做商业代码签名，且新版本下载量较少，Windows SmartScreen 暂时无法建立足够的信誉记录，所以会显示"无法识别的应用"或"发布者未知"。请只从本仓库的 [Releases 页面](https://github.com/bjfwan/cdrive-cleaner/releases) 下载安装包，并确认文件名与发布页面一致。
+
 安装完会在开始菜单出现 `CSD - 磁盘空间管理`。首次启动若提示"开启管理员模式"，建议同意以启用 MFT + USN 加速。
 
 ---
