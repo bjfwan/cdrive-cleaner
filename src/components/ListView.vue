@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, markRaw, shallowRef, watch } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 import {
   IconRiskSafe,
   IconRiskLow,
@@ -10,7 +11,7 @@ import {
   IconFile,
   IconMigrate,
 } from './icons';
-import type { DirectoryNode, FileInfo } from '../types';
+import type { DirectoryChildrenSnapshot, DirectoryFilesPage, DirectoryNode, FileInfo, FilePageSort } from '../types';
 import { formatBytes, formatNumber } from '../utils/format';
 import { useToast } from '../composables/useToast';
 import { useSelectionSet } from '../composables/useSelectionSet';
@@ -23,6 +24,7 @@ interface Props {
   totalSize: number;
   deepScanning: boolean;
   currentPath: string;
+  rootPath?: string;
   hasDeepScanned: boolean;
 }
 
@@ -58,41 +60,81 @@ interface FileRow {
 }
 type Row = DirRow | FileRow;
 
-const loadingFiles = shallowRef(false);
+interface CachedDirectoryFiles {
+  files: FileInfo[];
+  total: number;
+  totalSize: number;
+  hasMore: boolean;
+  cachedAt: number;
+}
+
+type DirectoryFilesCommand = 'scan_directory_files_page' | 'get_directory_files_page' | 'legacy';
+
+const MAX_DIRECTORY_SNAPSHOTS = 256;
+const FILE_PAGE_SIZE = 200;
+const FILE_CACHE_TTL_MS = 30000;
+const MAX_FILE_PAGE_CACHE = 128;
+const FILE_SORT: FilePageSort = 'size_desc';
+const loadingFilesInitial = shallowRef(false);
+const loadingFilesMore = shallowRef(false);
+const loadingDirectories = shallowRef(false);
 const currentFiles = shallowRef<FileInfo[]>([]);
+const fileTotal = shallowRef(0);
+const fileTotalSize = shallowRef(0);
+const fileLoadError = shallowRef('');
+const fileHasMoreFlag = shallowRef(false);
+const directorySnapshots = shallowRef(new Map<string, DirectoryChildrenSnapshot>());
+const directoryMeta = shallowRef(new Map<string, DirectoryNode>());
 const viewPath = shallowRef('');
 const pathHistory = shallowRef<string[]>([]);
 const selectedDirs = useSelectionSet<string>();
 const selectedFiles = useSelectionSet<string>();
+const filePageCache = new Map<string, CachedDirectoryFiles>();
 let fileLoadRequestId = 0;
+let directoryLoadRequestId = 0;
+let directoryFilesCommand: DirectoryFilesCommand | null = null;
 
 const normalizedRootPath = computed(() => normalizePath(props.currentPath));
+const backendRootPath = computed(() => props.rootPath || props.currentPath);
 const activePath = computed(() => viewPath.value || props.currentPath);
-const activeNode = computed(() => findDirectory(activePath.value));
+const activeSnapshot = computed(() => directorySnapshots.value.get(normalizePath(activePath.value)) ?? null);
+const activeNode = computed(() => directoryMeta.value.get(normalizePath(activePath.value)) ?? null);
 const visibleDirectories = computed(() => {
   if (!activePath.value || normalizePath(activePath.value) === normalizedRootPath.value) {
     return props.directories;
   }
-  return activeNode.value?.children ?? [];
+  return activeSnapshot.value?.directories ?? [];
 });
-const activeTotalSize = computed(() => activeNode.value?.size ?? props.totalSize);
+const activeTotalSize = computed(() => activeSnapshot.value?.total_size ?? activeNode.value?.size ?? props.totalSize);
 const canGoBack = computed(() => normalizePath(activePath.value) !== normalizedRootPath.value);
 const pathHint = computed(() => activePath.value || props.currentPath);
+const loadedFiles = computed(() => currentFiles.value.length);
+const loadingFiles = computed(() => loadingFilesInitial.value || loadingFilesMore.value);
+const fileHasMore = computed(() => fileHasMoreFlag.value || (fileTotal.value > 0 && loadedFiles.value < fileTotal.value));
+const loading = computed(() => visibleDirectories.value.length === 0 && currentFiles.value.length === 0 && (loadingDirectories.value || loadingFilesInitial.value));
 
 function normalizePath(path: string) {
   return path.replace(/[\\/]+$/, '').toLowerCase();
 }
 
-function findDirectory(path: string): DirectoryNode | null {
-  const target = normalizePath(path);
-  if (!target || target === normalizedRootPath.value) return null;
-  const stack = [...props.directories];
-  while (stack.length > 0) {
-    const dir = stack.pop()!;
-    if (normalizePath(dir.path) === target) return dir;
-    if (dir.children?.length) stack.push(...dir.children);
+function rememberDirectories(directories: DirectoryNode[]) {
+  const next = new Map(directoryMeta.value);
+  for (const dir of directories) {
+    next.set(normalizePath(dir.path), dir);
   }
-  return null;
+  directoryMeta.value = next;
+}
+
+function setDirectorySnapshot(path: string, snapshot: DirectoryChildrenSnapshot) {
+  const next = new Map(directorySnapshots.value);
+  const key = normalizePath(path);
+  if (!next.has(key) && next.size >= MAX_DIRECTORY_SNAPSHOTS) {
+    const oldestKey = next.keys().next().value;
+    if (oldestKey) next.delete(oldestKey);
+  }
+  next.set(key, snapshot);
+  directorySnapshots.value = next;
+  rememberDirectories(snapshot.directories);
 }
 
 function isDirSelectable(dir: DirectoryNode) {
@@ -215,45 +257,230 @@ function goRoot() {
   viewPath.value = props.currentPath;
 }
 
-async function loadDirectoryFiles(path: string) {
+function fileCacheKey(path: string) {
+  return `${normalizePath(path)}|${FILE_SORT}`;
+}
+
+function resetFilePageState() {
+  fileLoadRequestId += 1;
+  loadingFilesInitial.value = false;
+  loadingFilesMore.value = false;
+  currentFiles.value = [];
+  fileTotal.value = 0;
+  fileTotalSize.value = 0;
+  fileLoadError.value = '';
+  fileHasMoreFlag.value = false;
+}
+
+function setFilePageCache(path: string) {
+  const key = fileCacheKey(path);
+  if (filePageCache.has(key)) filePageCache.delete(key);
+  filePageCache.set(key, {
+    files: currentFiles.value,
+    total: fileTotal.value,
+    totalSize: fileTotalSize.value,
+    hasMore: fileHasMore.value,
+    cachedAt: Date.now(),
+  });
+  if (filePageCache.size > MAX_FILE_PAGE_CACHE) {
+    const oldestKey = filePageCache.keys().next().value;
+    if (oldestKey) filePageCache.delete(oldestKey);
+  }
+}
+
+function restoreFilePageCache(path: string) {
+  const key = fileCacheKey(path);
+  const hit = filePageCache.get(key);
+  if (!hit) return false;
+  if (Date.now() - hit.cachedAt > FILE_CACHE_TTL_MS) {
+    filePageCache.delete(key);
+    return false;
+  }
+  filePageCache.delete(key);
+  filePageCache.set(key, hit);
+  currentFiles.value = hit.files;
+  fileTotal.value = hit.total;
+  fileTotalSize.value = hit.totalSize;
+  fileHasMoreFlag.value = hit.hasMore;
+  fileLoadError.value = '';
+  return true;
+}
+
+function prepareDirectoryFiles(path: string) {
+  resetFilePageState();
+  if (!restoreFilePageCache(path)) {
+    void loadDirectoryFilesPage(path, true);
+  }
+}
+
+async function loadDirectoryFilesPage(path: string, reset: boolean) {
+  if (!path) return;
+  if (!reset && (!fileHasMore.value || loadingFiles.value)) return;
+
   const requestId = ++fileLoadRequestId;
-  loadingFiles.value = true;
+  const requestPath = path;
+  const offset = reset ? 0 : currentFiles.value.length;
+
+  if (reset) {
+    loadingFilesInitial.value = true;
+    loadingFilesMore.value = false;
+  } else {
+    loadingFilesMore.value = true;
+  }
+  fileLoadError.value = '';
 
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
-    const files = await invoke<FileInfo[]>('scan_directory_files', { path });
-    if (requestId === fileLoadRequestId) {
-      currentFiles.value = files;
-    }
+    const page = await loadDirectoryFilesPageFromBackend(requestPath, offset);
+    if (requestId !== fileLoadRequestId || normalizePath(requestPath) !== normalizePath(activePath.value)) return;
+
+    currentFiles.value = reset ? page.files : [...currentFiles.value, ...page.files];
+    fileTotal.value = page.total;
+    fileTotalSize.value = page.total_size ?? currentFiles.value.reduce((sum, file) => sum + file.size, 0);
+    fileHasMoreFlag.value = page.has_more ?? currentFiles.value.length < page.total;
+    setFilePageCache(requestPath);
   } catch {
-    if (requestId === fileLoadRequestId) {
-      currentFiles.value = [];
-      showToast('加载文件失败', '无法读取当前目录的文件列表', 'error');
-    }
+    if (requestId !== fileLoadRequestId) return;
+    if (reset) currentFiles.value = [];
+    fileLoadError.value = '无法读取当前目录的文件列表';
+    showToast('加载文件失败', fileLoadError.value, 'error');
   } finally {
     if (requestId === fileLoadRequestId) {
-      loadingFiles.value = false;
+      loadingFilesInitial.value = false;
+      loadingFilesMore.value = false;
+    }
+  }
+}
+
+async function loadDirectoryFilesPageFromBackend(path: string, offset: number): Promise<DirectoryFilesPage> {
+  if (directoryFilesCommand === 'legacy') {
+    return loadLegacyDirectoryFilesPage(path, offset);
+  }
+
+  const commands: DirectoryFilesCommand[] = directoryFilesCommand
+    ? [directoryFilesCommand]
+    : ['scan_directory_files_page', 'get_directory_files_page'];
+
+  for (const command of commands) {
+    try {
+      const page = await invoke<DirectoryFilesPage>(command, {
+        path,
+        offset,
+        limit: FILE_PAGE_SIZE,
+        sort: FILE_SORT,
+      });
+      directoryFilesCommand = command;
+      return page;
+    } catch (err) {
+      if (!isCommandUnavailable(err)) throw err;
+    }
+  }
+
+  directoryFilesCommand = 'legacy';
+  return loadLegacyDirectoryFilesPage(path, offset);
+}
+
+async function loadLegacyDirectoryFilesPage(path: string, offset: number): Promise<DirectoryFilesPage> {
+  const files = await invoke<FileInfo[]>('scan_directory_files', { path });
+  const sorted = sortFiles(files);
+  const pageFiles = sorted.slice(offset, offset + FILE_PAGE_SIZE);
+  return {
+    files: pageFiles,
+    total: sorted.length,
+    offset,
+    limit: FILE_PAGE_SIZE,
+    total_size: sorted.reduce((sum, file) => sum + file.size, 0),
+    has_more: offset + pageFiles.length < sorted.length,
+  };
+}
+
+function sortFiles(files: FileInfo[]) {
+  switch (FILE_SORT) {
+    case 'size_asc':
+      return [...files].sort((a, b) => a.size - b.size);
+    case 'name_asc':
+      return [...files].sort((a, b) => a.name.localeCompare(b.name));
+    case 'name_desc':
+      return [...files].sort((a, b) => b.name.localeCompare(a.name));
+    case 'modified_asc':
+      return [...files].sort((a, b) => a.modified_at.localeCompare(b.modified_at));
+    case 'modified_desc':
+      return [...files].sort((a, b) => b.modified_at.localeCompare(a.modified_at));
+    default:
+      return [...files].sort((a, b) => b.size - a.size);
+  }
+}
+
+function loadNextFilePage() {
+  void loadDirectoryFilesPage(activePath.value, false);
+}
+
+function isCommandUnavailable(err: unknown): boolean {
+  const message = String(err).toLowerCase();
+  return message.includes('not found') || message.includes('unknown command') || message.includes('找不到');
+}
+
+async function loadDirectoryChildren(path: string) {
+  if (!props.hasDeepScanned || normalizePath(path) === normalizedRootPath.value) {
+    loadingDirectories.value = false;
+    return;
+  }
+
+  const cacheKey = normalizePath(path);
+  if (directorySnapshots.value.has(cacheKey)) {
+    loadingDirectories.value = false;
+    return;
+  }
+
+  const requestId = ++directoryLoadRequestId;
+  const rootPath = backendRootPath.value;
+  loadingDirectories.value = true;
+
+  try {
+    const snapshot = await invoke<DirectoryChildrenSnapshot>('get_directory_children', {
+      rootPath,
+      path,
+    });
+    if (requestId === directoryLoadRequestId && rootPath === backendRootPath.value) {
+      setDirectorySnapshot(path, snapshot);
+    }
+  } catch {
+    if (requestId === directoryLoadRequestId) {
+      showToast('加载目录失败', '无法读取当前目录的子目录索引', 'error');
+    }
+  } finally {
+    if (requestId === directoryLoadRequestId) {
+      loadingDirectories.value = false;
     }
   }
 }
 
 watch(
-  () => [props.currentPath, props.directories] as const,
+  () => [props.currentPath, props.rootPath, props.directories] as const,
   ([newPath]) => {
+    const shouldLoadAfterReset = normalizePath(activePath.value) === normalizePath(newPath);
+    directoryLoadRequestId += 1;
+    loadingDirectories.value = false;
+    directorySnapshots.value = new Map();
+    directoryMeta.value = new Map();
+    rememberDirectories(props.directories);
     viewPath.value = newPath;
     pathHistory.value = [];
+    if (shouldLoadAfterReset) {
+      prepareDirectoryFiles(newPath);
+      void loadDirectoryChildren(newPath);
+    }
     clearSelection();
   },
   { immediate: true },
 );
 
 watch(
-  () => [activePath.value, activeTotalSize.value] as const,
-  ([newPath]) => {
-    void loadDirectoryFiles(newPath);
+  () => activePath.value,
+  (newPath) => {
+    prepareDirectoryFiles(newPath);
+    void loadDirectoryChildren(newPath);
     clearSelection();
   },
-  { immediate: true },
 );
 
 function getVerdictLabel(verdict?: string): string {
@@ -331,15 +558,15 @@ function pctWidth(size: number): string {
       </div>
     </div>
 
-    <div v-if="rows.length === 0 && !loadingFiles" class="empty">
+    <div v-if="rows.length === 0 && !loading" class="empty">
       <component :is="ICON_FOLDER" class="empty-icon" :size="44" />
-      <h3>此目录目前没有内容</h3>
-      <p>没有检测到子目录或文件。</p>
+      <h3>{{ fileLoadError ? '文件列表加载失败' : '此目录目前没有内容' }}</h3>
+      <p>{{ fileLoadError || '没有检测到子目录或文件。' }}</p>
     </div>
 
-    <div v-else-if="loadingFiles" class="loading">
+    <div v-else-if="loading" class="loading">
       <div class="spinner"></div>
-      <span>正在加载当前目录下的文件明细...</span>
+      <span>正在加载当前目录内容...</span>
     </div>
 
     <template v-else>
@@ -380,6 +607,7 @@ function pctWidth(size: number): string {
             :items="rows"
             :item-size="56"
             :buffer="6"
+            @scroll-near-end="loadNextFilePage"
             v-slot="{ item: row }"
           >
             <!-- 目录行 -->
@@ -519,6 +747,14 @@ function pctWidth(size: number): string {
               </div>
             </div>
           </VirtualList>
+        </div>
+
+        <div v-if="fileTotal > 0 || loadingFiles || fileLoadError" class="table-footer">
+          <span>文件 {{ formatNumber(loadedFiles) }} / {{ fileTotal > 0 ? formatNumber(fileTotal) : '--' }} 已加载</span>
+          <span v-if="fileLoadError">{{ fileLoadError }}</span>
+          <span v-else-if="loadingFilesMore || loadingFilesInitial">正在加载文件...</span>
+          <button v-else-if="fileHasMore" class="load-more-btn" @click="loadNextFilePage">加载更多文件</button>
+          <span v-else-if="fileTotal > 0">文件已加载全部 · {{ formatBytes(fileTotalSize) }}</span>
         </div>
       </div>
     </template>
@@ -720,6 +956,36 @@ function pctWidth(size: number): string {
   flex: 1;
   min-height: 0;
   padding: 0.3rem 0;
+}
+
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 1rem;
+  border-top: 1px solid var(--color-border-light);
+  color: var(--color-text-tertiary);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.load-more-btn {
+  border: 1px solid var(--color-border-light);
+  border-radius: 0.78rem;
+  padding: 0.42rem 0.7rem;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform var(--transition-base), background var(--transition-base), color var(--transition-fast);
+}
+
+.load-more-btn:hover {
+  transform: translateY(-1px);
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
 }
 
 .table-row {
@@ -1040,6 +1306,10 @@ function pctWidth(size: number): string {
   border-bottom-color: var(--color-border-medium);
 }
 
+[data-theme="dark"] .table-footer {
+  border-top-color: var(--color-border-medium);
+}
+
 [data-theme="dark"] .table-row:hover {
   background: rgba(255, 255, 255, 0.05);
   border-color: var(--color-border-medium);
@@ -1055,6 +1325,11 @@ function pctWidth(size: number): string {
 }
 
 [data-theme="dark"] .action-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .load-more-btn {
   background: rgba(255, 255, 255, 0.05);
   border-color: var(--color-border-medium);
 }

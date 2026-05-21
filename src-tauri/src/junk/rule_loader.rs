@@ -251,14 +251,6 @@ fn effective_max_depth(
     }
     None
 }
-// ─── Prepared Rule Cache ────────────────────────────────────────────────────
-
-/// A rule with all expensive one-time work already done:
-/// JSON parsing, env-var expansion, glob pattern collection, max_depth
-/// resolution, and the `Box::leak` calls for `&'static str` slots.
-///
-/// `detect` paths are kept as raw strings (post env-var expansion) so we can
-/// re-check filesystem state on every scan without re-parsing.
 struct PreparedRule {
     id: &'static str,
     name: &'static str,
@@ -395,14 +387,6 @@ fn rule_is_active(detect_paths: &[String], counters: &DetectCounters) -> bool {
         exists
     })
 }
-
-/// Parse all embedded JSON rule files, detect active rules, and convert them to `JunkRule`.
-/// Returns only rules whose detect paths exist on this machine.
-///
-/// First call: triggers one-time JSON parse + string leak via `prepared_rules`.
-/// Subsequent calls: only re-runs filesystem detect probes. No allocation
-/// happens for inactive rules; for active ones we clone owned `String`s into a
-/// fresh `JunkRule` (the leaked `&'static str`s are shared across calls).
 pub fn load_json_rules() -> Vec<JunkRule> {
     let t_total = Instant::now();
     let prepared = prepared_rules();
@@ -581,19 +565,6 @@ mod tests {
             "expected stable string pointers from prepared cache, but addresses differ",
         );
     }
-
-    /// Audit: no JSON rule should silently incur a full-drive walk.
-    /// A rule has a full-drive walk risk when:
-    ///   - patterns are non-empty, AND
-    ///   - some resolved path is a drive root, AND
-    ///   - no explicit max_depth is set
-    /// In this case, the safety net would auto-cap, but we still want loud
-    /// notice during CI so authors set max_depth explicitly.
-    ///
-    /// This test enumerates every JSON rule, expanding env vars where they're
-    /// available on the test runner, and reports any rule that hits all three
-    /// conditions. Failure = an author wrote a new full-drive rule without a
-    /// max_depth declaration.
     #[test]
     fn json_rules_avoid_implicit_full_drive_scans() {
         let mut all_configs: Vec<CleanRuleConfig> = Vec::new();

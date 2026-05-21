@@ -7,12 +7,18 @@ interface Props {
   buffer?: number;
   /** 当 itemSize 不能完全反映实际行高时可以放大估算 buffer。 */
   overscan?: number;
+  endThreshold?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   buffer: 6,
   overscan: 0,
+  endThreshold: 480,
 });
+
+const emit = defineEmits<{
+  'scroll-near-end': [];
+}>();
 
 const containerRef = ref<HTMLElement | null>(null);
 const viewportHeight = shallowRef(0);
@@ -20,6 +26,14 @@ const scrollTop = shallowRef(0);
 
 let scrollRaf = 0;
 let resizeObserver: ResizeObserver | null = null;
+
+function checkNearEnd() {
+  const el = containerRef.value;
+  if (!el) return;
+  if (el.scrollHeight - el.scrollTop - el.clientHeight <= props.endThreshold) {
+    emit('scroll-near-end');
+  }
+}
 
 function onScroll() {
   const el = containerRef.value;
@@ -29,6 +43,7 @@ function onScroll() {
     scrollRaf = 0;
     if (!containerRef.value) return;
     scrollTop.value = containerRef.value.scrollTop;
+    checkNearEnd();
   });
 }
 
@@ -37,6 +52,7 @@ function syncViewport() {
   if (!el) return;
   viewportHeight.value = el.clientHeight;
   scrollTop.value = el.scrollTop;
+  checkNearEnd();
 }
 
 onMounted(() => {
@@ -71,6 +87,7 @@ watch(
       el.scrollTop = max;
       scrollTop.value = max;
     }
+    checkNearEnd();
   },
 );
 

@@ -550,13 +550,13 @@ impl FileMigrator {
         for entry in jwalk::WalkDir::new(path)
             .skip_hidden(false)
             .follow_links(false)
+            .into_iter()
+            .flatten()
         {
-            if let Ok(entry) = entry {
-                if let Ok(m) = entry.metadata() {
-                    if m.is_file() {
-                        total_size += m.len();
-                        total_count += 1;
-                    }
+            if let Ok(m) = entry.metadata() {
+                if m.is_file() {
+                    total_size += m.len();
+                    total_count += 1;
                 }
             }
         }

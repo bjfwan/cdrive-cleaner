@@ -1,3 +1,9 @@
+#![allow(
+    clippy::too_many_arguments,
+    clippy::new_without_default,
+    clippy::type_complexity,
+)]
+
 mod commands;
 pub mod database;
 pub mod diagnostics;
@@ -17,7 +23,7 @@ pub mod junk;
 pub mod bench;
 
 use database::{MigrationDb, ScanCacheDb, SpaceHistoryDb};
-use scanner::DiskScanner;
+use scanner::{duplicates::DuplicateScanRegistry, DiskScanner};
 use session::ScanSessionRegistry;
 use std::sync::Arc;
 
@@ -59,18 +65,18 @@ pub fn run() {
     init_tracing();
     tracing::info!("CDrive Cleaner 启动");
     let scan_cache_db = utils::get_scan_cache_db_path()
-        .and_then(|p| ScanCacheDb::new(p.to_string_lossy().as_ref()).map_err(Into::into))
+        .and_then(|p| ScanCacheDb::new(p.to_string_lossy().as_ref()))
         .expect("Failed to open scan cache database");
     scan_cache_db
         .purge_legacy_scan_types()
         .expect("Failed to purge legacy scan cache types");
 
     let migration_db = utils::get_migrations_db_path()
-        .and_then(|p| MigrationDb::new(p.to_string_lossy().as_ref()).map_err(Into::into))
+        .and_then(|p| MigrationDb::new(p.to_string_lossy().as_ref()))
         .expect("Failed to open migration database");
 
     let space_history_db = utils::get_space_history_db_path()
-        .and_then(|p| SpaceHistoryDb::new(p.to_string_lossy().as_ref()).map_err(Into::into))
+        .and_then(|p| SpaceHistoryDb::new(p.to_string_lossy().as_ref()))
         .expect("Failed to open space history database");
     if let Err(err) = space_history_db.purge_old(90) {
         tracing::warn!("[space-history] failed to purge old snapshots: {err}");
@@ -91,17 +97,22 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(DiskScanner::new())
         .manage(Arc::new(ScanSessionRegistry::new()))
+        .manage(Arc::new(DuplicateScanRegistry::new()))
         .manage(scan_cache_db)
         .manage(migration_db)
         .manage(space_history_db)
         .invoke_handler(tauri::generate_handler![
             commands::scan_disk_deep,
             commands::get_directory_snapshot,
+            commands::get_directory_children,
             commands::get_large_files,
+            commands::get_large_files_page,
             commands::analyze_smart_groups,
             commands::reveal_in_explorer,
             commands::cancel_scan,
             commands::scan_directory_files,
+            commands::get_directory_files_page,
+            commands::scan_directory_files_page,
             commands::migrate_file,
             commands::delete_path,
             commands::get_disk_info,
@@ -122,6 +133,7 @@ pub fn run() {
             commands::exit_app,
             commands::get_space_history,
             commands::find_duplicates,
+            commands::cancel_duplicate_scan,
             commands::delete_duplicate_files,
             commands::detect_game_libraries,
             commands::migrate_game,
@@ -138,6 +150,8 @@ pub fn run() {
             commands::explain_file,
             commands::get_relocatable_programs,
             commands::get_balance_suggestion,
+            commands::check_for_updates,
+            commands::open_url,
             diagnostics::export_diagnostic_bundle,
         ])
         .run(tauri::generate_context!())

@@ -588,7 +588,7 @@ fn add_to_buckets(
     let items = buckets.entry(category).or_default();
     if items.len() < 10 || size > items.last().map(|i| i.2).unwrap_or(0) {
         items.push((path.to_string(), name.to_string(), size, is_dir));
-        items.sort_by(|a, b| b.2.cmp(&a.2));
+        items.sort_by_key(|i| std::cmp::Reverse(i.2));
         if items.len() > 10 {
             items.truncate(10);
         }
@@ -724,7 +724,7 @@ pub fn analyze_space_breakdown(indexed: &IndexedScanResult, disk_total: u64, dis
         });
     }
 
-    categories.sort_by(|a, b| b.size.cmp(&a.size));
+    categories.sort_by_key(|c| std::cmp::Reverse(c.size));
 
     SpaceBreakdown {
         disk_path,
@@ -802,7 +802,7 @@ pub fn get_relocatable_programs(indexed: &IndexedScanResult) -> Vec<RelocatableP
         }
     }
 
-    programs.sort_by(|a, b| b.size.cmp(&a.size));
+    programs.sort_by_key(|p| std::cmp::Reverse(p.size));
     programs
 }
 

@@ -1,5 +1,5 @@
 ﻿use super::backend::{self, ScanBackendKind};
-use super::file_info::{DirectoryNode, ScanResult};
+use super::file_info::{DirectoryChildrenSnapshot, DirectoryNode, ScanResult};
 use super::progress::ScanProgress;
 use super::scan_index::IndexedScanResult;
 use super::timing::StageTimer;
@@ -51,11 +51,17 @@ impl DiskScanner {
     }
 
     pub fn get_directory_snapshot(&self, root_path: &str, path: &str) -> Option<ScanResult> {
-        self.sessions
-            .lock()
-            .ok()
-            .and_then(|sessions| sessions.get(root_path).cloned())
-            .and_then(|indexed| indexed.snapshot_for_path(path))
+        let sessions = self.sessions.lock().ok()?;
+        sessions.get(root_path)?.snapshot_for_path(path)
+    }
+
+    pub fn get_directory_children(
+        &self,
+        root_path: &str,
+        path: &str,
+    ) -> Option<DirectoryChildrenSnapshot> {
+        let sessions = self.sessions.lock().ok()?;
+        sessions.get(root_path)?.children_snapshot_for_path(path)
     }
 
     pub fn with_indexed<F, T>(&self, root_path: &str, f: F) -> Option<T>
@@ -420,7 +426,7 @@ impl DiskScanner {
 
         // 从最深层开始累加子目录大小到父目录
         let mut all_paths: Vec<PathBuf> = nodes_map.keys().cloned().collect();
-        all_paths.sort_by(|a, b| b.components().count().cmp(&a.components().count()));
+        all_paths.sort_by_key(|p| std::cmp::Reverse(p.components().count()));
 
         for dir_path in &all_paths {
             if let Some(parent_path) = dir_path.parent() {
@@ -769,9 +775,9 @@ impl DiskScanner {
         for node in nodes.iter_mut() {
             Self::sort_directory_tree(&mut node.children);
             node.has_children = !node.children.is_empty();
-            node.children.sort_by(|a, b| b.size.cmp(&a.size));
+            node.children.sort_by_key(|n| std::cmp::Reverse(n.size));
         }
-        nodes.sort_by(|a, b| b.size.cmp(&a.size));
+        nodes.sort_by_key(|n| std::cmp::Reverse(n.size));
     }
 
     fn sum_dir_count(nodes: &[DirectoryNode]) -> usize {

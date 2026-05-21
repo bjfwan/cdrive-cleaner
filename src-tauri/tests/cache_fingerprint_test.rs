@@ -10,10 +10,12 @@
 
 #[cfg(target_os = "windows")]
 mod tests {
+    use cdrive_cleaner_lib::database::scan_cache_db::CachedScanResult;
     use cdrive_cleaner_lib::database::ScanCacheDb;
     use cdrive_cleaner_lib::scanner::env_fingerprint::{
         EnvFingerprint, CACHE_SCHEMA_VERSION,
     };
+    use cdrive_cleaner_lib::scanner::file_info::ScanResult;
     use std::path::PathBuf;
 
     fn temp_db_path(label: &str) -> PathBuf {
@@ -64,6 +66,27 @@ mod tests {
             completed,
         )
         .unwrap();
+    }
+
+    fn minimal_scan_result(system_reserved_bytes: u64) -> ScanResult {
+        ScanResult {
+            root_path: "C:\\".to_string(),
+            total_size: 1024,
+            system_reserved_bytes,
+            total_files: 1,
+            total_dirs: 1,
+            scan_duration_ms: 1,
+            directories: Vec::new(),
+            large_files: Vec::new(),
+            inaccessible_count: 0,
+            scan_backend: Some("native".to_string()),
+            root_file_id: None,
+            usn_journal_id: None,
+            usn_next_usn: None,
+            cache_schema_version: CACHE_SCHEMA_VERSION,
+            env_fingerprint: baseline_fp(),
+            scan_completed: true,
+        }
     }
 
     #[test]
@@ -181,6 +204,58 @@ mod tests {
     }
 
     #[test]
+    fn cached_blob_round_trip_preserves_system_reserved_bytes() {
+        let db_path = temp_db_path("blob");
+        let db = ScanCacheDb::new(db_path.to_string_lossy().as_ref()).unwrap();
+
+        let fp = baseline_fp();
+        let mut result = minimal_scan_result(4096);
+        result.env_fingerprint = fp.clone();
+        db.save_scan_result_typed(
+            "H:\\",
+            "deep",
+            &result,
+            &serde_json::to_string(&fp).unwrap(),
+            true,
+        )
+        .unwrap();
+
+        let cached = db
+            .get_valid_scan_result("H:\\", "deep", &fp)
+            .unwrap()
+            .unwrap();
+        assert!(cached.result_blob.is_some());
+
+        let decoded: ScanResult = cached.deserialize_result().unwrap();
+        assert_eq!(decoded.system_reserved_bytes, 4096);
+        assert_eq!(decoded.total_size, 1024);
+
+        cleanup(&db_path);
+    }
+
+    #[test]
+    fn corrupt_blob_falls_back_to_json_and_preserves_system_reserved_bytes() {
+        let result_json = serde_json::to_string(&minimal_scan_result(8192)).unwrap();
+        let cached = CachedScanResult {
+            id: 1,
+            disk_path: "I:\\".to_string(),
+            scan_type: "deep".to_string(),
+            result_json,
+            created_at: String::new(),
+            file_count: 1,
+            total_size: 1024,
+            env_fingerprint_json: Some(serde_json::to_string(&baseline_fp()).unwrap()),
+            scan_completed: true,
+            cache_schema_version: CACHE_SCHEMA_VERSION,
+            result_blob: Some(vec![0, 1, 2, 3]),
+        };
+
+        let decoded: ScanResult = cached.deserialize_result().unwrap();
+        assert_eq!(decoded.system_reserved_bytes, 8192);
+        assert_eq!(decoded.total_size, 1024);
+    }
+
+    #[test]
     fn legacy_record_without_fingerprint_is_invisible() {
         let db_path = temp_db_path("legacy");
         let db = ScanCacheDb::new(db_path.to_string_lossy().as_ref()).unwrap();
@@ -234,10 +309,6 @@ mod tests {
         .unwrap();
         drop(conn);
 
-        assert!(
-            CACHE_SCHEMA_VERSION >= 1,
-            "test assumes current schema_version >= 1"
-        );
         let result = db.get_valid_scan_result("G:\\", "deep", &fp).unwrap();
         assert!(
             result.is_none(),

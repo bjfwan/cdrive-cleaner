@@ -69,6 +69,27 @@ export interface FileInfo {
   link_target?: string;
 }
 
+export type FilePageSort = 'size_desc' | 'size_asc' | 'name_asc' | 'name_desc' | 'modified_desc' | 'modified_asc';
+
+export interface LargeFilesPage {
+  files: FileInfo[];
+  total: number;
+  offset: number;
+  limit: number;
+  total_size: number;
+  filtered_total_size: number;
+  has_more?: boolean;
+}
+
+export interface DirectoryFilesPage {
+  files: FileInfo[];
+  total: number;
+  offset: number;
+  limit: number;
+  total_size?: number;
+  has_more?: boolean;
+}
+
 export interface ScanResult {
   root_path: string;
   total_size: number;
@@ -80,6 +101,14 @@ export interface ScanResult {
   large_files: FileInfo[];
   inaccessible_count: number;
   scan_backend?: string;
+}
+
+export interface DirectoryChildrenSnapshot {
+  root_path: string;
+  total_size: number;
+  total_files: number;
+  total_dirs: number;
+  directories: DirectoryNode[];
 }
 
 export interface ScanCapabilities {
@@ -142,6 +171,16 @@ export interface AppSettings {
   createSymlink: boolean;
   defaultDeleteMode: DeleteMode;
   theme?: 'light' | 'dark' | 'auto';
+  autoCheckUpdate?: boolean;
+}
+
+export interface UpdateInfo {
+  has_update: boolean;
+  latest_version: string;
+  current_version: string;
+  release_notes: string;
+  download_url: string;
+  published_at: string;
 }
 
 export interface CacheEntry {

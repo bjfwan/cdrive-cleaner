@@ -325,13 +325,13 @@ fn stat_total(path: &Path) -> (u64, usize) {
     for entry in jwalk::WalkDir::new(path)
         .skip_hidden(false)
         .follow_links(false)
+        .into_iter()
+        .flatten()
     {
-        if let Ok(entry) = entry {
-            if let Ok(m) = entry.metadata() {
-                if m.is_file() {
-                    total_size = total_size.saturating_add(m.len());
-                    total_files += 1;
-                }
+        if let Ok(m) = entry.metadata() {
+            if m.is_file() {
+                total_size = total_size.saturating_add(m.len());
+                total_files += 1;
             }
         }
     }

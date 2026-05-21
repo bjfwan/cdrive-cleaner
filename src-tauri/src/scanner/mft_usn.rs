@@ -9,6 +9,7 @@ use std::time::Instant;
 use super::backend::ScanBackendKind;
 use super::file_info::{DirectoryNode, FileInfo, ScanResult};
 use super::incremental;
+use super::path_utils::{normalized_path_key, normalized_path_key_str, normalized_path_starts_with};
 use super::progress::ScanProgress;
 use super::timing::StageTimer;
 use crate::winfs::{self, MftEntry};
@@ -518,7 +519,7 @@ fn scan_path_once(
     }
 
     let mut all_paths: Vec<PathBuf> = nodes_map.keys().cloned().collect();
-    all_paths.sort_by(|a, b| b.components().count().cmp(&a.components().count()));
+    all_paths.sort_by_key(|p| std::cmp::Reverse(p.components().count()));
 
     for dir_path in &all_paths {
         if let Some(parent_path) = dir_path.parent() {
@@ -741,7 +742,7 @@ fn build_descendant_plan(
             path_cache.insert(*child_id, parent_path.join(&record.name));
             processed += 1;
 
-            if processed % 4096 == 0 {
+            if processed.is_multiple_of(4096) {
                 prep_done.store(processed, Ordering::Relaxed);
             }
 
@@ -1203,7 +1204,7 @@ fn reconcile_post_scan_window(
                 incremental::rescan_directory_snapshot(changed_path, LARGE_FILE_THRESHOLD)
             {
                 own_overrides.insert(
-                    incremental::normalized_path_key_str(&node.path),
+                    normalized_path_key_str(&node.path),
                     (own_size, own_file_count),
                 );
                 rescanned_nodes.push(node);
@@ -1244,20 +1245,31 @@ fn reconcile_post_scan_window(
         Vec::new()
     };
 
+    let changed_dir_keys: Vec<String> = changed_dirs
+        .iter()
+        .map(|path| normalized_path_key(path))
+        .collect();
+    let root_key = normalized_path_key(root_path);
+
     let mut large_files: Vec<FileInfo> = result
         .large_files
         .into_iter()
         .filter(|file| {
             let file_path = Path::new(&file.path);
-            !changed_dirs
+            let file_key = normalized_path_key_str(&file.path);
+            !changed_dir_keys
                 .iter()
-                .any(|changed_path| path_starts_with(file_path, changed_path))
-                && !(change_set.root_files_changed && file_path.parent() == Some(root_path))
+                .any(|changed_path| normalized_path_starts_with(&file_key, changed_path))
+                && (!change_set.root_files_changed
+                    || !file_path
+                        .parent()
+                        .map(|parent| normalized_path_key(parent) == root_key)
+                        .unwrap_or(false))
         })
         .collect();
     large_files.extend(rescanned_large_files);
     large_files.extend(root_large_files);
-    large_files.sort_by(|a, b| b.size.cmp(&a.size));
+    large_files.sort_by_key(|f| std::cmp::Reverse(f.size));
 
     let (total_size, total_files) = incremental::sum_tree(&directories);
     let total_dirs = incremental::count_directories(&directories, &result.root_path);
@@ -1329,34 +1341,9 @@ fn normalize_changed_dirs(root_path: &Path, change_set: &winfs::UsnChangeSet) ->
 }
 
 fn path_starts_with(candidate: &Path, prefix: &Path) -> bool {
-    let candidate_components: Vec<String> = candidate
-        .components()
-        .map(|component| {
-            #[cfg(windows)]
-            {
-                component.as_os_str().to_string_lossy().to_lowercase()
-            }
-            #[cfg(not(windows))]
-            {
-                component.as_os_str().to_string_lossy().to_string()
-            }
-        })
-        .collect();
-    let prefix_components: Vec<String> = prefix
-        .components()
-        .map(|component| {
-            #[cfg(windows)]
-            {
-                component.as_os_str().to_string_lossy().to_lowercase()
-            }
-            #[cfg(not(windows))]
-            {
-                component.as_os_str().to_string_lossy().to_string()
-            }
-        })
-        .collect();
-
-    candidate_components.starts_with(&prefix_components)
+    let candidate_key = normalized_path_key(candidate);
+    let prefix_key = normalized_path_key(prefix);
+    normalized_path_starts_with(&candidate_key, &prefix_key)
 }
 
 fn spawn_progress_thread(
@@ -1463,9 +1450,9 @@ fn sort_directory_tree(nodes: &mut [DirectoryNode]) {
     for node in nodes.iter_mut() {
         sort_directory_tree(&mut node.children);
         node.has_children = !node.children.is_empty();
-        node.children.sort_by(|a, b| b.size.cmp(&a.size));
+        node.children.sort_by_key(|n| std::cmp::Reverse(n.size));
     }
-    nodes.sort_by(|a, b| b.size.cmp(&a.size));
+    nodes.sort_by_key(|n| std::cmp::Reverse(n.size));
 }
 
 fn sum_dir_count(nodes: &[DirectoryNode]) -> usize {

@@ -1,5 +1,6 @@
 use super::disk_scanner::{DiskScanner, ScanProgressEmitter};
 use super::file_info::{DirectoryNode, FileInfo, ScanResult};
+use super::path_utils::{normalized_path_key, normalized_path_key_str, normalized_path_starts_with};
 use super::progress::ScanProgress;
 use super::timing::StageTimer;
 use crate::winfs;
@@ -144,60 +145,14 @@ fn get_disk_used_bytes(_path: &Path) -> Option<u64> {
     None
 }
 
-#[cfg(windows)]
-fn normalized_path_key(path: &Path) -> String {
-    let mut text = path
-        .to_string_lossy()
-        .replace('/', "\\")
-        .to_ascii_lowercase();
-    while text.ends_with('\\') && text.len() > 3 {
-        text.pop();
-    }
-    text
-}
-
-#[cfg(not(windows))]
-fn normalized_path_key(path: &Path) -> String {
-    path.to_string_lossy().to_string()
-}
-
-pub(crate) fn normalized_path_key_str(path: &str) -> String {
-    normalized_path_key(Path::new(path))
-}
-
 fn path_matches(node_path: &str, other: &Path) -> bool {
     normalized_path_key_str(node_path) == normalized_path_key(other)
 }
 
 fn path_starts_with(candidate: &Path, prefix: &Path) -> bool {
-    let candidate_components: Vec<String> = candidate
-        .components()
-        .map(|component| {
-            #[cfg(windows)]
-            {
-                component.as_os_str().to_string_lossy().to_ascii_lowercase()
-            }
-            #[cfg(not(windows))]
-            {
-                component.as_os_str().to_string_lossy().to_string()
-            }
-        })
-        .collect();
-    let prefix_components: Vec<String> = prefix
-        .components()
-        .map(|component| {
-            #[cfg(windows)]
-            {
-                component.as_os_str().to_string_lossy().to_ascii_lowercase()
-            }
-            #[cfg(not(windows))]
-            {
-                component.as_os_str().to_string_lossy().to_string()
-            }
-        })
-        .collect();
-
-    candidate_components.starts_with(&prefix_components)
+    let candidate_key = normalized_path_key(candidate);
+    let prefix_key = normalized_path_key(prefix);
+    normalized_path_starts_with(&candidate_key, &prefix_key)
 }
 
 #[allow(dead_code)]
@@ -241,10 +196,9 @@ pub fn check_directory_changes_with_clock(
 
     match (cached_node.modified_time, current_modified) {
         (Some(cached_time), Some(current_time)) => {
-            if cached_time == current_time {
-                ChangeStatus::Unchanged
-            } else if current_time < cached_time
-                && cached_time - current_time < CLOCK_SKEW_TOLERANCE_SECS
+            if cached_time == current_time
+                || (current_time < cached_time
+                    && cached_time - current_time < CLOCK_SKEW_TOLERANCE_SECS)
             {
                 ChangeStatus::Unchanged
             } else {
@@ -676,7 +630,7 @@ fn sort_directory_tree(nodes: &mut [DirectoryNode]) {
         sort_directory_tree(&mut node.children);
         node.has_children = !node.children.is_empty();
     }
-    nodes.sort_by(|a, b| b.size.cmp(&a.size));
+    nodes.sort_by_key(|n| std::cmp::Reverse(n.size));
 }
 
 pub(crate) fn scan_root_files(
@@ -710,7 +664,7 @@ pub(crate) fn scan_root_files(
         }
     }
 
-    large_files.sort_by(|a, b| b.size.cmp(&a.size));
+    large_files.sort_by_key(|f| std::cmp::Reverse(f.size));
     let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
     if elapsed_ms >= 100.0 {
         tracing::debug!("[scan-timing][incremental] scan_root_files path={} took {:.2}ms | files={} size={} large_files={}",
@@ -971,7 +925,7 @@ fn rescan_directory_tree(path: &Path, large_file_threshold: u64) -> Option<Resca
         .unwrap_or((0u64, 0usize));
 
     let mut all_paths: Vec<PathBuf> = dir_nodes.keys().cloned().collect();
-    all_paths.sort_by(|a, b| b.components().count().cmp(&a.components().count()));
+    all_paths.sort_by_key(|p| std::cmp::Reverse(p.components().count()));
 
     for dir_path in &all_paths {
         if dir_path == path {
@@ -1006,7 +960,7 @@ fn rescan_directory_tree(path: &Path, large_file_threshold: u64) -> Option<Resca
 
     let mut node = dir_nodes.remove(path)?;
     sort_directory_tree(&mut node.children);
-    large_files.sort_by(|a, b| b.size.cmp(&a.size));
+    large_files.sort_by_key(|f| std::cmp::Reverse(f.size));
 
     Some(RescannedDirectory {
         node,
@@ -1755,33 +1709,42 @@ async fn scan_incremental_internal(
         "incremental",
         format!("stage3_rebuild_large_files path={}", path.display()),
     );
-    let deleted_pathbufs: Vec<PathBuf> = changes
+    let deleted_path_keys: Vec<String> = changes
         .iter()
         .filter(|c| c.status == ChangeStatus::Deleted)
-        .map(|c| c.path.clone())
+        .map(|c| normalized_path_key(&c.path))
         .collect();
 
-    let rescanned_scopes: Vec<(PathBuf, RescanMode)> = rescanned_dirs
+    let rescanned_scopes: Vec<(String, RescanMode)> = rescanned_dirs
         .iter()
-        .map(|item| (PathBuf::from(&item.node.path), item.mode))
+        .map(|item| (normalized_path_key_str(&item.node.path), item.mode))
         .collect();
+    let root_key = normalized_path_key(path);
 
     let mut large_files: Vec<FileInfo> = cached_large_files
         .into_iter()
         .filter(|file| {
             let file_path = Path::new(&file.path);
-            !deleted_pathbufs
+            let file_key = normalized_path_key_str(&file.path);
+            !deleted_path_keys
                 .iter()
-                .any(|deleted| path_starts_with(file_path, deleted))
+                .any(|deleted| normalized_path_starts_with(&file_key, deleted))
                 && !rescanned_scopes
                     .iter()
                     .any(|(changed_path, mode)| match mode {
-                        RescanMode::Recursive => path_starts_with(file_path, changed_path),
+                        RescanMode::Recursive => normalized_path_starts_with(&file_key, changed_path),
                         RescanMode::DirectFilesOnly => {
-                            file_path.parent() == Some(changed_path.as_path())
+                            file_path
+                                .parent()
+                                .map(|parent| normalized_path_key(parent) == *changed_path)
+                                .unwrap_or(false)
                         }
                     })
-                && !(root_files_changed && file_path.parent() == Some(path))
+                && (!root_files_changed
+                    || !file_path
+                        .parent()
+                        .map(|parent| normalized_path_key(parent) == root_key)
+                        .unwrap_or(false))
         })
         .collect();
 
@@ -1793,7 +1756,7 @@ async fn scan_incremental_internal(
         large_files.extend(root_large_files);
     }
 
-    large_files.sort_by(|a, b| b.size.cmp(&a.size));
+    large_files.sort_by_key(|f| std::cmp::Reverse(f.size));
     large_files_timer.finish_with(format!("large_files={}", large_files.len()));
     let scan_duration_ms = start.elapsed().as_millis() as u64;
 
@@ -1925,7 +1888,7 @@ pub(crate) fn upsert_root_files_node(
     for node in nodes.iter_mut() {
         node.has_children = !node.children.is_empty();
     }
-    nodes.sort_by(|a, b| b.size.cmp(&a.size));
+    nodes.sort_by_key(|n| std::cmp::Reverse(n.size));
 }
 
 fn flatten_tree(nodes: Vec<DirectoryNode>, flat: &mut HashMap<String, DirectoryNode>) {
@@ -1995,7 +1958,7 @@ fn apply_direct_file_refreshes(
     }
 
     fn walk(
-        nodes: &mut Vec<DirectoryNode>,
+        nodes: &mut [DirectoryNode],
         updates: &mut HashMap<String, DirectoryNode>,
         root_path: &Path,
     ) -> bool {
@@ -2034,7 +1997,7 @@ fn apply_direct_file_refreshes(
         }
 
         if any_changed {
-            nodes.sort_by(|a, b| b.size.cmp(&a.size));
+            nodes.sort_by_key(|n| std::cmp::Reverse(n.size));
         }
 
         any_changed
@@ -2152,7 +2115,7 @@ fn extract_subtree(tree: &mut Vec<DirectoryNode>, key: &str) -> Option<Directory
 }
 
 fn attach_under_parent(
-    tree: &mut Vec<DirectoryNode>,
+    tree: &mut [DirectoryNode],
     new_path: &str,
     new_node: DirectoryNode,
 ) -> bool {
@@ -2176,9 +2139,8 @@ fn relocate_subtree_path(node: &mut DirectoryNode, old_key_prefix: &str, new_pat
     let old_path_key = normalized_path_key_str(&node.path);
     let new_path_for_node = if old_path_key == old_key_prefix {
         new_path.to_string()
-    } else if old_path_key.starts_with(old_key_prefix) {
+    } else if let Some(suffix) = old_path_key.strip_prefix(old_key_prefix) {
         // suffix 包含分隔符，拼接到 new_path 上
-        let suffix = &old_path_key[old_key_prefix.len()..];
         format!("{}{}", new_path, suffix)
     } else {
         node.path.clone()
@@ -2359,7 +2321,7 @@ fn recalc_subtotals_authoritative_cancellable<C: CancellationLike>(
         }
     }
     *counter += 1;
-    if *counter % MERGE_CANCEL_CHECK_STRIDE == 0 {
+    if (*counter).is_multiple_of(MERGE_CANCEL_CHECK_STRIDE) {
         if let Some(token) = cancellation {
             if token.is_cancelled() {
                 *cancelled = true;
@@ -2482,7 +2444,7 @@ fn merge_scan_results_keyed(
         .zip(delete_keys.iter())
         .map(|(p, k)| (p.clone(), k.clone()))
         .collect();
-    delete_pairs.sort_by(|a, b| b.1.matches('\\').count().cmp(&a.1.matches('\\').count()));
+    delete_pairs.sort_by_key(|pair| std::cmp::Reverse(pair.1.matches('\\').count()));
 
     for (raw, key) in &delete_pairs {
         let target = Path::new(raw);
@@ -2511,7 +2473,7 @@ fn merge_scan_results_keyed(
         .enumerate()
         .map(|(idx, node)| (idx, change_keys[idx].clone(), node))
         .collect();
-    indexed.sort_by(|a, b| a.1.matches('\\').count().cmp(&b.1.matches('\\').count()));
+    indexed.sort_by_key(|item| item.1.matches('\\').count());
 
     for (_, key, node) in indexed {
         let target = PathBuf::from(&node.path);
@@ -2848,11 +2810,7 @@ pub fn inspect_tree_merge_health(nodes: &[DirectoryNode], root_path: &Path) -> T
         if !path_matches(&node.path, root_path) {
             health.unique_dir_nodes += 1;
             let expected_dir_count = 1 + child_dir_sum;
-            let dir_diff = if node.dir_count >= expected_dir_count {
-                node.dir_count - expected_dir_count
-            } else {
-                expected_dir_count - node.dir_count
-            };
+            let dir_diff = node.dir_count.abs_diff(expected_dir_count);
             let dir_tolerance = (expected_dir_count / 50).max(2);
             if dir_diff > dir_tolerance {
                 health.inconsistent_node_count += 1;

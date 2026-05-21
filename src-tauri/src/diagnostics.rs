@@ -378,18 +378,16 @@ fn persist_scan_result_sync(
     snapshot.cache_schema_version = crate::scanner::env_fingerprint::CACHE_SCHEMA_VERSION;
     snapshot.env_fingerprint = fp.clone();
     snapshot.scan_completed = true;
-    let json = serde_json::to_string(&snapshot)?;
     let fp_json = serde_json::to_string(&fp)?;
     // 占位 + 转正：进程崩了 → 下次启动判脏。
-    cache_db.save_scan_result(
+    cache_db.save_scan_result_typed(
         disk_path,
         scan_type,
-        &json,
-        snapshot.total_files as i64,
-        snapshot.total_size as i64,
+        &snapshot,
         &fp_json,
         false,
     )?;
+
     cache_db.mark_scan_completed(disk_path, scan_type)?;
     Ok(())
 }
@@ -441,7 +439,7 @@ async fn run_deep_scan_pass(
     let cache_present_before = cached.is_some();
 
     let (strategy, incremental_candidate_before, full_result) = match cached {
-        Some(cached) => match cached.deserialize_result::<ScanResult>() {
+        Some(cached) => match cached.deserialize_result() {
             Ok(cached_result) if should_rebuild_cached_deep_scan(target_path, &cached_result) => (
                 "fresh_rebuild_stale_deep_cache",
                 false,
@@ -554,6 +552,6 @@ fn recent_log_files(logs_dir: &Path) -> Vec<PathBuf> {
         })
         .collect();
 
-    files.sort_by(|a, b| b.1.cmp(&a.1));
+    files.sort_by_key(|f| std::cmp::Reverse(f.1));
     files.into_iter().take(10).map(|(path, _)| path).collect()
 }

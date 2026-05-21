@@ -38,6 +38,36 @@ pub struct DirectoryNode {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DirectoryChildrenSnapshot {
+    pub root_path: String,
+    pub total_size: u64,
+    pub total_files: usize,
+    pub total_dirs: usize,
+    pub directories: Vec<DirectoryNode>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LargeFilesPage {
+    pub files: Vec<FileInfo>,
+    pub total: usize,
+    pub offset: usize,
+    pub limit: usize,
+    pub total_size: u64,
+    pub filtered_total_size: u64,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DirectoryFilesPage {
+    pub files: Vec<FileInfo>,
+    pub total: usize,
+    pub offset: usize,
+    pub limit: usize,
+    pub total_size: u64,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ScanResult {
     pub root_path: String,
     pub total_size: u64,

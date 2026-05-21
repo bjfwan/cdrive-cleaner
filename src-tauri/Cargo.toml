@@ -1,10 +1,10 @@
 [package]
 name = "cdrive-cleaner"
-version = "0.1.7"
+version = "0.1.8"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
-license = "MIT"
+license = "GPL-3.0-only"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -62,6 +62,7 @@ dashmap = "6"
 bincode = "1"
 aho-corasick = "1"
 zip = "0.6"
+ureq = { version = "2", features = ["json"] }
 
 [dev-dependencies]
 serial_test = "3"

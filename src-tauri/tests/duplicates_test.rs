@@ -44,7 +44,7 @@ fn detects_two_identical_large_files() {
     other_payload[0] = 9;
     let c = make_file(&dir, "c.bin", &other_payload);
 
-    let groups = find_duplicates_blocking(vec![a, b, c], None).unwrap();
+    let groups = find_duplicates_blocking(vec![a, b, c], None, None).unwrap();
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0].files.len(), 2);
     assert_eq!(groups[0].wasted_bytes, payload.len() as u64);
@@ -58,7 +58,7 @@ fn ignores_files_below_threshold() {
     let payload = vec![3u8; 1024];
     let a = make_file(&dir, "a.bin", &payload);
     let b = make_file(&dir, "b.bin", &payload);
-    let groups = find_duplicates_blocking(vec![a, b], None).unwrap();
+    let groups = find_duplicates_blocking(vec![a, b], None, None).unwrap();
     assert!(groups.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -76,7 +76,7 @@ fn distinguishes_same_size_different_content() {
 
     let a = make_file(&dir, "a.bin", &a_payload);
     let b = make_file(&dir, "b.bin", &b_payload);
-    let groups = find_duplicates_blocking(vec![a, b], None).unwrap();
+    let groups = find_duplicates_blocking(vec![a, b], None, None).unwrap();
     assert!(groups.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }

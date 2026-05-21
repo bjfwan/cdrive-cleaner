@@ -81,6 +81,7 @@ mod tests {
         ScanResult {
             root_path: root.to_string_lossy().to_string(),
             total_size: children.iter().map(|c| c.size).sum(),
+            system_reserved_bytes: 0,
             total_files: children.iter().map(|c| c.file_count).sum(),
             total_dirs: children.len(),
             scan_duration_ms: 0,

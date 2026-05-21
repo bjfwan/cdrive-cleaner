@@ -22,9 +22,17 @@ interface DuplicateGroup {
 }
 
 interface DuplicateProgress {
+  root_path: string;
+  request_id: number;
   current_size: number;
   scanned_files: number;
   found_groups: number;
+}
+
+interface DuplicateGroupEvent {
+  root_path: string;
+  request_id: number;
+  group: DuplicateGroup;
 }
 
 interface DeleteResult {
@@ -79,25 +87,71 @@ function sizeOfPath(path: string): number {
 const pathSizeMap = new Map<string, number>();
 
 let unlisten: UnlistenFn | null = null;
+let groupUnlisten: UnlistenFn | null = null;
+let scanRequestId = 0;
+let cancellationRequested = false;
 
 watch(
   () => props.rootPath,
-  () => {
-    groups.value = [];
-    pathSizeMap.clear();
-    checkedTotalSize = 0;
-    checkedSizeRef.value = 0;
-    checked.clear();
-    expanded.clear();
+  (_next, previous) => {
+    if (scanning.value && previous) {
+      void cancelDuplicateScan(previous);
+    }
+    scanRequestId += 1;
+    scanning.value = false;
+    cancellationRequested = false;
+    stopDuplicateListeners();
+    resetDuplicateState();
   },
 );
 
 onBeforeUnmount(() => {
+  if (scanning.value) {
+    void cancelDuplicateScan(props.rootPath);
+  }
+  scanRequestId += 1;
+  stopDuplicateListeners();
+});
+
+async function cancelDuplicateScan(rootPath = props.rootPath) {
+  if (!rootPath) return;
+  cancellationRequested = true;
+  try {
+    await invoke('cancel_duplicate_scan', { rootPath });
+  } catch {}
+}
+
+async function cancelActiveScan() {
+  const requestId = scanRequestId;
+  await cancelDuplicateScan();
+  if (requestId !== scanRequestId) return;
+  scanRequestId += 1;
+  scanning.value = false;
+  cancellationRequested = false;
+  resetDuplicateState();
+  stopDuplicateListeners();
+}
+
+function stopDuplicateListeners() {
   if (unlisten) {
     unlisten();
     unlisten = null;
   }
-});
+  if (groupUnlisten) {
+    groupUnlisten();
+    groupUnlisten = null;
+  }
+}
+
+function resetDuplicateState() {
+  groups.value = [];
+  pathSizeMap.clear();
+  checkedTotalSize = 0;
+  checkedSizeRef.value = 0;
+  checked.clear();
+  expanded.clear();
+  progress.value = null;
+}
 
 function rebuildPathSizeMap(list: DuplicateGroup[]) {
   pathSizeMap.clear();
@@ -105,6 +159,12 @@ function rebuildPathSizeMap(list: DuplicateGroup[]) {
     for (const f of g.files) {
       pathSizeMap.set(f.path, g.size);
     }
+  }
+}
+
+function appendPathSizeMap(group: DuplicateGroup) {
+  for (const f of group.files) {
+    pathSizeMap.set(f.path, group.size);
   }
 }
 
@@ -121,27 +181,52 @@ async function startScan() {
     return;
   }
   if (scanning.value) return;
+  const requestId = ++scanRequestId;
+  const rootPath = props.rootPath;
+  cancellationRequested = false;
   scanning.value = true;
-  groups.value = [];
-  pathSizeMap.clear();
-  checkedTotalSize = 0;
-  checkedSizeRef.value = 0;
-  checked.clear();
-  expanded.clear();
-  progress.value = { current_size: 0, scanned_files: 0, found_groups: 0 };
+  resetDuplicateState();
+  progress.value = {
+    root_path: rootPath,
+    request_id: requestId,
+    current_size: 0,
+    scanned_files: 0,
+    found_groups: 0,
+  };
 
-  if (unlisten) {
-    unlisten();
-    unlisten = null;
-  }
+  stopDuplicateListeners();
   unlisten = await listen<DuplicateProgress>('duplicate-progress', (event) => {
+    if (
+      requestId !== scanRequestId ||
+      event.payload.request_id !== requestId ||
+      event.payload.root_path !== rootPath ||
+      rootPath !== props.rootPath
+    ) {
+      return;
+    }
     progress.value = event.payload;
+  });
+  groupUnlisten = await listen<DuplicateGroupEvent>('duplicate-group-found', (event) => {
+    if (
+      requestId !== scanRequestId ||
+      event.payload.request_id !== requestId ||
+      event.payload.root_path !== rootPath ||
+      rootPath !== props.rootPath ||
+      cancellationRequested
+    ) {
+      return;
+    }
+    const group = event.payload.group;
+    groups.value = [...groups.value, group];
+    appendPathSizeMap(group);
   });
 
   try {
     const result = await invoke<DuplicateGroup[]>('find_duplicates', {
-      rootPath: props.rootPath,
+      rootPath,
+      requestId,
     });
+    if (requestId !== scanRequestId || rootPath !== props.rootPath || cancellationRequested) return;
     groups.value = result;
     rebuildPathSizeMap(result);
     applyDefaultSelection(result);
@@ -155,12 +240,15 @@ async function startScan() {
       );
     }
   } catch (err) {
+    if (requestId !== scanRequestId || cancellationRequested || String(err).includes('已取消')) return;
     showToast('重复文件分析失败', String(err), 'error');
   } finally {
-    scanning.value = false;
-    if (unlisten) {
-      unlisten();
-      unlisten = null;
+    const wasCanceled = cancellationRequested;
+    if (requestId === scanRequestId) {
+      scanning.value = false;
+      if (wasCanceled) resetDuplicateState();
+      cancellationRequested = false;
+      stopDuplicateListeners();
     }
   }
 }
@@ -298,6 +386,13 @@ function formatModified(value: string) {
           @click="startScan"
         >
           重新分析
+        </button>
+        <button
+          v-else
+          class="dupe-btn dupe-btn--ghost"
+          @click="cancelActiveScan"
+        >
+          取消分析
         </button>
       </div>
     </header>

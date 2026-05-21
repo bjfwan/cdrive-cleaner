@@ -5,7 +5,7 @@
 
 [![CI](https://github.com/bjfwan/cdrive-cleaner/actions/workflows/ci.yml/badge.svg)](https://github.com/bjfwan/cdrive-cleaner/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/bjfwan/cdrive-cleaner?include_prereleases)](https://github.com/bjfwan/cdrive-cleaner/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6)
 
 ---
@@ -282,5 +282,5 @@ npm run tauri build
 
 ## License
 
-[MIT License](LICENSE) © 2026 bjfwan
+[GPL-3.0 License](LICENSE) © 2026 bjfwan
 

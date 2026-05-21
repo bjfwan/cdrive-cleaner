@@ -71,12 +71,12 @@ pub fn directory_size(path: &std::path::Path) -> u64 {
     for entry in jwalk::WalkDir::new(path)
         .skip_hidden(false)
         .follow_links(false)
+        .into_iter()
+        .flatten()
     {
-        if let Ok(entry) = entry {
-            if let Ok(meta) = entry.metadata() {
-                if meta.is_file() {
-                    total = total.saturating_add(meta.len());
-                }
+        if let Ok(meta) = entry.metadata() {
+            if meta.is_file() {
+                total = total.saturating_add(meta.len());
             }
         }
     }

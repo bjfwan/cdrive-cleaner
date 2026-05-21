@@ -37,7 +37,7 @@ impl Stats {
 
         durs.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let mean = durs.iter().sum::<f64>() / n as f64;
-        let median = if n % 2 == 0 {
+        let median = if n.is_multiple_of(2) {
             (durs[n / 2 - 1] + durs[n / 2]) / 2.0
         } else {
             durs[n / 2]

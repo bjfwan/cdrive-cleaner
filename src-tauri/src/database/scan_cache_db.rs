@@ -1,9 +1,11 @@
 use anyhow::Result;
 use rusqlite::{params, Connection};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use crate::safety::MigrationSafety;
 use crate::scanner::env_fingerprint::{EnvFingerprint, CACHE_SCHEMA_VERSION};
+use crate::scanner::file_info::{DirectoryNode, FileInfo, ScanResult};
 
 /// 当前 SQLite schema 版本号，与 `PRAGMA user_version` 对齐。
 /// - v0：原始 schema
@@ -33,11 +35,11 @@ pub struct CachedScanResult {
 impl CachedScanResult {
     /// 从缓存记录反序列化 `ScanResult`。优先使用 `result_blob`（bincode），
     /// 回退到 `result_json`（JSON，兼容老缓存）。
-    pub fn deserialize_result<T: DeserializeOwned>(&self) -> Result<T> {
+    pub fn deserialize_result(&self) -> Result<ScanResult> {
         if let Some(ref blob) = self.result_blob {
-            match bincode::deserialize(blob) {
+            match deserialize_scan_result_blob(blob) {
                 Ok(result) => return Ok(result),
-                Err(err) if !self.result_json.is_empty() => {
+                Err(err) if !self.result_json.is_empty() && self.result_json != "{}" => {
                     tracing::warn!("[scan-cache] bincode deserialize failed id={} disk_path={} scan_type={} blob_bytes={} err={}; falling back to json", self.id, self.disk_path, self.scan_type, blob.len(), err);
                 }
                 Err(err) => return Err(anyhow::anyhow!("bincode: {err}")),
@@ -45,6 +47,202 @@ impl CachedScanResult {
         }
         serde_json::from_str(&self.result_json).map_err(|e| anyhow::anyhow!("json: {e}"))
     }
+}
+
+#[derive(Serialize, Deserialize)]
+struct ScanResultCachePayload {
+    root_path: String,
+    total_size: u64,
+    system_reserved_bytes: u64,
+    total_files: usize,
+    total_dirs: usize,
+    scan_duration_ms: u64,
+    directories: Vec<DirectoryNodeCachePayload>,
+    large_files: Vec<FileInfoCachePayload>,
+    inaccessible_count: usize,
+    scan_backend: Option<String>,
+    root_file_id: Option<u64>,
+    usn_journal_id: Option<u64>,
+    usn_next_usn: Option<i64>,
+    cache_schema_version: u32,
+    env_fingerprint: EnvFingerprint,
+    scan_completed: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct DirectoryNodeCachePayload {
+    path: String,
+    name: String,
+    size: u64,
+    file_count: usize,
+    dir_count: usize,
+    children: Vec<DirectoryNodeCachePayload>,
+    has_children: bool,
+    is_symlink: bool,
+    link_target: Option<String>,
+    safety: Option<MigrationSafety>,
+    modified_time: Option<u64>,
+    file_id: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct FileInfoCachePayload {
+    path: String,
+    name: String,
+    size: u64,
+    extension: String,
+    modified_at: String,
+    is_readonly: bool,
+    is_symlink: bool,
+    link_target: Option<String>,
+}
+
+impl From<&ScanResult> for ScanResultCachePayload {
+    fn from(result: &ScanResult) -> Self {
+        Self {
+            root_path: result.root_path.clone(),
+            total_size: result.total_size,
+            system_reserved_bytes: result.system_reserved_bytes,
+            total_files: result.total_files,
+            total_dirs: result.total_dirs,
+            scan_duration_ms: result.scan_duration_ms,
+            directories: result
+                .directories
+                .iter()
+                .map(DirectoryNodeCachePayload::from)
+                .collect(),
+            large_files: result
+                .large_files
+                .iter()
+                .map(FileInfoCachePayload::from)
+                .collect(),
+            inaccessible_count: result.inaccessible_count,
+            scan_backend: result.scan_backend.clone(),
+            root_file_id: result.root_file_id,
+            usn_journal_id: result.usn_journal_id,
+            usn_next_usn: result.usn_next_usn,
+            cache_schema_version: result.cache_schema_version,
+            env_fingerprint: result.env_fingerprint.clone(),
+            scan_completed: result.scan_completed,
+        }
+    }
+}
+
+impl From<ScanResultCachePayload> for ScanResult {
+    fn from(payload: ScanResultCachePayload) -> Self {
+        Self {
+            root_path: payload.root_path,
+            total_size: payload.total_size,
+            system_reserved_bytes: payload.system_reserved_bytes,
+            total_files: payload.total_files,
+            total_dirs: payload.total_dirs,
+            scan_duration_ms: payload.scan_duration_ms,
+            directories: payload
+                .directories
+                .into_iter()
+                .map(DirectoryNode::from)
+                .collect(),
+            large_files: payload
+                .large_files
+                .into_iter()
+                .map(FileInfo::from)
+                .collect(),
+            inaccessible_count: payload.inaccessible_count,
+            scan_backend: payload.scan_backend,
+            root_file_id: payload.root_file_id,
+            usn_journal_id: payload.usn_journal_id,
+            usn_next_usn: payload.usn_next_usn,
+            cache_schema_version: payload.cache_schema_version,
+            env_fingerprint: payload.env_fingerprint,
+            scan_completed: payload.scan_completed,
+        }
+    }
+}
+
+impl From<&DirectoryNode> for DirectoryNodeCachePayload {
+    fn from(node: &DirectoryNode) -> Self {
+        Self {
+            path: node.path.clone(),
+            name: node.name.clone(),
+            size: node.size,
+            file_count: node.file_count,
+            dir_count: node.dir_count,
+            children: node
+                .children
+                .iter()
+                .map(DirectoryNodeCachePayload::from)
+                .collect(),
+            has_children: node.has_children,
+            is_symlink: node.is_symlink,
+            link_target: node.link_target.clone(),
+            safety: node.safety.clone(),
+            modified_time: node.modified_time,
+            file_id: node.file_id,
+        }
+    }
+}
+
+impl From<DirectoryNodeCachePayload> for DirectoryNode {
+    fn from(payload: DirectoryNodeCachePayload) -> Self {
+        Self {
+            path: payload.path,
+            name: payload.name,
+            size: payload.size,
+            file_count: payload.file_count,
+            dir_count: payload.dir_count,
+            children: payload
+                .children
+                .into_iter()
+                .map(DirectoryNode::from)
+                .collect(),
+            has_children: payload.has_children,
+            is_symlink: payload.is_symlink,
+            link_target: payload.link_target,
+            safety: payload.safety,
+            modified_time: payload.modified_time,
+            file_id: payload.file_id,
+        }
+    }
+}
+
+impl From<&FileInfo> for FileInfoCachePayload {
+    fn from(file: &FileInfo) -> Self {
+        Self {
+            path: file.path.clone(),
+            name: file.name.clone(),
+            size: file.size,
+            extension: file.extension.clone(),
+            modified_at: file.modified_at.clone(),
+            is_readonly: file.is_readonly,
+            is_symlink: file.is_symlink,
+            link_target: file.link_target.clone(),
+        }
+    }
+}
+
+impl From<FileInfoCachePayload> for FileInfo {
+    fn from(payload: FileInfoCachePayload) -> Self {
+        Self {
+            path: payload.path,
+            name: payload.name,
+            size: payload.size,
+            extension: payload.extension,
+            modified_at: payload.modified_at,
+            is_readonly: payload.is_readonly,
+            is_symlink: payload.is_symlink,
+            link_target: payload.link_target,
+        }
+    }
+}
+
+fn serialize_scan_result_blob(result: &ScanResult) -> Result<Vec<u8>> {
+    let payload = ScanResultCachePayload::from(result);
+    Ok(bincode::serialize(&payload)?)
+}
+
+fn deserialize_scan_result_blob(blob: &[u8]) -> Result<ScanResult> {
+    let payload: ScanResultCachePayload = bincode::deserialize(blob)?;
+    Ok(payload.into())
 }
 
 #[derive(Clone)]
@@ -128,22 +326,62 @@ impl ScanCacheDb {
         env_fingerprint_json: &str,
         scan_completed: bool,
     ) -> Result<i64> {
-        let conn = self.lock_conn();
-        let completed = if scan_completed { 1 } else { 0 };
-        // 尝试将 JSON 转为 bincode blob 以获得更好的读取性能。
-        // 如果 result_json 为空或解析失败（占位记录），blob 为 NULL，保留 json 原样。
         let blob: Option<Vec<u8>> = if result_json.is_empty() || result_json == "{}" {
             None
         } else {
-            use crate::scanner::file_info::ScanResult;
             let sr = serde_json::from_str::<ScanResult>(result_json)
                 .map_err(|e| anyhow::anyhow!("scan cache json self-check failed: {e}"))?;
-            bincode::serialize(&sr).ok().and_then(|blob| {
-                let _: ScanResult = bincode::deserialize(&blob).ok()?;
+            serialize_scan_result_blob(&sr).ok().and_then(|blob| {
+                let _: ScanResult = deserialize_scan_result_blob(&blob).ok()?;
                 Some(blob)
             })
         };
-        let stored_json = result_json;
+        self.upsert_scan_result(
+            disk_path,
+            scan_type,
+            result_json,
+            blob,
+            file_count,
+            total_size,
+            env_fingerprint_json,
+            scan_completed,
+        )
+    }
+
+    pub fn save_scan_result_typed(
+        &self,
+        disk_path: &str,
+        scan_type: &str,
+        result: &ScanResult,
+        env_fingerprint_json: &str,
+        scan_completed: bool,
+    ) -> Result<i64> {
+        let blob = serialize_scan_result_blob(result)?;
+        self.upsert_scan_result(
+            disk_path,
+            scan_type,
+            "{}",
+            Some(blob),
+            result.total_files as i64,
+            result.total_size as i64,
+            env_fingerprint_json,
+            scan_completed,
+        )
+    }
+
+    fn upsert_scan_result(
+        &self,
+        disk_path: &str,
+        scan_type: &str,
+        result_json: &str,
+        result_blob: Option<Vec<u8>>,
+        file_count: i64,
+        total_size: i64,
+        env_fingerprint_json: &str,
+        scan_completed: bool,
+    ) -> Result<i64> {
+        let conn = self.lock_conn();
+        let completed = if scan_completed { 1 } else { 0 };
         conn.execute(
             "INSERT INTO scan_cache (
                  disk_path, scan_type, result_json, file_count, total_size, created_at,
@@ -161,13 +399,13 @@ impl ScanCacheDb {
             params![
                 disk_path,
                 scan_type,
-                stored_json,
+                result_json,
                 file_count,
                 total_size,
                 env_fingerprint_json,
                 completed,
                 CACHE_SCHEMA_VERSION as i64,
-                blob,
+                result_blob,
             ],
         )?;
         Ok(conn.last_insert_rowid())

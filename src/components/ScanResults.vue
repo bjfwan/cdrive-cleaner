@@ -35,6 +35,7 @@ const selectedFile = ref<FileInfo | null>(null);
 const selectedItems = ref<Array<DirectoryNode | FileInfo>>([]);
 
 const currentDriveLetter = computed(() => props.currentPath.substring(0, 2));
+const browseRootPath = computed(() => `${currentDriveLetter.value}\\`);
 const currentDisk = computed(() => {
   const drive = currentDriveLetter.value;
   return props.availableDisks.find((disk) => disk.drive_letter === drive) ?? null;
@@ -62,13 +63,6 @@ const sortedDirectories = computed(() => {
     return [];
   }
   return [...props.result.directories].sort((a, b) => b.size - a.size);
-});
-
-const sortedLargeFiles = computed(() => {
-  if (!props.result?.large_files || props.result.large_files.length === 0) {
-    return [];
-  }
-  return [...props.result.large_files].sort((a, b) => b.size - a.size);
 });
 
 const availableTargetDisks = computed(() => {
@@ -197,6 +191,7 @@ function closeMigrateDialog() {
         :total-size="result.total_size"
         :deep-scanning="deepScanning"
         :current-path="currentPath"
+        :root-path="browseRootPath"
         :has-deep-scanned="hasDeepScanned"
         @navigate="$emit('navigate', $event)"
         @migrate-dir="showMigrateDialog"
@@ -206,7 +201,8 @@ function closeMigrateDialog() {
 
       <LargeFilesView
         v-if="viewMode === 'large-files'"
-        :files="sortedLargeFiles"
+        :root-path="browseRootPath"
+        :path="currentPath"
         :deep-scanning="deepScanning"
         :has-deep-scanned="hasDeepScanned"
         :large-file-threshold="largeFileThreshold"

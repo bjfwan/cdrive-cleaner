@@ -6,15 +6,20 @@ use crate::migration::{
 };
 use crate::pending_intent::{self, PendingScanIntent};
 use crate::scanner::{
-    duplicates::{find_duplicates_blocking, DuplicateGroup},
+    duplicates::{find_duplicates_blocking_with_events, DuplicateGroup, DuplicateScanRegistry},
     env_fingerprint::{EnvFingerprint, CACHE_SCHEMA_VERSION},
-    file_info::{FileInfo, ScanResult},
+    file_info::{DirectoryChildrenSnapshot, DirectoryFilesPage, FileInfo, LargeFilesPage, ScanResult},
+    path_utils::normalized_path_key,
     timing::StageTimer,
     DiskScanner,
 };
 use crate::session::ScanSessionRegistry;
 use crate::winfs;
-use std::sync::Arc;
+use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 use tauri::AppHandle;
 use tauri::Emitter;
 
@@ -28,6 +33,44 @@ pub struct ScanCapabilities {
     pub reason: String,
 }
 
+const MAX_PAGE_LIMIT: usize = 500;
+const DEFAULT_PAGE_LIMIT: usize = 100;
+const DIRECTORY_FILES_CACHE_TTL: Duration = Duration::from_secs(5);
+const MAX_DIRECTORY_FILES_CACHE_ENTRIES: usize = 128;
+
+#[derive(Clone)]
+struct DirectoryFilesCacheEntry {
+    files: Vec<FileInfo>,
+    cached_at: Instant,
+}
+
+static DIRECTORY_FILES_CACHE: OnceLock<Mutex<HashMap<String, DirectoryFilesCacheEntry>>> =
+    OnceLock::new();
+
+fn clamp_page_limit(limit: usize) -> usize {
+    if limit == 0 {
+        DEFAULT_PAGE_LIMIT
+    } else {
+        limit.min(MAX_PAGE_LIMIT)
+    }
+}
+
+#[derive(Clone, serde::Serialize)]
+struct DuplicateProgressEvent {
+    pub root_path: String,
+    pub request_id: u64,
+    pub current_size: u64,
+    pub scanned_files: usize,
+    pub found_groups: usize,
+}
+
+#[derive(Clone, serde::Serialize)]
+struct DuplicateGroupEvent {
+    pub root_path: String,
+    pub request_id: u64,
+    pub group: DuplicateGroup,
+}
+
 fn persist_scan_result_async(
     cache_db: ScanCacheDb,
     disk_path: String,
@@ -38,23 +81,20 @@ fn persist_scan_result_async(
     let log_path = disk_path.clone();
     tauri::async_runtime::spawn(async move {
         let save_task = tokio::task::spawn_blocking(move || -> Result<(), String> {
-            // 把指纹 + schema_version + scan_completed 写进 ScanResult JSON，
+            // 把指纹 + schema_version + scan_completed 写进 ScanResult，
             // 这样下次读出来就能直接和当前环境对比，无需再依赖 SQL 元列。
             let mut sealed = result;
             sealed.cache_schema_version = CACHE_SCHEMA_VERSION;
             sealed.env_fingerprint = fingerprint.clone();
             sealed.scan_completed = true;
-            let json = serde_json::to_string(&sealed).map_err(|e| e.to_string())?;
             let fp_json = serde_json::to_string(&fingerprint).map_err(|e| e.to_string())?;
             // 第一步：先 UPSERT 一条 scan_completed=0 的占位记录。
             // 进程在 mark_scan_completed 之前挂掉，下次启动看到 0 直接判脏。
             cache_db
-                .save_scan_result(
+                .save_scan_result_typed(
                     &disk_path,
                     scan_type,
-                    &json,
-                    sealed.total_files as i64,
-                    sealed.total_size as i64,
+                    &sealed,
                     &fp_json,
                     false,
                 )
@@ -179,7 +219,7 @@ pub async fn scan_disk_deep(
             "scan-deep-command",
             format!("deserialize_cached_result path={path}"),
         );
-        let cached_result = cached.deserialize_result::<ScanResult>();
+        let cached_result = cached.deserialize_result();
         match &cached_result {
             Ok(result) => deserialize_timer.finish_with(format!(
                 "status=ok backend={:?} files={} dirs={} size={}",
@@ -403,6 +443,17 @@ pub fn get_directory_snapshot(
 }
 
 #[tauri::command]
+pub fn get_directory_children(
+    root_path: String,
+    path: String,
+    scanner: tauri::State<'_, DiskScanner>,
+) -> Result<DirectoryChildrenSnapshot, String> {
+    scanner
+        .get_directory_children(&root_path, &path)
+        .ok_or_else(|| "目录快照不存在，请重新执行深度扫描".to_string())
+}
+
+#[tauri::command]
 pub fn get_large_files(
     root_path: String,
     path: Option<String>,
@@ -414,6 +465,30 @@ pub fn get_large_files(
                 .large_files_for_path_public(path.as_deref().unwrap_or(&root_path))
                 .into_iter()
                 .collect::<Vec<_>>()
+        })
+        .ok_or_else(|| "尚未扫描，请先执行深度扫描".to_string())
+}
+
+#[tauri::command]
+pub fn get_large_files_page(
+    root_path: String,
+    path: Option<String>,
+    min_size: Option<u64>,
+    offset: usize,
+    limit: usize,
+    sort: Option<String>,
+    scanner: tauri::State<'_, DiskScanner>,
+) -> Result<LargeFilesPage, String> {
+    let limit = clamp_page_limit(limit);
+    scanner
+        .with_indexed(&root_path, |indexed| {
+            indexed.large_files_page_for_path_public(
+                path.as_deref().unwrap_or(&root_path),
+                min_size,
+                offset,
+                limit,
+                sort.as_deref(),
+            )
         })
         .ok_or_else(|| "尚未扫描，请先执行深度扫描".to_string())
 }
@@ -462,63 +537,162 @@ pub async fn cancel_scan(
 
 #[tauri::command]
 pub async fn scan_directory_files(path: String) -> Result<Vec<FileInfo>, String> {
+    tokio::task::spawn_blocking(move || get_directory_files_cached(PathBuf::from(path)))
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn get_directory_files_page(
+    path: String,
+    offset: usize,
+    limit: usize,
+    sort: Option<String>,
+) -> Result<DirectoryFilesPage, String> {
+    let limit = clamp_page_limit(limit);
     tokio::task::spawn_blocking(move || {
-        let dir_path = std::path::PathBuf::from(path);
-        if !dir_path.exists() || !dir_path.is_dir() {
-            return Err("路径不存在或不是目录".to_string());
+        let mut files = get_directory_files_cached(PathBuf::from(path))?;
+        sort_directory_files(&mut files, sort.as_deref().unwrap_or("size_desc"));
+        Ok(paginate_directory_files(files, offset, limit))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn get_directory_files_cached(dir_path: PathBuf) -> Result<Vec<FileInfo>, String> {
+    if !dir_path.exists() || !dir_path.is_dir() {
+        return Err("路径不存在或不是目录".to_string());
+    }
+
+    let key = normalized_path_key(&dir_path);
+    let cache = DIRECTORY_FILES_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Ok(guard) = cache.lock() {
+        if let Some(entry) = guard.get(&key) {
+            if entry.cached_at.elapsed() <= DIRECTORY_FILES_CACHE_TTL {
+                return Ok(entry.files.clone());
+            }
         }
+    }
 
-        let mut files = Vec::new();
-        for entry in winfs::enumerate_directory(&dir_path, false).map_err(|e| e.to_string())? {
-            let modified_at = entry
-                .modified_time
-                .and_then(|secs| chrono::DateTime::from_timestamp(secs as i64, 0))
-                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                .unwrap_or_default();
+    let mut files = enumerate_directory_direct_files(&dir_path)?;
+    sort_directory_files(&mut files, "size_desc");
 
-            if entry.is_symlink {
-                if entry.is_dir {
-                    continue;
-                }
+    if let Ok(mut guard) = cache.lock() {
+        guard.retain(|_, entry| entry.cached_at.elapsed() <= DIRECTORY_FILES_CACHE_TTL);
+        if guard.len() >= MAX_DIRECTORY_FILES_CACHE_ENTRIES {
+            if let Some(oldest_key) = guard.keys().next().cloned() {
+                guard.remove(&oldest_key);
+            }
+        }
+        guard.insert(
+            key,
+            DirectoryFilesCacheEntry {
+                files: files.clone(),
+                cached_at: Instant::now(),
+            },
+        );
+    }
 
-                files.push(FileInfo {
-                    path: entry.path.to_string_lossy().to_string(),
-                    name: entry.name,
-                    size: 0,
-                    extension: entry
-                        .path
-                        .extension()
-                        .and_then(|e| e.to_str())
-                        .unwrap_or("")
-                        .to_string(),
-                    modified_at,
-                    is_readonly: entry.is_readonly,
-                    is_symlink: true,
-                    link_target: winfs::resolve_link_target(&entry.path),
-                });
+    Ok(files)
+}
+
+fn enumerate_directory_direct_files(dir_path: &Path) -> Result<Vec<FileInfo>, String> {
+    let mut files = Vec::new();
+    for entry in winfs::enumerate_directory(dir_path, false).map_err(|e| e.to_string())? {
+        let modified_at = entry
+            .modified_time
+            .and_then(|secs| chrono::DateTime::from_timestamp(secs as i64, 0))
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_default();
+
+        if entry.is_symlink {
+            if entry.is_dir {
                 continue;
             }
 
-            if !entry.is_dir {
-                files.push(FileInfo {
-                    path: entry.path.to_string_lossy().to_string(),
-                    name: entry.name,
-                    size: entry.size,
-                    extension: entry
-                        .path
-                        .extension()
-                        .and_then(|e| e.to_str())
-                        .unwrap_or("")
-                        .to_string(),
-                    modified_at,
-                    is_readonly: entry.is_readonly,
-                    is_symlink: false,
-                    link_target: None,
-                });
-            }
+            files.push(FileInfo {
+                path: entry.path.to_string_lossy().to_string(),
+                name: entry.name,
+                size: 0,
+                extension: entry
+                    .path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_string(),
+                modified_at,
+                is_readonly: entry.is_readonly,
+                is_symlink: true,
+                link_target: winfs::resolve_link_target(&entry.path),
+            });
+            continue;
         }
-        files.sort_by(|a, b| b.size.cmp(&a.size));
-        Ok(files)
+
+        if !entry.is_dir {
+            files.push(FileInfo {
+                path: entry.path.to_string_lossy().to_string(),
+                name: entry.name,
+                size: entry.size,
+                extension: entry
+                    .path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_string(),
+                modified_at,
+                is_readonly: entry.is_readonly,
+                is_symlink: false,
+                link_target: None,
+            });
+        }
+    }
+    Ok(files)
+}
+
+fn sort_directory_files(files: &mut [FileInfo], sort: &str) {
+    let sort = sort.to_ascii_lowercase();
+    files.sort_by(|a, b| compare_file_info(a, b, &sort));
+}
+
+fn compare_file_info(a: &FileInfo, b: &FileInfo, sort: &str) -> Ordering {
+    match sort {
+        "size_asc" => a.size.cmp(&b.size).then_with(|| a.path.cmp(&b.path)),
+        "name_asc" => a.name.cmp(&b.name).then_with(|| b.size.cmp(&a.size)),
+        "name_desc" => b.name.cmp(&a.name).then_with(|| b.size.cmp(&a.size)),
+        "modified_asc" => a.modified_at.cmp(&b.modified_at).then_with(|| b.size.cmp(&a.size)),
+        "modified_desc" => b.modified_at.cmp(&a.modified_at).then_with(|| b.size.cmp(&a.size)),
+        _ => b.size.cmp(&a.size).then_with(|| a.path.cmp(&b.path)),
+    }
+}
+
+fn paginate_directory_files(files: Vec<FileInfo>, offset: usize, limit: usize) -> DirectoryFilesPage {
+    let total_size = files.iter().fold(0u64, |sum, file| sum.saturating_add(file.size));
+    let total = files.len();
+    let page_files = files.into_iter().skip(offset).take(limit).collect();
+
+    DirectoryFilesPage {
+        files: page_files,
+        total,
+        offset,
+        limit,
+        total_size,
+        has_more: offset.saturating_add(limit) < total,
+    }
+}
+
+#[tauri::command]
+pub async fn scan_directory_files_page(
+    path: String,
+    offset: Option<usize>,
+    limit: Option<usize>,
+    sort: Option<String>,
+) -> Result<DirectoryFilesPage, String> {
+    tokio::task::spawn_blocking(move || {
+        let limit = clamp_page_limit(limit.unwrap_or(0));
+        let mut files = get_directory_files_cached(PathBuf::from(path))?;
+        sort_directory_files(&mut files, sort.as_deref().unwrap_or("size_desc"));
+        let offset = offset.unwrap_or(0);
+        Ok(paginate_directory_files(files, offset, limit))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -883,15 +1057,12 @@ pub async fn save_scan_cache(
     result.cache_schema_version = CACHE_SCHEMA_VERSION;
     result.env_fingerprint = current_fp.clone();
     result.scan_completed = true;
-    let json = serde_json::to_string(&result).map_err(|e| e.to_string())?;
     let fp_json = serde_json::to_string(&current_fp).map_err(|e| e.to_string())?;
     cache_db
-        .save_scan_result(
+        .save_scan_result_typed(
             &disk_path,
             &scan_type,
-            &json,
-            result.total_files as i64,
-            result.total_size as i64,
+            &result,
             &fp_json,
             true,
         )
@@ -1193,8 +1364,10 @@ pub async fn get_space_history(
 #[tauri::command]
 pub async fn find_duplicates(
     root_path: String,
+    request_id: Option<u64>,
     app: AppHandle,
     scanner: tauri::State<'_, DiskScanner>,
+    duplicate_scans: tauri::State<'_, Arc<DuplicateScanRegistry>>,
 ) -> Result<Vec<DuplicateGroup>, String> {
     let candidates = scanner
         .with_indexed(&root_path, |indexed| {
@@ -1209,14 +1382,59 @@ pub async fn find_duplicates(
     );
 
     let app_handle = app.clone();
+    let progress_root_path = root_path.clone();
+    let progress_request_id = request_id.unwrap_or(0);
     let emitter: crate::scanner::duplicates::DuplicateProgressEmitter =
         std::sync::Arc::new(move |progress| {
-            let _ = app_handle.emit("duplicate-progress", progress);
+            let _ = app_handle.emit(
+                "duplicate-progress",
+                DuplicateProgressEvent {
+                    root_path: progress_root_path.clone(),
+                    request_id: progress_request_id,
+                    current_size: progress.current_size,
+                    scanned_files: progress.scanned_files,
+                    found_groups: progress.found_groups,
+                },
+            );
         });
-    tokio::task::spawn_blocking(move || find_duplicates_blocking(candidates, Some(emitter)))
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+    let group_app_handle = app.clone();
+    let group_root_path = root_path.clone();
+    let group_request_id = progress_request_id;
+    let group_emitter: crate::scanner::duplicates::DuplicateGroupEmitter =
+        std::sync::Arc::new(move |group| {
+            let _ = group_app_handle.emit(
+                "duplicate-group-found",
+                DuplicateGroupEvent {
+                    root_path: group_root_path.clone(),
+                    request_id: group_request_id,
+                    group,
+                },
+            );
+        });
+    let registry = duplicate_scans.inner().clone();
+    let token = registry.begin_scan(&root_path);
+    let task_token = token.clone();
+    let join_result = tokio::task::spawn_blocking(move || {
+        find_duplicates_blocking_with_events(
+            candidates,
+            Some(emitter),
+            Some(group_emitter),
+            Some(task_token),
+        )
+    })
+    .await;
+    registry.finish_scan(&root_path, &token);
+    let result = join_result.map_err(|e| e.to_string())?;
+    result.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn cancel_duplicate_scan(
+    root_path: String,
+    duplicate_scans: tauri::State<'_, Arc<DuplicateScanRegistry>>,
+) -> Result<(), String> {
+    duplicate_scans.cancel(&root_path);
+    Ok(())
 }
 
 #[tauri::command]
@@ -1729,4 +1947,198 @@ fn get_disk_info_for_path_inner<'a>(root_path: &str, disks: &'a [DiskInfo]) -> O
     let drive = root_path.chars().next()?.to_ascii_uppercase();
     let letter = format!("{}:", drive);
     disks.iter().find(|d| d.drive_letter.eq_ignore_ascii_case(&letter))
+}
+
+// ─── Open URL ───────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .spawn()
+            .map_err(|e| format!("无法打开链接: {e}"))?;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = url;
+    }
+    Ok(())
+}
+
+// ─── Update Check ───────────────────────────────────────────────────────────
+
+#[derive(serde::Serialize)]
+pub struct UpdateInfo {
+    pub has_update: bool,
+    pub latest_version: String,
+    pub current_version: String,
+    pub release_notes: String,
+    pub download_url: String,
+    pub published_at: String,
+}
+
+#[tauri::command]
+pub async fn check_for_updates() -> Result<UpdateInfo, String> {
+    let current_version = env!("CARGO_PKG_VERSION").to_string();
+
+    tokio::task::spawn_blocking(move || {
+        let url = "https://api.github.com/repos/bjfwan/cdrive-cleaner/releases/latest";
+        let resp = ureq::get(url)
+            .set("User-Agent", &format!("CSD/{current_version}"))
+            .set("Accept", "application/vnd.github+json")
+            .call()
+            .map_err(|e| format!("网络请求失败: {e}"))?;
+
+        let body: serde_json::Value = resp
+            .into_json::<serde_json::Value>()
+            .map_err(|e| format!("解析响应失败: {e}"))?;
+
+        let tag = body["tag_name"]
+            .as_str()
+            .unwrap_or("")
+            .trim_start_matches('v')
+            .to_string();
+
+        if tag.is_empty() {
+            return Err("无法获取最新版本号".to_string());
+        }
+
+        let release_notes = body["body"].as_str().unwrap_or("").to_string();
+        let published_at = body["published_at"].as_str().unwrap_or("").to_string();
+        let html_url = body["html_url"]
+            .as_str()
+            .unwrap_or("https://github.com/bjfwan/cdrive-cleaner/releases")
+            .to_string();
+
+        let has_update = version_is_newer(&tag, &current_version);
+
+        Ok(UpdateInfo {
+            has_update,
+            latest_version: tag,
+            current_version,
+            release_notes,
+            download_url: html_url,
+            published_at,
+        })
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+fn version_is_newer(latest: &str, current: &str) -> bool {
+    let parse = |s: &str| -> Vec<u64> {
+        s.split('.')
+            .filter_map(|p| p.parse::<u64>().ok())
+            .collect()
+    };
+    let l = parse(latest);
+    let c = parse(current);
+    for i in 0..l.len().max(c.len()) {
+        let lv = l.get(i).copied().unwrap_or(0);
+        let cv = c.get(i).copied().unwrap_or(0);
+        match lv.cmp(&cv) {
+            Ordering::Greater => return true,
+            Ordering::Less => return false,
+            Ordering::Equal => continue,
+        }
+    }
+    false
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn file(path: &str, size: u64, name: &str) -> FileInfo {
+        FileInfo {
+            path: path.to_string(),
+            name: name.to_string(),
+            size,
+            extension: String::new(),
+            modified_at: String::new(),
+            is_readonly: false,
+            is_symlink: false,
+            link_target: None,
+        }
+    }
+
+    #[test]
+    fn clamp_page_limit_defaults_and_caps() {
+        assert_eq!(clamp_page_limit(0), DEFAULT_PAGE_LIMIT);
+        assert_eq!(clamp_page_limit(MAX_PAGE_LIMIT + 1), MAX_PAGE_LIMIT);
+        assert_eq!(clamp_page_limit(42), 42);
+    }
+
+    #[test]
+    fn sort_directory_files_orders_by_size_then_path() {
+        let mut files = vec![
+            file(r"C:\x\b.bin", 10, "b.bin"),
+            file(r"C:\x\a.bin", 20, "a.bin"),
+        ];
+
+        sort_directory_files(&mut files, "size_desc");
+
+        assert_eq!(files[0].path, r"C:\x\a.bin");
+        assert_eq!(files[1].path, r"C:\x\b.bin");
+    }
+
+    #[test]
+    fn sort_directory_files_orders_by_name() {
+        let mut files = vec![
+            file(r"C:\x\b.bin", 10, "b.bin"),
+            file(r"C:\x\a.bin", 20, "a.bin"),
+        ];
+
+        sort_directory_files(&mut files, "name_asc");
+
+        assert_eq!(files[0].name, "a.bin");
+        assert_eq!(files[1].name, "b.bin");
+    }
+
+    #[test]
+    fn paginate_directory_files_sets_has_more_and_total_size() {
+        let files = vec![
+            file(r"C:\x\a.bin", 10, "a.bin"),
+            file(r"C:\x\b.bin", 20, "b.bin"),
+            file(r"C:\x\c.bin", 30, "c.bin"),
+        ];
+
+        let page = paginate_directory_files(files, 1, 1);
+
+        assert_eq!(page.total, 3);
+        assert_eq!(page.files.len(), 1);
+        assert_eq!(page.files[0].path, r"C:\x\b.bin");
+        assert_eq!(page.total_size, 60);
+        assert!(page.has_more);
+    }
+
+    #[test]
+    fn paginate_directory_files_offset_out_of_range_returns_empty() {
+        let page = paginate_directory_files(vec![file(r"C:\x\a.bin", 10, "a.bin")], 10, 5);
+
+        assert!(page.files.is_empty());
+        assert_eq!(page.total, 1);
+        assert_eq!(page.total_size, 10);
+        assert!(!page.has_more);
+    }
+
+    #[test]
+    fn version_is_newer_basic() {
+        assert!(version_is_newer("0.2.0", "0.1.8"));
+        assert!(version_is_newer("0.1.9", "0.1.8"));
+        assert!(version_is_newer("1.0.0", "0.9.9"));
+        assert!(!version_is_newer("0.1.8", "0.1.8"));
+        assert!(!version_is_newer("0.1.7", "0.1.8"));
+        assert!(!version_is_newer("0.1.0", "0.2.0"));
+    }
+
+    #[test]
+    fn version_is_newer_different_lengths() {
+        assert!(version_is_newer("0.1.8.1", "0.1.8"));
+        assert!(!version_is_newer("0.1.8", "0.1.8.1"));
+    }
 }

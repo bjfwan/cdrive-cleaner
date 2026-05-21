@@ -147,7 +147,7 @@ fn rename_subtree_keeps_totals_stable() {
     let cached_old_child = make_node(&dir_a_old_child, 100, 4, 1, vec![]);
     let cached_old = make_node(&dir_a_old, 150, 6, 2, vec![cached_old_child]);
     let cached_a = make_node(&dir_a, 150, 6, 3, vec![cached_old]);
-    let _cached_tree = vec![cached_a];
+    let _cached_tree = [cached_a];
 
     // 模拟 rename：把缓存里的 old 子树平移成 new 的 path 字符串。
     // 这正是 incremental.rs 里 apply_rename_pre_merge 干的事。

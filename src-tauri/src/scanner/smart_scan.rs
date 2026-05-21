@@ -74,7 +74,7 @@ pub fn build_report(indexed: &IndexedScanResult) -> SmartScanReport {
     let mut classified_paths: Vec<String> = Vec::new();
 
     let mut nodes: Vec<&DirectoryNode> = indexed.iter_nodes().collect();
-    nodes.sort_by(|a, b| b.size.cmp(&a.size));
+    nodes.sort_by_key(|n| std::cmp::Reverse(n.size));
 
     for node in nodes {
         if let Some(item) = classify_dir(node, root_path) {
@@ -158,7 +158,7 @@ pub fn build_report(indexed: &IndexedScanResult) -> SmartScanReport {
     let mut groups: Vec<SmartGroup> = buckets
         .into_iter()
         .map(|(category, mut items)| {
-            items.sort_by(|a, b| b.size.cmp(&a.size));
+            items.sort_by_key(|i| std::cmp::Reverse(i.size));
             if items.len() > 80 {
                 items.truncate(80);
             }
@@ -180,7 +180,7 @@ pub fn build_report(indexed: &IndexedScanResult) -> SmartScanReport {
         })
         .collect();
 
-    groups.sort_by(|a, b| b.selected_size.cmp(&a.selected_size));
+    groups.sort_by_key(|g| std::cmp::Reverse(g.selected_size));
 
     let potential_savings: u64 = groups.iter().map(|g| g.total_size).sum();
     let default_savings: u64 = groups.iter().map(|g| g.selected_size).sum();

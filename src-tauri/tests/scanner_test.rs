@@ -54,9 +54,9 @@ mod tests {
         // 文件 1: root/a.txt        (100 字节)
         // 文件 2: root/sub/b.bin    (1024 字节)
         // 文件 3: root/sub/deep/c   (50 字节)
-        write_file(&ws.root.join("a.txt"), &vec![b'a'; 100]);
-        write_file(&ws.root.join("sub").join("b.bin"), &vec![b'b'; 1024]);
-        write_file(&ws.root.join("sub").join("deep").join("c"), &vec![b'c'; 50]);
+        write_file(&ws.root.join("a.txt"), &[b'a'; 100]);
+        write_file(&ws.root.join("sub").join("b.bin"), &[b'b'; 1024]);
+        write_file(&ws.root.join("sub").join("deep").join("c"), &[b'c'; 50]);
 
         let scanner = DiskScanner::new();
         let result = scanner

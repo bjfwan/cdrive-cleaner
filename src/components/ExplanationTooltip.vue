@@ -14,9 +14,27 @@ const visible = ref(false);
 const tooltipStyle = ref<Record<string, string>>({});
 const info = ref<FileExplanation | null>(null);
 
+const MAX_CACHE_SIZE = 256;
 const cache = new Map<string, FileExplanation>();
 let hoverTimer: ReturnType<typeof setTimeout> | null = null;
 let currentPath = '';
+
+function getCached(path: string) {
+  const data = cache.get(path);
+  if (!data) return null;
+  cache.delete(path);
+  cache.set(path, data);
+  return data;
+}
+
+function setCached(path: string, data: FileExplanation) {
+  if (cache.has(path)) cache.delete(path);
+  cache.set(path, data);
+  if (cache.size > MAX_CACHE_SIZE) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey) cache.delete(oldestKey);
+  }
+}
 
 async function show(path: string, el: HTMLElement) {
   currentPath = path;
@@ -25,11 +43,11 @@ async function show(path: string, el: HTMLElement) {
   hoverTimer = setTimeout(async () => {
     if (currentPath !== path) return;
 
-    let data = cache.get(path);
+    let data = getCached(path);
     if (!data) {
       try {
         data = await invoke<FileExplanation>('explain_file', { path });
-        cache.set(path, data);
+        setCached(path, data);
       } catch {
         return;
       }

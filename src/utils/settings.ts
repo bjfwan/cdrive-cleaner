@@ -7,6 +7,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   largeFileThreshold: 100,
   createSymlink: true,
   defaultDeleteMode: 'recycle',
+  autoCheckUpdate: true,
 };
 
 function normalizeDeleteMode(value: unknown): DeleteMode {
@@ -25,6 +26,7 @@ function normalizeSettings(value: Partial<AppSettings>): AppSettings {
     largeFileThreshold: Number.isFinite(threshold) ? Math.min(Math.max(Math.round(threshold), 1), 10000) : DEFAULT_SETTINGS.largeFileThreshold,
     createSymlink: typeof value.createSymlink === 'boolean' ? value.createSymlink : DEFAULT_SETTINGS.createSymlink,
     defaultDeleteMode: normalizeDeleteMode(value.defaultDeleteMode),
+    autoCheckUpdate: typeof value.autoCheckUpdate === 'boolean' ? value.autoCheckUpdate : DEFAULT_SETTINGS.autoCheckUpdate,
     ...(theme !== undefined ? { theme } : {}),
   };
 }

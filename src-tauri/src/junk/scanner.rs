@@ -146,15 +146,13 @@ pub fn scan_junk_blocking(
                     // has passed since the last emit. `lock().ok()` avoids
                     // panicking if a worker poisoned the mutex.
                     match last_emit.lock().ok() {
-                        Some(mut guard) => {
-                            if guard.elapsed().as_millis() >= PROGRESS_THROTTLE_MS {
-                                *guard = Instant::now();
-                                true
-                            } else {
-                                false
-                            }
+                        Some(mut guard)
+                            if guard.elapsed().as_millis() >= PROGRESS_THROTTLE_MS =>
+                        {
+                            *guard = Instant::now();
+                            true
                         }
-                        None => false,
+                        _ => false,
                     }
                 };
                 if should_emit {
@@ -274,7 +272,7 @@ fn log_rule_perf_summary(records: &[RulePerf], total_scan_ms: u64) {
         return;
     }
     let mut sorted: Vec<&RulePerf> = records.iter().collect();
-    sorted.sort_by(|a, b| b.elapsed_ms.cmp(&a.elapsed_ms));
+    sorted.sort_by_key(|r| std::cmp::Reverse(r.elapsed_ms));
 
     let total_rule_ms: u64 = records.iter().map(|r| r.elapsed_ms).sum();
     let max_ms = sorted.first().map(|r| r.elapsed_ms).unwrap_or(0);

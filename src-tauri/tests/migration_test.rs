@@ -59,6 +59,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn migrates_file_with_hardlink_and_cleans_up_via_temp_workspace() {
         let _guard = test_lock().lock().unwrap();
         let workspace = TestWorkspace::new("file-migration");
@@ -93,6 +94,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn migrates_directory_with_junction_and_cleans_up_via_temp_workspace() {
         let _guard = test_lock().lock().unwrap();
         let workspace = TestWorkspace::new("dir-migration");

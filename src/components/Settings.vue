@@ -62,6 +62,7 @@ const emit = defineEmits<{
   'save': [settings: AppSettings];
   'restart-onboarding': [];
   'show-about': [];
+  'check-update': [];
 }>();
 
 const settings = ref<AppSettings>({
@@ -512,6 +513,37 @@ async function exportDiagnostics() {
 
         <div class="setting-section">
           <div class="section-header">
+            <h3>更新</h3>
+            <p>检查软件新版本</p>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label">
+              <label for="auto-update">启动时自动检查更新</label>
+              <span class="setting-description">每次打开应用时自动检测是否有新版本</span>
+            </div>
+            <label class="toggle-switch">
+              <input
+                id="auto-update"
+                type="checkbox"
+                v-model="settings.autoCheckUpdate"
+                @click.stop
+              />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label">
+              <label>手动检查</label>
+              <span class="setting-description">立即连接 GitHub 查看是否有新版本</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" @click="emit('check-update'); emit('close')">检查更新</button>
+          </div>
+        </div>
+
+        <div class="setting-section">
+          <div class="section-header">
             <h3>其他</h3>
             <p>引导与关于信息</p>
           </div>
@@ -681,7 +713,7 @@ async function exportDiagnostics() {
         </button>
         <img :src="appIcon" alt="应用图标" class="about-icon" />
         <h3 class="about-title">CDrive Cleaner</h3>
-        <p class="about-version">v0.1.7</p>
+        <p class="about-version">v0.1.8</p>
         <p class="about-desc">
           一键扫描、智能搬运、安全回滚——为 C 盘瘦身的桌面工具。
         </p>
@@ -703,7 +735,7 @@ async function exportDiagnostics() {
           </p>
         </div>
 
-        <p class="about-footer">© 2024–2026 CDrive Cleaner · MIT License</p>
+        <p class="about-footer">© 2024–2026 CDrive Cleaner · GPL-3.0 License</p>
       </div>
     </div>
   </div>

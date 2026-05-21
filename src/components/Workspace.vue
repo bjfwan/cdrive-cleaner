@@ -53,6 +53,10 @@ const breakdown = ref<SpaceBreakdown | null>(null);
 const loadingBreakdown = ref(false);
 const balanceSuggestion = ref<BalanceSuggestion | null>(null);
 const loadingBalance = ref(false);
+let smartRequestId = 0;
+let breakdownRequestId = 0;
+let balanceRequestId = 0;
+let trendRequestId = 0;
 const reclaimOpportunities = ref<ReclaimOpportunity[]>([]);
 const loadingReclaim = ref(false);
 const knownFolders = ref<KnownFolderInfo[]>([]);
@@ -87,66 +91,99 @@ const itemCount = computed(() =>
 );
 
 watch(
-  () => props.scanResult,
-  async (next) => {
-    if (next && props.hasDeepScanned) {
-      await loadSmart();
-      void loadBreakdown();
-      void loadBalanceSuggestion();
+  () => [props.rootScanResult, props.selectedDisk, props.hasDeepScanned, props.availableDisks.length] as const,
+  ([root, disk, hasDeepScanned]) => {
+    const smartId = ++smartRequestId;
+    const breakdownId = ++breakdownRequestId;
+    const balanceId = ++balanceRequestId;
+    const trendId = ++trendRequestId;
+
+    if (root && disk && hasDeepScanned) {
+      void loadSmart(disk, smartId);
+      void loadBreakdown(disk, breakdownId);
+      void loadBalanceSuggestion(disk, balanceId);
       void nextTick(() => {
-        trendRefreshKey.value += 1;
+        if (trendId === trendRequestId && disk === props.selectedDisk) {
+          trendRefreshKey.value += 1;
+        }
       });
     } else {
       smartReport.value = null;
       breakdown.value = null;
       balanceSuggestion.value = null;
+      loadingSmart.value = false;
+      loadingBreakdown.value = false;
+      loadingBalance.value = false;
     }
   },
   { immediate: true },
 );
 
-async function loadSmart() {
-  if (!props.selectedDisk) return;
+async function loadSmart(rootPath = props.selectedDisk, requestId = ++smartRequestId) {
+  if (!rootPath) return;
   loadingSmart.value = true;
   try {
     const report = await invoke<SmartScanReport>('analyze_smart_groups', {
-      rootPath: props.selectedDisk,
+      rootPath,
     });
+    if (requestId !== smartRequestId || rootPath !== props.selectedDisk) return;
     smartReport.value = report;
     cart.setFromSmartGroups(report.groups);
   } catch (err) {
-    console.error('[smart-scan] failed:', err);
-    showToast('智能扫描失败', String(err), 'warning');
+    if (requestId === smartRequestId && rootPath === props.selectedDisk) {
+      console.error('[smart-scan] failed:', err);
+      showToast('智能扫描失败', String(err), 'warning');
+    }
   } finally {
-    loadingSmart.value = false;
+    if (requestId === smartRequestId) {
+      loadingSmart.value = false;
+    }
   }
 }
 
-async function loadBreakdown() {
-  if (!props.selectedDisk) return;
+async function loadBreakdown(rootPath = props.selectedDisk, requestId = ++breakdownRequestId) {
+  if (!rootPath) return;
   loadingBreakdown.value = true;
   try {
-    breakdown.value = await invoke<SpaceBreakdown>('get_space_breakdown', {
-      rootPath: props.selectedDisk,
+    const result = await invoke<SpaceBreakdown>('get_space_breakdown', {
+      rootPath,
     });
+    if (requestId === breakdownRequestId && rootPath === props.selectedDisk) {
+      breakdown.value = result;
+    }
   } catch {
-    breakdown.value = null;
+    if (requestId === breakdownRequestId && rootPath === props.selectedDisk) {
+      breakdown.value = null;
+    }
   } finally {
-    loadingBreakdown.value = false;
+    if (requestId === breakdownRequestId) {
+      loadingBreakdown.value = false;
+    }
   }
 }
 
-async function loadBalanceSuggestion() {
-  if (!props.selectedDisk || props.availableDisks.length < 2) return;
+async function loadBalanceSuggestion(rootPath = props.selectedDisk, requestId = ++balanceRequestId) {
+  if (!rootPath || props.availableDisks.length < 2) {
+    balanceSuggestion.value = null;
+    loadingBalance.value = false;
+    return;
+  }
   loadingBalance.value = true;
   try {
-    balanceSuggestion.value = await invoke<BalanceSuggestion>('get_balance_suggestion', {
-      rootPath: props.selectedDisk,
+    const result = await invoke<BalanceSuggestion>('get_balance_suggestion', {
+      rootPath,
     });
+    if (requestId === balanceRequestId && rootPath === props.selectedDisk) {
+      balanceSuggestion.value = result;
+    }
   } catch {
-    balanceSuggestion.value = null;
+    if (requestId === balanceRequestId && rootPath === props.selectedDisk) {
+      balanceSuggestion.value = null;
+    }
   } finally {
-    loadingBalance.value = false;
+    if (requestId === balanceRequestId) {
+      loadingBalance.value = false;
+    }
   }
 }
 
@@ -327,7 +364,7 @@ const heroSubtitle = computed(() => {
           <button class="hero-btn ghost" @click="openBrowse('duplicates')" :disabled="!hasDeepScanned">重复文件</button>
           <button class="hero-btn ghost" @click="openReclaimPanel">系统回收</button>
           <button class="hero-btn ghost" @click="openRedirectPanel">默认存储位置</button>
-          <button class="hero-btn refresh" @click="loadSmart" :disabled="!hasDeepScanned || loadingSmart">
+          <button class="hero-btn refresh" @click="() => loadSmart()" :disabled="!hasDeepScanned || loadingSmart">
             {{ loadingSmart ? '分析中…' : '重新分析' }}
           </button>
         </div>
@@ -407,6 +444,7 @@ const heroSubtitle = computed(() => {
               :total-size="browseScanResult.total_size"
               :deep-scanning="deepScanning"
               :current-path="browseScanResult.root_path"
+              :root-path="selectedDisk"
               :has-deep-scanned="hasDeepScanned"
               @navigate="emit('navigate', $event)"
               @migrate-dir="onListMigrate"
@@ -415,7 +453,8 @@ const heroSubtitle = computed(() => {
             />
             <LargeFilesView
               v-else-if="browseTab === 'large_files' && browseScanResult"
-              :files="browseScanResult.large_files"
+              :root-path="selectedDisk"
+              :path="browseScanResult.root_path"
               :deep-scanning="deepScanning"
               :has-deep-scanned="hasDeepScanned"
               :large-file-threshold="largeFileThreshold"

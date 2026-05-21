@@ -1,25 +1,45 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef, watchEffect } from 'vue';
+import { computed, ref, shallowRef, watch } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 import { IconFile, IconDocument, IconMigrate } from './icons';
-import type { FileInfo } from '../types';
-import { formatBytes, formatDate } from '../utils/format';
+import type { FileInfo, FilePageSort, LargeFilesPage } from '../types';
+import { formatBytes, formatDate, formatNumber } from '../utils/format';
 import VirtualList from './VirtualList.vue';
 import ExplanationTooltip from './ExplanationTooltip.vue';
+import { useToast } from '../composables/useToast';
 
 interface Props {
-  files: FileInfo[];
+  rootPath: string;
+  path?: string;
   deepScanning?: boolean;
   hasDeepScanned: boolean;
   largeFileThreshold: number;
 }
 
 const props = defineProps<Props>();
+const showToast = useToast();
 
 defineEmits<{
   'migrate-file': [file: FileInfo];
 }>();
 
+const PAGE_SIZE = 200;
+const LARGE_FILE_SORT: FilePageSort = 'size_desc';
 const tooltipRef = ref<InstanceType<typeof ExplanationTooltip> | null>(null);
+const pagedFiles = shallowRef<FileInfo[]>([]);
+const total = ref(0);
+const totalSize = ref(0);
+const filteredTotalSize = ref(0);
+const loadingInitial = ref(false);
+const loadingMore = ref(false);
+const loadError = ref('');
+const hasMoreFlag = ref(false);
+let pageRequestId = 0;
+let largeFilesPageUnavailable = false;
+
+const loaded = computed(() => pagedFiles.value.length);
+const isLoading = computed(() => loadingInitial.value || loadingMore.value);
+const hasMore = computed(() => hasMoreFlag.value || (total.value > 0 && loaded.value < total.value));
 
 function onRowEnter(file: FileInfo, event: MouseEvent) {
   tooltipRef.value?.show(file.path, event.currentTarget as HTMLElement);
@@ -29,29 +49,111 @@ function onRowLeave() {
   tooltipRef.value?.hide();
 }
 
-// 缓存：当 props.files / props.largeFileThreshold 都没变时直接复用上一次结果。
-const filteredCache = shallowRef<FileInfo[]>([]);
-let lastFilesRef: FileInfo[] | null = null;
-let lastThreshold = -1;
+function resetPageState() {
+  pageRequestId += 1;
+  pagedFiles.value = [];
+  total.value = 0;
+  totalSize.value = 0;
+  filteredTotalSize.value = 0;
+  loadingInitial.value = false;
+  loadingMore.value = false;
+  loadError.value = '';
+  hasMoreFlag.value = false;
+}
 
-watchEffect(() => {
-  const files = props.files;
-  const threshold = props.largeFileThreshold;
-  if (files === lastFilesRef && threshold === lastThreshold) {
-    return;
-  }
-  lastFilesRef = files;
-  lastThreshold = threshold;
-  const thresholdBytes = threshold * 1024 * 1024;
-  const next: FileInfo[] = [];
-  for (let i = 0; i < files.length; i++) {
-    const f = files[i];
-    if (f.size >= thresholdBytes) next.push(f);
-  }
-  filteredCache.value = next;
-});
+async function loadPage(reset: boolean) {
+  if (!props.hasDeepScanned || !props.rootPath) return;
+  if (!reset && (!hasMore.value || isLoading.value)) return;
 
-const filteredFiles = computed(() => filteredCache.value);
+  const requestId = ++pageRequestId;
+  const offset = reset ? 0 : pagedFiles.value.length;
+  const rootPath = props.rootPath;
+  const path = props.path || props.rootPath;
+  const minSize = props.largeFileThreshold * 1024 * 1024;
+
+  if (reset) {
+    loadingInitial.value = true;
+    loadingMore.value = false;
+  } else {
+    loadingMore.value = true;
+  }
+
+  loadError.value = '';
+
+  try {
+    let page: LargeFilesPage;
+    if (largeFilesPageUnavailable) {
+      page = await loadLegacyPage(rootPath, path, minSize, offset);
+    } else {
+      try {
+        page = await invoke<LargeFilesPage>('get_large_files_page', {
+          rootPath,
+          path,
+          minSize,
+          offset,
+          limit: PAGE_SIZE,
+          sort: LARGE_FILE_SORT,
+        });
+      } catch (err) {
+        if (!isCommandUnavailable(err)) throw err;
+        largeFilesPageUnavailable = true;
+        page = await loadLegacyPage(rootPath, path, minSize, offset);
+      }
+    }
+    if (requestId !== pageRequestId || rootPath !== props.rootPath || path !== (props.path || props.rootPath)) return;
+
+    pagedFiles.value = reset ? page.files : [...pagedFiles.value, ...page.files];
+    total.value = page.total;
+    totalSize.value = page.total_size;
+    filteredTotalSize.value = page.filtered_total_size;
+    hasMoreFlag.value = page.has_more ?? pagedFiles.value.length < page.total;
+  } catch (err) {
+    if (requestId !== pageRequestId) return;
+    loadError.value = String(err);
+    if (reset) pagedFiles.value = [];
+    showToast('大文件加载失败', String(err), 'error');
+  } finally {
+    if (requestId === pageRequestId) {
+      loadingInitial.value = false;
+      loadingMore.value = false;
+    }
+  }
+}
+
+function loadNextPage() {
+  void loadPage(false);
+}
+
+async function loadLegacyPage(rootPath: string, path: string, minSize: number, offset: number): Promise<LargeFilesPage> {
+  const files = await invoke<FileInfo[]>('get_large_files', { rootPath, path });
+  const filtered = files
+    .filter((file) => file.size >= minSize)
+    .sort((a, b) => b.size - a.size);
+  const pageFiles = filtered.slice(offset, offset + PAGE_SIZE);
+  return {
+    files: pageFiles,
+    total: filtered.length,
+    offset,
+    limit: PAGE_SIZE,
+    total_size: files.reduce((sum, file) => sum + file.size, 0),
+    filtered_total_size: filtered.reduce((sum, file) => sum + file.size, 0),
+    has_more: offset + pageFiles.length < filtered.length,
+  };
+}
+
+function isCommandUnavailable(err: unknown): boolean {
+  const message = String(err).toLowerCase();
+  return message.includes('not found') || message.includes('unknown command') || message.includes('找不到');
+}
+
+watch(
+  () => [props.rootPath, props.path, props.largeFileThreshold, props.hasDeepScanned] as const,
+  () => {
+    resetPageState();
+    void loadPage(true);
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -68,8 +170,20 @@ const filteredFiles = computed(() => filteredCache.value);
           <strong>{{ largeFileThreshold }} MB</strong>
         </div>
         <div class="summary-pill">
-          <span>命中数量</span>
-          <strong>{{ filteredFiles.length }}</strong>
+          <span>命中总数</span>
+          <strong>{{ formatNumber(total) }}</strong>
+        </div>
+        <div class="summary-pill">
+          <span>已加载</span>
+          <strong>{{ formatNumber(loaded) }}</strong>
+        </div>
+        <div class="summary-pill">
+          <span>命中体积</span>
+          <strong>{{ formatBytes(filteredTotalSize) }}</strong>
+        </div>
+        <div class="summary-pill">
+          <span>范围体积</span>
+          <strong>{{ formatBytes(totalSize) }}</strong>
         </div>
         <div class="summary-pill" :class="{ muted: !hasDeepScanned }">
           <span>迁移能力</span>
@@ -78,10 +192,16 @@ const filteredFiles = computed(() => filteredCache.value);
       </div>
     </div>
 
-    <div v-if="filteredFiles.length === 0" class="empty">
+    <div v-if="loadingInitial && pagedFiles.length === 0" class="empty">
       <IconDocument class="empty-icon" :size="46" />
-      <h3>没有找到符合条件的大文件</h3>
-      <p>当前扫描结果里没有大于 {{ largeFileThreshold }}MB 的文件。</p>
+      <h3>正在加载大文件</h3>
+      <p>首屏只加载前 {{ PAGE_SIZE }} 条，滚动后继续读取。</p>
+    </div>
+
+    <div v-else-if="pagedFiles.length === 0" class="empty">
+      <IconDocument class="empty-icon" :size="46" />
+      <h3>{{ loadError ? '大文件列表加载失败' : '没有找到符合条件的大文件' }}</h3>
+      <p>{{ loadError || `当前范围里没有大于 ${largeFileThreshold}MB 的文件。` }}</p>
     </div>
 
     <div v-else class="table-shell">
@@ -95,9 +215,10 @@ const filteredFiles = computed(() => filteredCache.value);
 
       <div class="table-body">
         <VirtualList
-          :items="filteredFiles"
+          :items="pagedFiles"
           :item-size="56"
           :buffer="6"
+          @scroll-near-end="loadNextPage"
           v-slot="{ item: file }"
         >
           <div :key="(file as FileInfo).path" class="table-row" @mouseenter="onRowEnter(file as FileInfo, $event)" @mouseleave="onRowLeave">
@@ -122,6 +243,13 @@ const filteredFiles = computed(() => filteredCache.value);
             </div>
           </div>
         </VirtualList>
+      </div>
+
+      <div class="table-footer">
+        <span>{{ formatNumber(loaded) }} / {{ formatNumber(total) }} 已加载</span>
+        <span v-if="loadingMore">正在加载更多...</span>
+        <button v-else-if="hasMore" class="load-more-btn" @click="loadNextPage">加载更多</button>
+        <span v-else>已加载全部</span>
       </div>
     </div>
 
@@ -254,6 +382,36 @@ const filteredFiles = computed(() => filteredCache.value);
   flex: 1;
   min-height: 0;
   padding: 0.3rem 0;
+}
+
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 1rem;
+  border-top: 1px solid var(--color-border-light);
+  color: var(--color-text-tertiary);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.load-more-btn {
+  border: 1px solid var(--color-border-light);
+  border-radius: 0.78rem;
+  padding: 0.42rem 0.7rem;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform var(--transition-base), background var(--transition-base), color var(--transition-fast);
+}
+
+.load-more-btn:hover {
+  transform: translateY(-1px);
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
 }
 
 .table-row {
@@ -395,12 +553,21 @@ const filteredFiles = computed(() => filteredCache.value);
   border-bottom-color: var(--color-border-medium);
 }
 
+[data-theme="dark"] .table-footer {
+  border-top-color: var(--color-border-medium);
+}
+
 [data-theme="dark"] .table-row:hover {
   background: rgba(255, 255, 255, 0.05);
   border-color: var(--color-border-medium);
 }
 
 [data-theme="dark"] .action-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--color-border-medium);
+}
+
+[data-theme="dark"] .load-more-btn {
   background: rgba(255, 255, 255, 0.05);
   border-color: var(--color-border-medium);
 }

@@ -390,7 +390,7 @@ mod windows_impl {
                 .map_err(to_io_error)?;
         }
 
-        let mut privileges = TOKEN_PRIVILEGES {
+        let privileges = TOKEN_PRIVILEGES {
             PrivilegeCount: 1,
             Privileges: [LUID_AND_ATTRIBUTES {
                 Luid: luid,
@@ -399,7 +399,7 @@ mod windows_impl {
         };
 
         unsafe {
-            AdjustTokenPrivileges(token, false, Some(&mut privileges), 0, None, None)
+            AdjustTokenPrivileges(token, false, Some(&privileges), 0, None, None)
                 .map_err(to_io_error)?;
         }
 
@@ -600,7 +600,7 @@ mod windows_impl {
     pub(crate) fn query_file_metadata_by_id_on_volume(
         volume: HANDLE,
         file_id: u64,
-        open_as_directory: bool,
+        _open_as_directory: bool,
     ) -> std::io::Result<FileIdMetadata> {
         let file_id_desc = FILE_ID_DESCRIPTOR {
             dwSize: size_of::<FILE_ID_DESCRIPTOR>() as u32,
@@ -609,11 +609,7 @@ mod windows_impl {
                 FileId: file_id as i64,
             },
         };
-        let flags = if open_as_directory {
-            FILE_FLAG_BACKUP_SEMANTICS.0 | FILE_FLAG_OPEN_REPARSE_POINT.0
-        } else {
-            FILE_FLAG_BACKUP_SEMANTICS.0 | FILE_FLAG_OPEN_REPARSE_POINT.0
-        };
+        let flags = FILE_FLAG_BACKUP_SEMANTICS.0 | FILE_FLAG_OPEN_REPARSE_POINT.0;
         let handle = unsafe {
             OpenFileById(
                 volume,
@@ -1067,7 +1063,7 @@ mod windows_impl {
     }
 
     fn to_io_error(err: windows::core::Error) -> std::io::Error {
-        std::io::Error::new(std::io::ErrorKind::Other, err.to_string())
+        std::io::Error::other(err.to_string())
     }
 }
 

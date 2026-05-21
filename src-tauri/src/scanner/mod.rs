@@ -5,6 +5,7 @@ pub mod env_fingerprint;
 pub mod file_info;
 pub mod incremental;
 pub mod mft_usn;
+pub mod path_utils;
 pub mod progress;
 pub mod scan_index;
 pub mod smart_scan;

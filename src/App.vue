@@ -11,9 +11,10 @@ import Workspace from './components/Workspace.vue';
 import JunkCleanView from './components/JunkCleanView.vue';
 import { TOAST_KEY } from './composables/useToast';
 import { useCart } from './composables/useCart';
-import type { AppSettings, DeleteMode, DeleteResult, DiskInfo, ScanCapabilities, ScanResult, ToastType } from './types';
+import type { AppSettings, DeleteMode, DeleteResult, DiskInfo, ScanCapabilities, ScanResult, ToastType, UpdateInfo } from './types';
 import { formatBytes } from './utils/format';
 import { getSettings } from './utils/settings';
+import { checkForUpdates, shouldAutoCheck, markChecked } from './utils/updater';
 
 const Settings = defineAsyncComponent(() => import('./components/Settings.vue'));
 const History = defineAsyncComponent(() => import('./components/History.vue'));
@@ -26,6 +27,7 @@ const GamesView = defineAsyncComponent(() => import('./components/GamesView.vue'
 // chunk lazily keeps the initial bundle smaller and lets the component fully
 // detach (event listeners + reactive state) when not scanning.
 const DeepScanProgress = defineAsyncComponent(() => import('./components/DeepScanProgress.vue'));
+const UpdateDialog = defineAsyncComponent(() => import('./components/UpdateDialog.vue'));
 
 const disks = ref<DiskInfo[]>([]);
 const selectedDisk = ref<string>('');
@@ -65,6 +67,10 @@ const cartConfirm = ref<{ open: boolean; targetDisk: string; deleteMode: DeleteM
   type: 'warning',
 });
 const appSettings = ref<AppSettings>(getSettings());
+
+const showUpdateDialog = ref(false);
+const updateInfo = ref<UpdateInfo | null>(null);
+const updateChecking = ref(false);
 
 const cart = useCart();
 
@@ -155,6 +161,7 @@ onMounted(async () => {
   window.addEventListener('keydown', onGlobalKey);
   void notifyOnGameDetection();
   void resumePendingScanIntent();
+  void autoCheckForUpdates();
 });
 
 onBeforeUnmount(() => {
@@ -867,6 +874,38 @@ interface PendingScanIntent {
   requested_with_elevation: boolean;
 }
 
+async function autoCheckForUpdates() {
+  const settings = getSettings();
+  if (settings.autoCheckUpdate === false) return;
+  if (!shouldAutoCheck()) return;
+
+  try {
+    const info = await checkForUpdates();
+    markChecked();
+    if (info.has_update) {
+      updateInfo.value = info;
+      showUpdateDialog.value = true;
+    }
+  } catch {
+    // 启动时静默失败，不打扰用户
+  }
+}
+
+async function manualCheckForUpdates() {
+  updateChecking.value = true;
+  showUpdateDialog.value = true;
+  try {
+    const info = await checkForUpdates();
+    markChecked();
+    updateInfo.value = info;
+  } catch (err) {
+    showUpdateDialog.value = false;
+    showToastNotification('检查更新失败', String(err), 'error');
+  } finally {
+    updateChecking.value = false;
+  }
+}
+
 async function resumePendingScanIntent() {
   let pending: PendingScanIntent | null = null;
   try {
@@ -1068,6 +1107,7 @@ async function resumePendingScanIntent() {
       @save="onSettingsSaved"
       @restart-onboarding="showOnboarding = true"
       @show-about="showWelcome = true"
+      @check-update="manualCheckForUpdates"
     />
 
     <div v-if="showHistory" class="modal-overlay" @click="closeHistory">
@@ -1118,6 +1158,13 @@ async function resumePendingScanIntent() {
       type="warning"
       @confirm="restartAsAdmin"
       @cancel="showAdminRestartConfirm = false"
+    />
+
+    <UpdateDialog
+      :show="showUpdateDialog"
+      :update-info="updateInfo"
+      :checking="updateChecking"
+      @close="showUpdateDialog = false"
     />
 
     <ConfirmDialog
