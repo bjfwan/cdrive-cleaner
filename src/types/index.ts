@@ -180,6 +180,7 @@ export interface UpdateInfo {
   current_version: string;
   release_notes: string;
   download_url: string;
+  installer_url: string;
   published_at: string;
 }
 

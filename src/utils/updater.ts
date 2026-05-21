@@ -8,6 +8,14 @@ export async function checkForUpdates(): Promise<UpdateInfo> {
   return invoke<UpdateInfo>('check_for_updates');
 }
 
+export async function downloadUpdate(url: string): Promise<string> {
+  return invoke<string>('download_update', { url });
+}
+
+export async function installUpdate(path: string): Promise<void> {
+  return invoke<void>('install_update', { path });
+}
+
 export function shouldAutoCheck(): boolean {
   const last = localStorage.getItem(CHECK_COOLDOWN_KEY);
   if (!last) return true;

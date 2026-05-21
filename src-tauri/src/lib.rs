@@ -151,6 +151,8 @@ pub fn run() {
             commands::get_relocatable_programs,
             commands::get_balance_suggestion,
             commands::check_for_updates,
+            commands::download_update,
+            commands::install_update,
             commands::open_url,
             diagnostics::export_diagnostic_bundle,
         ])

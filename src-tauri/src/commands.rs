@@ -17,6 +17,7 @@ use crate::session::ScanSessionRegistry;
 use crate::winfs;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -1977,6 +1978,7 @@ pub struct UpdateInfo {
     pub current_version: String,
     pub release_notes: String,
     pub download_url: String,
+    pub installer_url: String,
     pub published_at: String,
 }
 
@@ -2013,6 +2015,21 @@ pub async fn check_for_updates() -> Result<UpdateInfo, String> {
             .unwrap_or("https://github.com/bjfwan/cdrive-cleaner/releases")
             .to_string();
 
+        // Find the NSIS installer asset (xxx-setup.exe)
+        let installer_url = body["assets"]
+            .as_array()
+            .and_then(|assets| {
+                assets.iter().find_map(|a| {
+                    let name = a["name"].as_str().unwrap_or("");
+                    if name.ends_with("-setup.exe") {
+                        a["browser_download_url"].as_str().map(|u| u.to_string())
+                    } else {
+                        None
+                    }
+                })
+            })
+            .unwrap_or_default();
+
         let has_update = version_is_newer(&tag, &current_version);
 
         Ok(UpdateInfo {
@@ -2021,11 +2038,118 @@ pub async fn check_for_updates() -> Result<UpdateInfo, String> {
             current_version,
             release_notes,
             download_url: html_url,
+            installer_url,
             published_at,
         })
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+#[derive(Clone, serde::Serialize)]
+struct DownloadProgress {
+    downloaded: u64,
+    total: u64,
+    percent: f64,
+}
+
+#[tauri::command]
+pub async fn download_update(
+    app: AppHandle,
+    url: String,
+) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        let resp = ureq::get(&url)
+            .set("User-Agent", "CSD")
+            .call()
+            .map_err(|e| format!("下载失败: {e}"))?;
+
+        let total: u64 = resp
+            .header("Content-Length")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+
+        let temp_dir = std::env::temp_dir().join("csd-update");
+        std::fs::create_dir_all(&temp_dir)
+            .map_err(|e| format!("创建临时目录失败: {e}"))?;
+
+        // Extract filename from URL or use default
+        let filename = url
+            .rsplit('/')
+            .next()
+            .unwrap_or("CSD-setup.exe")
+            .to_string();
+        let dest = temp_dir.join(&filename);
+
+        let mut file = std::fs::File::create(&dest)
+            .map_err(|e| format!("创建文件失败: {e}"))?;
+
+        let mut reader = resp.into_reader();
+        let mut buf = [0u8; 65536];
+        let mut downloaded: u64 = 0;
+        let mut last_emit = std::time::Instant::now();
+
+        loop {
+            let n = reader
+                .read(&mut buf)
+                .map_err(|e| format!("读取数据失败: {e}"))?;
+            if n == 0 {
+                break;
+            }
+            std::io::Write::write_all(&mut file, &buf[..n])
+                .map_err(|e| format!("写入文件失败: {e}"))?;
+            downloaded += n as u64;
+
+            // Emit progress at most every 100ms
+            if last_emit.elapsed() >= Duration::from_millis(100) || downloaded == total {
+                let percent = if total > 0 {
+                    (downloaded as f64 / total as f64) * 100.0
+                } else {
+                    0.0
+                };
+                let _ = app.emit("download-progress", DownloadProgress {
+                    downloaded,
+                    total,
+                    percent,
+                });
+                last_emit = std::time::Instant::now();
+            }
+        }
+
+        // Final 100% emit
+        let _ = app.emit("download-progress", DownloadProgress {
+            downloaded,
+            total,
+            percent: 100.0,
+        });
+
+        Ok(dest.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+#[tauri::command]
+pub async fn install_update(path: String) -> Result<(), String> {
+    use std::process::Command;
+
+    let installer = PathBuf::from(&path);
+    if !installer.exists() {
+        return Err(format!("安装包不存在: {path}"));
+    }
+
+    // Launch the NSIS installer silently (or normal mode)
+    Command::new(&installer)
+        .spawn()
+        .map_err(|e| format!("启动安装器失败: {e}"))?;
+
+    // Give the installer a moment to start, then exit the current app
+    std::thread::spawn(|| {
+        std::thread::sleep(Duration::from_millis(500));
+        std::process::exit(0);
+    });
+
+    Ok(())
 }
 
 fn version_is_newer(latest: &str, current: &str) -> bool {
