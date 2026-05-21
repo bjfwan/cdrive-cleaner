@@ -44,7 +44,7 @@ mod tests {
         }
     }
 
-    fn make_cached_subdir(path: &Path) -> DirectoryNode {
+    fn make_cached_subdir(path: &Path, changed: bool) -> DirectoryNode {
         DirectoryNode {
             path: path.to_string_lossy().to_string(),
             name: path
@@ -52,11 +52,10 @@ mod tests {
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string(),
-            // 故意把 cached size 设成 1，这样 incremental 一定会判 Modified
-            // （fs 实际为空 → cached_size != current_size）并把它放进 stage2 的
-            // 重扫候选列表里。
-            size: 1,
-            file_count: 1,
+            // changed=true → size=1 （fs 实际为空，cached_size != current_size → Modified）
+            // changed=false → size=0 （与实际相符，不触发重扫）
+            size: if changed { 1 } else { 0 },
+            file_count: if changed { 1 } else { 0 },
             dir_count: 1,
             children: Vec::new(),
             has_children: false,
@@ -69,12 +68,16 @@ mod tests {
     }
 
     /// 构造一个含有 ≥ 1500 个子目录的假缓存。
+    /// 前 200 个目录标记为“变化”（size=1 vs 实际 0），其余保持一致。
+    /// 这样 change_ratio = 200/1500 ≈ 13% < 30%，不会触发全量回退，
+    /// 确保进入 stage2 重扫循环（那里有取消检查点）。
     fn build_cached_result(root: &Path) -> ScanResult {
+        const CHANGED_COUNT: usize = 200;
         let mut children = Vec::with_capacity(1500);
         for i in 0..1500 {
             let dir = root.join(format!("dir_{:05}", i));
             fs::create_dir_all(&dir).unwrap();
-            children.push(make_cached_subdir(&dir));
+            children.push(make_cached_subdir(&dir, i < CHANGED_COUNT));
         }
         // 把根目录节点也放进 directories（incremental.rs 期望 cached.directories
         // 是 root 的直接子节点列表）。

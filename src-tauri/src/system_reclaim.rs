@@ -1,6 +1,7 @@
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use std::path::Path;
+use std::time::Duration;
 use tokio::process::Command;
 
 #[cfg(target_os = "windows")]
@@ -112,11 +113,20 @@ pub async fn cleanup_windows_update(force: bool) -> Result<ReclaimResult> {
         args.push("/ResetBase");
     }
 
-    let output = hidden_command("Dism.exe")
+    let child = hidden_command("Dism.exe")
         .args(&args)
-        .output()
-        .await
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
         .context("无法启动 Dism")?;
+
+    let output = match tokio::time::timeout(Duration::from_secs(600), child.wait_with_output()).await {
+        Ok(result) => result.context("Dism 进程异常")?,
+        Err(_) => {
+            tracing::warn!("[system_reclaim] Dism 超时 (10 分钟)，切换到 fallback");
+            return cleanup_software_distribution_fallback().await;
+        }
+    };
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();

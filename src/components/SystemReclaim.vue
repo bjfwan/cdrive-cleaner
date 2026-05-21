@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { ReclaimOpportunity, ReclaimResult } from '../types/breakdown';
 import { formatBytes } from '../utils/format';
@@ -21,9 +21,35 @@ const emit = defineEmits<{
 
 const showToast = useToast();
 const executingId = ref<string | null>(null);
-const completedIds = ref<Map<string, { freed: number; success: boolean }>>(new Map());
+const elapsedSeconds = ref(0);
+let elapsedTimer: ReturnType<typeof setInterval> | null = null;
+const completedIds = ref<Map<string, { freed: number; success: boolean; message?: string }>>(new Map());
 const confirmTarget = ref<ReclaimOpportunity | null>(null);
 const confirmType = ref<'danger' | 'warning'>('warning');
+
+const statusHints: Record<string, string> = {
+  windows_update: 'DISM 正在分析组件存储，通常需要 3–10 分钟…',
+  delivery_optimization: '正在清理分发优化缓存…',
+  hibernation: '正在禁用休眠并删除 hiberfil.sys…',
+  restore_points: '正在删除系统还原点…',
+  pagefile: '正在配置页面文件迁移…',
+};
+
+function startElapsedTimer() {
+  elapsedSeconds.value = 0;
+  elapsedTimer = setInterval(() => { elapsedSeconds.value++; }, 1000);
+}
+function stopElapsedTimer() {
+  if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+}
+function formatElapsed(s: number): string {
+  if (s < 60) return `${s} 秒`;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return r > 0 ? `${m} 分 ${r} 秒` : `${m} 分钟`;
+}
+
+onUnmounted(() => stopElapsedTimer());
 
 function reclaimIcon(id: string) {
   const map: Record<string, any> = {
@@ -62,6 +88,7 @@ async function confirmAndExecute() {
 
 async function doExecute(opportunity: ReclaimOpportunity) {
   executingId.value = opportunity.id;
+  startElapsedTimer();
   try {
     const result = await invoke<ReclaimResult>('execute_reclaim', {
       id: opportunity.id,
@@ -70,6 +97,7 @@ async function doExecute(opportunity: ReclaimOpportunity) {
     completedIds.value.set(opportunity.id, {
       freed: result.freed_bytes,
       success: result.success,
+      message: result.message,
     });
     if (result.success) {
       showToast(`已释放 ${formatBytes(result.freed_bytes)}`, result.message, 'success');
@@ -78,9 +106,11 @@ async function doExecute(opportunity: ReclaimOpportunity) {
       showToast('操作失败', result.message, 'error');
     }
   } catch (err) {
-    completedIds.value.set(opportunity.id, { freed: 0, success: false });
-    showToast('执行失败', String(err), 'error');
+    const errMsg = String(err);
+    completedIds.value.set(opportunity.id, { freed: 0, success: false, message: errMsg });
+    showToast('执行失败', errMsg, 'error');
   } finally {
+    stopElapsedTimer();
     executingId.value = null;
   }
 }
@@ -137,7 +167,16 @@ async function doExecute(opportunity: ReclaimOpportunity) {
               <span v-if="completedIds.get(op.id)?.success" class="reclaim-done">
                 ✓ 已释放 {{ formatBytes(completedIds.get(op.id)!.freed) }}
               </span>
-              <span v-else class="reclaim-fail">✕ 失败</span>
+              <span v-else class="reclaim-fail" :title="completedIds.get(op.id)?.message">✕ 失败</span>
+            </template>
+            <template v-else-if="executingId === op.id">
+              <div class="reclaim-executing">
+                <div class="reclaim-executing-row">
+                  <IconSpinner :size="14" />
+                  <span class="reclaim-elapsed">{{ formatElapsed(elapsedSeconds) }}</span>
+                </div>
+                <span class="reclaim-hint">{{ statusHints[op.id] ?? '正在执行…' }}</span>
+              </div>
             </template>
             <button
               v-else
@@ -145,8 +184,7 @@ async function doExecute(opportunity: ReclaimOpportunity) {
               :disabled="executingId !== null"
               @click="executeReclaim(op)"
             >
-              <IconSpinner v-if="executingId === op.id" :size="14" />
-              <span v-else-if="op.requires_admin && !isElevated">需管理员</span>
+              <span v-if="op.requires_admin && !isElevated">需管理员</span>
               <span v-else>执行</span>
             </button>
           </div>
@@ -413,6 +451,35 @@ async function doExecute(opportunity: ReclaimOpportunity) {
   font-size: 0.76rem;
   font-weight: 600;
   color: var(--color-error);
+  cursor: default;
+}
+
+.reclaim-executing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+}
+
+.reclaim-executing-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.reclaim-elapsed {
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-feature-settings: 'tnum';
+  color: var(--color-highlight);
+}
+
+.reclaim-hint {
+  font-size: 0.68rem;
+  color: var(--color-text-tertiary);
+  max-width: 180px;
+  text-align: right;
+  line-height: 1.3;
 }
 
 /* ===== Dark mode overrides ===== */
