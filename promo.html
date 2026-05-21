@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<title>CSD · 磁盘空间管理</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;600;700;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-primary: #0a0a0f;
+    --bg-card: rgba(255,255,255,0.04);
+    --bg-card-hover: rgba(255,255,255,0.07);
+    --accent: #6366f1;
+    --accent-light: #818cf8;
+    --accent-glow: rgba(99,102,241,0.3);
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+    --cyan: #06b6d4;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --border: rgba(255,255,255,0.08);
+  }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ===== Animated background ===== */
+  .bg-grid {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 60px 60px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 40%, transparent 100%);
+  }
+
+  .bg-glow {
+    position: fixed;
+    width: 800px; height: 800px;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: 0.15;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .bg-glow.g1 { top: -300px; left: 50%; transform: translateX(-50%); background: var(--accent); }
+  .bg-glow.g2 { bottom: -400px; right: -200px; background: var(--cyan); opacity: 0.08; }
+  .bg-glow.g3 { bottom: 200px; left: -300px; background: var(--rose); opacity: 0.06; }
+
+  .container { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 40px; }
+
+  /* ===== Hero ===== */
+  .hero {
+    padding: 100px 0 80px;
+    text-align: center;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 18px;
+    border-radius: 100px;
+    background: rgba(99,102,241,0.12);
+    border: 1px solid rgba(99,102,241,0.25);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--accent-light);
+    letter-spacing: 0.5px;
+    margin-bottom: 32px;
+  }
+  .hero-badge .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .hero-icon {
+    width: 88px; height: 88px;
+    border-radius: 22px;
+    margin: 0 auto 36px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 60px var(--accent-glow);
+    overflow: hidden;
+  }
+  .hero-icon img { width: 100%; height: 100%; object-fit: cover; }
+
+  .hero h1 {
+    font-size: 56px;
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    line-height: 1.15;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #fff 0%, #cbd5e1 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero h1 span {
+    background: linear-gradient(135deg, var(--accent-light) 0%, var(--cyan) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+
+  .hero-sub {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 28px;
+  }
+
+  .hero p.desc {
+    font-size: 19px;
+    color: var(--text-secondary);
+    max-width: 640px;
+    margin: 0 auto 40px;
+    line-height: 1.8;
+  }
+
+  .hero-tags {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 48px;
+  }
+  .hero-tags .tag {
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 32px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s;
+    cursor: pointer;
+    border: none;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent) 0%, #4f46e5 100%);
+    color: #fff;
+    box-shadow: 0 4px 20px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px var(--accent-glow); }
+  .btn-outline {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+  }
+  .btn-outline:hover { background: var(--bg-card-hover); border-color: rgba(255,255,255,0.15); }
+
+  .btn svg { width: 18px; height: 18px; }
+
+  .hero-note {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .hero-note strong { color: var(--text-secondary); font-weight: 500; }
+
+  /* ===== Stats ===== */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 100px;
+  }
+  .stat {
+    background: var(--bg-primary);
+    padding: 32px 24px;
+    text-align: center;
+  }
+  .stat-value {
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    margin-bottom: 4px;
+  }
+  .stat-value.v-accent { color: var(--accent-light); }
+  .stat-value.v-green { color: var(--green); }
+  .stat-value.v-amber { color: var(--amber); }
+  .stat-value.v-cyan { color: var(--cyan); }
+  .stat-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  /* ===== Section titles ===== */
+  .section-header {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+  .section-header .overline {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent-light);
+    margin-bottom: 12px;
+  }
+  .section-header h2 {
+    font-size: 38px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 16px;
+  }
+  .section-header p {
+    font-size: 16px;
+    color: var(--text-secondary);
+    max-width: 560px;
+    margin: 0 auto;
+  }
+
+  /* ===== Feature grid ===== */
+  .features { margin-bottom: 100px; }
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .feature-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px 28px;
+    transition: all 0.25s;
+    position: relative;
+    overflow: hidden;
+  }
+  .feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent-light), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .feature-card:hover { background: var(--bg-card-hover); border-color: rgba(255,255,255,0.12); }
+  .feature-card:hover::before { opacity: 1; }
+
+  .feature-icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    margin-bottom: 18px;
+  }
+  .fi-scan { background: rgba(99,102,241,0.15); }
+  .fi-tree { background: rgba(6,182,212,0.15); }
+  .fi-migrate { background: rgba(34,197,94,0.15); }
+  .fi-safe { background: rgba(244,63,94,0.15); }
+  .fi-game { background: rgba(245,158,11,0.15); }
+  .fi-history { background: rgba(168,85,247,0.15); }
+
+  .feature-card h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .feature-card p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+  }
+
+  /* ===== Performance ===== */
+  .perf { margin-bottom: 100px; }
+  .perf-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+  .perf-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 28px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .perf-num {
+    font-size: 40px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    white-space: nowrap;
+    min-width: 110px;
+    text-align: right;
+  }
+  .perf-num .unit {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+  .perf-text h4 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .perf-text p {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  /* ===== Tech stack ===== */
+  .tech { margin-bottom: 100px; }
+  .tech-row {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .tech-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+  }
+  .tech-pill:hover { border-color: rgba(255,255,255,0.15); color: var(--text-primary); }
+  .tech-pill .tech-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+  }
+  .td-rust { background: #dea584; }
+  .td-vue { background: #42b883; }
+  .td-ts { background: #3178c6; }
+  .td-tauri { background: #ffc131; }
+  .td-sqlite { background: #003b57; border: 1px solid #0078a8; }
+  .td-ntfs { background: #0078d6; }
+
+  /* ===== Workflow ===== */
+  .workflow { margin-bottom: 100px; }
+  .flow-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    flex-wrap: wrap;
+    padding: 40px 0;
+  }
+  .flow-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .flow-step .step-num {
+    width: 48px; height: 48px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent) 0%, #4f46e5 100%);
+    color: #fff;
+    box-shadow: 0 4px 16px var(--accent-glow);
+  }
+  .flow-step .step-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .flow-step .step-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    max-width: 120px;
+    text-align: center;
+  }
+  .flow-arrow {
+    font-size: 24px;
+    color: var(--text-muted);
+    margin: 0 16px;
+    margin-bottom: 30px;
+  }
+
+  /* ===== Safety ===== */
+  .safety { margin-bottom: 100px; }
+  .safety-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  .safety-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px 20px;
+    text-align: center;
+  }
+  .safety-card .s-icon {
+    font-size: 28px;
+    margin-bottom: 12px;
+  }
+  .safety-card h4 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .safety-card p {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+  .sc-safe h4 { color: var(--green); }
+  .sc-action h4 { color: var(--amber); }
+  .sc-blocked h4 { color: var(--rose); }
+  .sc-critical h4 { color: #ef4444; }
+
+  /* ===== CTA ===== */
+  .cta {
+    text-align: center;
+    padding: 80px 0;
+    margin-bottom: 40px;
+    position: relative;
+  }
+  .cta::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 50% 80% at 50% 100%, var(--accent-glow), transparent);
+    opacity: 0.3;
+    pointer-events: none;
+  }
+  .cta h2 {
+    font-size: 38px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    position: relative;
+  }
+  .cta p {
+    font-size: 16px;
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+    position: relative;
+  }
+  .cta .btn { position: relative; }
+
+  /* ===== Footer ===== */
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 32px 0;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .footer a {
+    color: var(--text-secondary);
+    text-decoration: none;
+  }
+  .footer a:hover { color: var(--text-primary); }
+
+  /* ===== Responsive tweaks (mostly for screenshot) ===== */
+  @media (max-width: 900px) {
+    .feature-grid { grid-template-columns: 1fr; }
+    .perf-grid { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .safety-grid { grid-template-columns: repeat(2, 1fr); }
+    .hero h1 { font-size: 36px; }
+  }
+
+  /* ===== Highlight card (large span) ===== */
+  .feature-card.wide { grid-column: span 2; }
+  .feature-card.full { grid-column: span 3; }
+
+  /* ===== Separator ===== */
+  .sep {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 0 auto 100px;
+    max-width: 600px;
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-glow g1"></div>
+<div class="bg-glow g2"></div>
+<div class="bg-glow g3"></div>
+
+<div class="container">
+
+  <!-- ========== Hero ========== -->
+  <section class="hero">
+    <div class="hero-badge">
+      <span class="dot"></span>
+      <span>v0.1.8 · 开源免费 · GPL-3.0</span>
+    </div>
+
+    <div class="hero-icon">
+      <img src="src/assets/app-icon.png" alt="CSD Icon">
+    </div>
+
+    <h1><span>CSD</span></h1>
+    <div class="hero-sub">C-Drive Saver &middot; 磁盘空间管理</div>
+    <p class="desc">
+      C 盘越来越满？CSD 帮你<strong>看清空间去向</strong>、<strong>安全迁移目录</strong>、<strong>一键回滚</strong>。<br>
+      Tauri 2 + Vue 3 + Rust 原生构建，MFT/USN 加速扫描，几十万文件秒级出图。
+    </p>
+
+    <div class="hero-tags">
+      <span class="tag">Tauri 2</span>
+      <span class="tag">Vue 3</span>
+      <span class="tag">Rust</span>
+      <span class="tag">NTFS MFT/USN</span>
+      <span class="tag">Windows 10/11</span>
+      <span class="tag">Junction / Symlink</span>
+    </div>
+
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="https://github.com/bjfwan/cdrive-cleaner/releases" target="_blank">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        下载安装包
+      </a>
+      <a class="btn btn-outline" href="https://github.com/bjfwan/cdrive-cleaner" target="_blank">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        GitHub 源码
+      </a>
+    </div>
+    <p class="hero-note"><strong>Windows 10/11</strong> · x64 · 安装包约 5 MB · 无广告无后台</p>
+  </section>
+
+  <!-- ========== Stats ========== -->
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value v-accent">&lt;1<span style="font-size:20px">s</span></div>
+      <div class="stat-label">MFT 全盘扫描</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value v-green">227K</div>
+      <div class="stat-label">文件/秒 吞吐量</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value v-amber">5</div>
+      <div class="stat-label">步安全迁移流程</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value v-cyan">100%</div>
+      <div class="stat-label">可逆 · 一键回滚</div>
+    </div>
+  </div>
+
+  <!-- ========== Core Features ========== -->
+  <section class="features">
+    <div class="section-header">
+      <div class="overline">Core Features</div>
+      <h2>从扫描到迁移，一站式解决</h2>
+      <p>不只是告诉你空间去哪了，还帮你安全地搬走它</p>
+    </div>
+
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon fi-scan">&#x1F50D;</div>
+        <h3>极速磁盘扫描</h3>
+        <p>管理员模式走 NTFS MFT + USN Journal，几十万文件秒级完成。普通权限自动回退原生枚举，功能不打折。第二次扫描走增量，只重扫变更子树。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon fi-tree">&#x1F4CA;</div>
+        <h3>多维空间分析</h3>
+        <p>Treemap 面积图一眼看胖子，List 列表按大小/名称/时间排序，Large Files 跨目录挑大文件，Smart Groups 自动分组标记可清理/可迁移/系统关键。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon fi-migrate">&#x1F69A;</div>
+        <h3>目录安全迁移</h3>
+        <p>copy → verify → backup → create-link → cleanup 五步事务。原位置留 Junction/Symlink，应用零感知继续运行。CopyFile2 大文件 unbuffered IO + Rayon 并行复制。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon fi-safe">&#x1F6E1;</div>
+        <h3>四级安全检测</h3>
+        <p>迁移前自动跑安全分析：路径白名单 → 应用类型识别 → reparse 深度 → 进程占用 → 注册表关键键。系统关键目录硬拒绝，绝不踩坑。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon fi-game">&#x1F3AE;</div>
+        <h3>游戏库一键迁移</h3>
+        <p>自动识别 Steam / Epic / Game Pass 已安装游戏，免去手工找路径。Junction 链接让启动器无缝运行，专属迁移记录追踪每一款游戏。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon fi-history">&#x23F0;</div>
+        <h3>历史回滚 & 趋势</h3>
+        <p>每次迁移完整记录到 SQLite (WAL)，一键回滚到原状。Space Trend 90 天空间走势图，持续监控磁盘健康。重复文件检测 (xxhash) 批量清理。</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="sep"></div>
+
+  <!-- ========== Migration Workflow ========== -->
+  <section class="workflow">
+    <div class="section-header">
+      <div class="overline">Migration Flow</div>
+      <h2>五步迁移，步步可逆</h2>
+      <p>完整的事务流程，中途失败可重试，迁移成功后随时回滚</p>
+    </div>
+
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="step-num">1</div>
+        <div class="step-label">复制</div>
+        <div class="step-desc">CopyFile2 并行复制到目标盘</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="step-num">2</div>
+        <div class="step-label">校验</div>
+        <div class="step-desc">验证目标文件完整性</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="step-num">3</div>
+        <div class="step-label">备份</div>
+        <div class="step-desc">保留原始路径元数据</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="step-num">4</div>
+        <div class="step-label">链接</div>
+        <div class="step-desc">创建 Junction / Symlink</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="step-num">5</div>
+        <div class="step-label">清理</div>
+        <div class="step-desc">移除源文件释放空间</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="sep"></div>
+
+  <!-- ========== Safety Levels ========== -->
+  <section class="safety">
+    <div class="section-header">
+      <div class="overline">Safety First</div>
+      <h2>迁移安全四级守护</h2>
+      <p>系统关键目录硬拒绝，活跃应用有提示，让你搬得放心</p>
+    </div>
+
+    <div class="safety-grid">
+      <div class="safety-card sc-safe">
+        <div class="s-icon">&#x2705;</div>
+        <h4>Safe</h4>
+        <p>普通用户数据<br>应用缓存<br>直接放行</p>
+      </div>
+      <div class="safety-card sc-action">
+        <div class="s-icon">&#x26A0;&#xFE0F;</div>
+        <h4>Safe After Action</h4>
+        <p>需先关进程<br>或获取权限<br>UI 提示处理</p>
+      </div>
+      <div class="safety-card sc-blocked">
+        <div class="s-icon">&#x1F6AB;</div>
+        <h4>Blocked</h4>
+        <p>高风险目录<br>活跃应用<br>默认拒绝，可覆写</p>
+      </div>
+      <div class="safety-card sc-critical">
+        <div class="s-icon">&#x1F6D1;</div>
+        <h4>System Critical</h4>
+        <p>Windows 系统目录<br>Program Files<br>硬拒绝，不可覆写</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="sep"></div>
+
+  <!-- ========== Performance ========== -->
+  <section class="perf">
+    <div class="section-header">
+      <div class="overline">Performance</div>
+      <h2>快到起飞的性能</h2>
+      <p>MFT 原生加速 + 增量扫描 + 并行复制，不等待</p>
+    </div>
+
+    <div class="perf-grid">
+      <div class="perf-card">
+        <div class="perf-num" style="color: var(--accent-light);">21<span class="unit"> ms</span></div>
+        <div class="perf-text">
+          <h4>浅目录扫描</h4>
+          <p>30 文件目录</p>
+        </div>
+      </div>
+      <div class="perf-card">
+        <div class="perf-num" style="color: var(--green);">44<span class="unit"> ms</span></div>
+        <div class="perf-text">
+          <h4>万文件级扫描</h4>
+          <p>10,000 文件真实分布</p>
+        </div>
+      </div>
+      <div class="perf-card">
+        <div class="perf-num" style="color: var(--cyan);">227K<span class="unit"> /s</span></div>
+        <div class="perf-text">
+          <h4>峰值文件吞吐</h4>
+          <p>MFT + USN 加速模式</p>
+        </div>
+      </div>
+      <div class="perf-card">
+        <div class="perf-num" style="color: var(--amber);">82<span class="unit"> ms</span></div>
+        <div class="perf-text">
+          <h4>端到端迁移+回滚</h4>
+          <p>扫描 → 迁移 → 回滚</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="sep"></div>
+
+  <!-- ========== Tech Stack ========== -->
+  <section class="tech">
+    <div class="section-header">
+      <div class="overline">Tech Stack</div>
+      <h2>现代技术栈</h2>
+      <p>原生性能 + 现代前端 + 类型安全</p>
+    </div>
+
+    <div class="tech-row">
+      <div class="tech-pill"><span class="tech-dot td-rust"></span> Rust</div>
+      <div class="tech-pill"><span class="tech-dot td-tauri"></span> Tauri 2</div>
+      <div class="tech-pill"><span class="tech-dot td-vue"></span> Vue 3</div>
+      <div class="tech-pill"><span class="tech-dot td-ts"></span> TypeScript</div>
+      <div class="tech-pill"><span class="tech-dot td-sqlite"></span> SQLite + WAL</div>
+      <div class="tech-pill"><span class="tech-dot td-ntfs"></span> NTFS MFT/USN</div>
+      <div class="tech-pill"><span class="tech-dot" style="background:#e44d26"></span> ECharts</div>
+      <div class="tech-pill"><span class="tech-dot" style="background:#8b5cf6"></span> Element Plus</div>
+      <div class="tech-pill"><span class="tech-dot" style="background:#e5e7eb"></span> Rayon + Tokio</div>
+    </div>
+  </section>
+
+  <!-- ========== CTA ========== -->
+  <section class="cta">
+    <h2>告别 C 盘焦虑</h2>
+    <p>开源免费 · 无广告无后台 · 安装包仅约 5 MB</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="https://github.com/bjfwan/cdrive-cleaner/releases" target="_blank">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        立即下载
+      </a>
+      <a class="btn btn-outline" href="https://github.com/bjfwan/cdrive-cleaner" target="_blank">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        Star 支持
+      </a>
+    </div>
+  </section>
+
+  <!-- ========== Footer ========== -->
+  <footer class="footer">
+    <p>CSD · 磁盘空间管理 &mdash; <a href="https://github.com/bjfwan/cdrive-cleaner">GitHub</a> &middot; GPL-3.0 &copy; 2026 bjfwan</p>
+  </footer>
+
+</div>
+
+</body>
+</html>
