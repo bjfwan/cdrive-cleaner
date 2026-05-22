@@ -117,10 +117,6 @@ impl DiskScanner {
         self.scan_deep_with_progress(path, Some(progress_emitter), estimated_files)
             .await
     }
-
-    /// 与 [`scan_deep`] 等价，但取消信号由外部 [`CancellationToken`] 提供。
-    /// 命令层在拿到 RAII session handle 之后应该用这个入口，让 session 退出时
-    /// 自动停掉扫描。
     pub async fn scan_deep_with_token<P: AsRef<Path>, R: Runtime>(
         &self,
         path: P,
@@ -158,11 +154,6 @@ impl DiskScanner {
         self.scan_deep_with_progress_and_token(path, progress_emitter, estimated_files, None)
             .await
     }
-
-    /// 通用入口：可选地接受一个 [`CancellationToken`]。
-    /// - 不传：沿用原来"DiskScanner 自己持有的 AtomicBool + reset_cancel()"语义；
-    /// - 传：把外部 token 的 atomic flag 同步到 self.cancelled，扫描期间任意一边
-    ///   触发 cancel，扫描内部循环都会看到。
     pub(crate) async fn scan_deep_with_progress_and_token<P: AsRef<Path>>(
         &self,
         path: P,
@@ -171,15 +162,11 @@ impl DiskScanner {
         cancellation: Option<&CancellationToken>,
     ) -> Result<ScanResult> {
         let path = path.as_ref().to_path_buf();
-
-        // 选定扫描期间真正被 mft_usn / native walk 内部循环 load 的那个 flag。
-        // 优先用外部 token：注册表 + RAII guard 才能保证 panic / 提前 return 时
-        // 也会自动 cancel，避免遗留半成品扫描。
         let cancelled = match cancellation {
             Some(token) => {
-                // 进入新扫描时把外部 token 的标志位重置一下，避免上次取消遗留
-                // 影响这次扫描。Token 的所有权在 SessionHandle 上，重置是安全的。
-                token.as_atomic().store(false, Ordering::Relaxed);
+                if !token.is_cancelled() {
+                    token.as_atomic().store(false, Ordering::Relaxed);
+                }
                 token.as_atomic()
             }
             None => {
@@ -626,10 +613,6 @@ impl DiskScanner {
             scan_completed: false,
         })
     }
-
-    /// Recursively walk a directory in parallel using rayon::scope.
-    /// Each directory enumeration is spawned as a rayon task; discovered
-    /// subdirectories spawn further tasks, saturating the thread pool.
     fn walk_dir_parallel<'s>(
         scope: &rayon::Scope<'s>,
         dir: PathBuf,
@@ -654,8 +637,6 @@ impl DiskScanner {
                 return;
             }
         };
-
-        // Collect subdirectories to spawn after processing entries
         let mut subdirs: Vec<PathBuf> = Vec::new();
 
         for entry in entries {

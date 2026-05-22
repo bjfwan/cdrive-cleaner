@@ -359,14 +359,6 @@ fn collect_direct_file_changed_dirs(root_path: &Path, candidates: HashSet<String
 
     paths
 }
-
-/// `detect_changes_via_usn` 的结果摘要。
-///
-/// - `Available`：USN 拿到了完整的变化集，调用方按 changes / renames 走"快路径"。
-/// - `JournalReset`：USN journal_id 变了或 first_usn 越过我们的 checkpoint，
-///   走"USN 全量重建"路径——从 first_usn 起重读，把所有目录加入候选；如果
-///   USN 全量重建仍拿不到东西，再退化到 mtime。
-/// - `Unavailable`：没有 USN 路径可用，走 mtime 全量。
 pub enum UsnDetection {
     Available {
         changes: Vec<ChangedDirectory>,
@@ -488,10 +480,6 @@ fn detect_changes_via_usn_outcome(path: &Path, cached_result: &ScanResult) -> Us
             mode: RescanMode::Recursive,
         })
         .collect();
-
-    // DirectFilesOnly 候选去重：祖先已经走 Recursive 重扫的，自动 dedupe 掉，
-    // 否则会出现「父被替换为最新子树、子又把 clone 出来的旧 children 覆盖回去」
-    // 的覆盖竞态。
     changes.extend(
         collect_direct_file_changed_dirs(path, change_set.direct_file_dirs)
             .into_iter()
@@ -529,7 +517,6 @@ fn detect_changes_via_usn_outcome(path: &Path, cached_result: &ScanResult) -> Us
     }
 }
 
-/// 平台抽象：windows 走真实 USN，其它平台立刻返回 HardError，让上层走 mtime。
 enum UsnReadShim {
     Records(winfs::UsnChangeSet),
     JournalReset { new_journal_id: u64, first_usn: i64 },
@@ -572,12 +559,6 @@ fn winfs_read_usn(
         "USN journal is only available on Windows NTFS volumes",
     ))
 }
-
-/// 把整棵 cached 树的所有目录路径作为 USN 全量重建的"重扫候选"。
-/// 用于 USN journal_id 变了 / checkpoint 被回卷的情况——我们不知道具体哪些
-/// 子树变化了，但又不想退化到 mtime 全量递归。把缓存里所有目录都丢回阶段 2，
-/// 让阶段 2 按 Recursive 模式重扫；阶段 1 的去重逻辑只会留下根级别的 Recursive，
-/// 实际效果就是"以缓存为骨架做一次 USN 全量重建"。
 pub fn collect_all_cached_dirs_as_recursive(
     cached_tree: &[DirectoryNode],
     root_path: &Path,
@@ -601,8 +582,6 @@ pub fn collect_all_cached_dirs_as_recursive(
     }
     let mut out = Vec::new();
     walk(cached_tree, root_path, &mut out);
-    // 阶段 2 会按"祖先 Recursive 已经覆盖 → 后代不再单独重扫"去重；这里
-    // 直接交付完整列表即可，让上层 normalize 路径做收敛。
     out
 }
 
@@ -926,9 +905,6 @@ fn rescan_directory_tree(path: &Path, large_file_threshold: u64) -> Option<Resca
         }
     }
 
-    // 在把子目录大小累加上来之前，先把"根目录直接文件"的统计冻结下来——
-    // 它就是阶段 3 权威回填里需要的 own_size / own_file_count，不能再用
-    // node.size - Σchild.size 反算（中间过程会被父子覆盖污染）。
     let (root_own_size, root_own_files) = dir_file_stats
         .get(path)
         .copied()
@@ -1016,8 +992,6 @@ pub async fn scan_incremental_silent(
     scan_incremental_internal(path, cached_result, scanner, None, None, None).await
 }
 
-/// 与 `scan_incremental_silent` 一致，但额外接受一个 `CancellationToken`。
-/// 任务 B / C 的集成测试和命令层"无 UI 调用增量"的路径都用这个入口。
 pub async fn scan_incremental_with_token(
     path: &Path,
     cached_result: ScanResult,
@@ -1113,6 +1087,12 @@ async fn scan_incremental_internal(
 ) -> Result<ScanResult> {
     use std::time::Instant;
 
+    if let Some(token) = cancellation.as_ref() {
+        if token.is_cancelled() {
+            return Err(IncrementalScanError::Cancelled.into());
+        }
+    }
+
     let start = Instant::now();
     let total_timer = StageTimer::start(
         "incremental",
@@ -1182,8 +1162,6 @@ async fn scan_incremental_internal(
                 let candidates =
                     collect_all_cached_dirs_as_recursive(&cached_result.directories, path);
                 if candidates.is_empty() {
-                    // 缓存里啥也没有：那就只能 mtime 全量了。但我们仍然把
-                    // strategy 标签写到 tracing，方便排查。
                     let (current_root_size, current_root_files, _) =
                         scan_root_files(path, large_file_threshold);
                     let (cached_root_size, cached_root_files) = cached_result
@@ -1342,6 +1320,12 @@ async fn scan_incremental_internal(
         total_cached_dirs.max(1)
     );
     if change_ratio > 0.3 {
+        if let Some(token) = cancellation.as_ref() {
+            if token.is_cancelled() {
+                total_timer.finish_with("status=cancelled stage=before_fallback");
+                return Err(IncrementalScanError::Cancelled.into());
+            }
+        }
         tracing::info!(
             "[阶段2] 变化超过30% ({:.1}%)，切换到全量扫描",
             change_ratio * 100.0
@@ -1582,18 +1566,12 @@ async fn scan_incremental_internal(
                 normalized_path_key_str(&item.node.path),
                 (item.own_size, item.own_file_count),
             );
-            // 阶段 3 合并循环：每隔一段检查一次取消信号。
             if let Some(token) = cancellation.as_ref() {
                 if token.is_cancelled() {
                     return Err(IncrementalScanError::Cancelled.into());
                 }
             }
         }
-
-        // 重命名识别（best-effort）：USN 路径下，把 RENAME_OLD/NEW_NAME pair 起来
-        // 后变成 (old_path, new_path)。在送进 keyed merge 之前，先把缓存树里 old_path
-        // 的子树平移到 new_path 下，并把对应的 deleted_paths 干掉，让 keyed merge
-        // 把 rename 看成"什么都没动"。识别失败时退回到原本的"删 old + 建 new"。
         let rescanned_keys: HashSet<String> = rescanned_dirs
             .iter()
             .map(|item| normalized_path_key_str(&item.node.path))
@@ -2084,18 +2062,12 @@ fn apply_rename_pre_merge(
         let mut moved = subtree;
         relocate_subtree_path(&mut moved, &old_key, &rename.new_path);
         if !attach_under_parent(&mut tree, &rename.new_path, moved) {
-            // 父节点找不到（常见于 new_path 的 parent 不在 cache 里）：
-            // 按"删旧 + 建新"语义留给 keyed merge 处理。但因为我们刚刚 extract
-            // 掉了 old_key，如果再走删旧路径会找不到节点 → 这里直接把删除项也
-            // 干掉，让 keyed merge 看到的就是"什么都没动"，新 path 的 Recursive
-            // 重扫节点（如果有）会负责挂上来。
         } else {
             applied += 1;
         }
     }
 
     if applied > 0 {
-        // 把已经被 rename 处理过的 old_path 从 deleted_paths 里移除。
         let renamed_old_keys: HashSet<String> = renames
             .iter()
             .filter(|r| r.is_dir)
@@ -2154,15 +2126,11 @@ fn attach_under_parent(
     false
 }
 
-/// 把整棵子树里的 path 字符串从 old_prefix 平移到 new_prefix。
-/// 用 normalized key 做匹配但保留原本的大小写格式（在 Windows 上能通过
-/// path_matches 做大小写不敏感的查找）。
 fn relocate_subtree_path(node: &mut DirectoryNode, old_key_prefix: &str, new_path: &str) {
     let old_path_key = normalized_path_key_str(&node.path);
     let new_path_for_node = if old_path_key == old_key_prefix {
         new_path.to_string()
     } else if let Some(suffix) = old_path_key.strip_prefix(old_key_prefix) {
-        // suffix 包含分隔符，拼接到 new_path 上
         format!("{}{}", new_path, suffix)
     } else {
         node.path.clone()
@@ -2185,11 +2153,6 @@ pub fn merge_scan_results(
 ) -> Vec<DirectoryNode> {
     merge_scan_results_with_own(old_tree, changed_dirs, &HashMap::new(), deleted_paths, root_path)
 }
-/// 增量合并的"权威"入口。和 [`merge_scan_results`] 的区别在于：
-/// - 把每个本次重扫节点的 `(own_size, own_file_count)` 也透传进来；
-/// - 合并完成后会自底向上做一次"权威回填"，确保父节点的 size/file_count/dir_count
-///   = 自己直接持有的值 + Σ 子节点。这样能修掉「父被 Recursive 替换、子又走
-///   DirectFilesOnly 把 clone 出来的旧 children 覆盖回去」造成的统计漂移。
 pub fn merge_scan_results_with_own(
     old_tree: Vec<DirectoryNode>,
     changed_dirs: Vec<DirectoryNode>,
@@ -2208,9 +2171,6 @@ pub fn merge_scan_results_with_own(
     .unwrap_or_else(|partial| partial)
 }
 
-/// 与 `merge_scan_results_with_own` 一致，但允许在权威回填阶段每 1024 节点
-/// 检查一次取消信号，命中后立刻返回半成品树（封装在 Err 里）。生产路径
-/// 拿到 Err 时应当立刻退出整个增量扫描。
 pub(crate) fn merge_scan_results_with_own_cancellable<C: CancellationLike>(
     old_tree: Vec<DirectoryNode>,
     changed_dirs: Vec<DirectoryNode>,
@@ -2219,35 +2179,11 @@ pub(crate) fn merge_scan_results_with_own_cancellable<C: CancellationLike>(
     root_path: &Path,
     cancellation: Option<&C>,
 ) -> Result<Vec<DirectoryNode>, Vec<DirectoryNode>> {
-    // Step 0: 清掉旧树之前可能积累下来的统计偏差。
-    //
-    // 旧树里若有节点 size != own + Σchild.size（因为之前合并算法的累积漂移），
-    // 会让本轮采到的 cached_own = old_size - Σold_child.size 也带偏差。把
-    // 旧树先做一次自下而上的 enforce：own 用 saturating_sub 抓一下，然后强制
-    // node.size = own + Σchild.size，file_count / dir_count 同理。这样进入
-    // collect_cached_own 时拿到的就是已经一致的快照，own 也就对了。
-    //
-    // changed_dirs 里的节点马上要被替换，没必要清；root 的 size/file_count 由
-    // sum_tree 在 reconcile 末尾重算，这里也不强求清到根。
     let mut old_tree = old_tree;
     sanitize_tree_subtotals(&mut old_tree, root_path);
 
     let mut cached_own: HashMap<String, (u64, usize)> = HashMap::new();
     collect_cached_own(&old_tree, &mut cached_own);
-
-    // 同时把"changed_dirs 自带的 own"也合进 cached_own —— 这是兼容旧 API 的关键：
-    // 对每个被 upsert 替换的节点，size - Σchild.size 就是它本次扫描里"自己持有"
-    // 的部分，比 cached_own 留下的老值更新。`own_overrides`（外部显式传入）
-    // 优先级最高，依然可以覆盖这一步。
-    //
-    // 注意要递归到 changed_dirs 内部的所有子节点：rescan_directory_tree 返回
-    // 的子树里每个节点的 size/file_count 都是新扫到的真实值，应当一并覆盖
-    // cached_own 里同 path 的旧值。只浅扫一层会让 changed_dirs 子节点继续
-    // 沿用旧 cached_own 值，权威回填阶段就会用到陈旧 own。
-    //
-    // 重要：当 changed_dirs 同时包含 parent 和 child 的独立变更时（overlap），
-    // child 的值应该优先于 parent 中嵌套的同路径节点。先收集顶层 key 集合，
-    // 递归时遇到已有独立变更的 path 就跳过，最后由其自己的顶层 ingest 写入。
     let top_level_keys: HashSet<String> = changed_dirs
         .iter()
         .map(|n| normalized_path_key_str(&n.path))
@@ -2308,9 +2244,6 @@ pub(crate) fn merge_scan_results_with_own_cancellable<C: CancellationLike>(
     sort_directory_tree(&mut tree);
     Ok(tree)
 }
-
-/// 占位类型：提供一个 `CancellationLike` 但永不取消，用来给
-/// `merge_scan_results_with_own` 的非可取消入口填类型参数。
 struct NoCancel;
 impl CancellationLike for NoCancel {
     fn is_cancelled(&self) -> bool {
@@ -2364,16 +2297,6 @@ fn collect_cached_own(nodes: &[DirectoryNode], out: &mut HashMap<String, (u64, u
         collect_cached_own(&node.children, out);
     }
 }
-
-/// 自下而上地把每棵旧树修整成 size = own + Σchild.size、file_count = own + Σchild.file_count、
-/// dir_count = 1 + Σchild.dir_count。
-///
-/// 这是历史包袱清理：之前几轮合并算法可能在节点上累积了 size/file_count/dir_count
-/// 与子节点和不一致的偏差。直接从旧树读 cached_own 时，这种偏差会被错误地"持有"
-/// 到 own 上。先 sanitize 一次，确保拿到的 own 至少满足 own + Σchild = node 当前
-/// 持有值，把累积偏差冻结成"old 时刻已经存在的差"，不再被传到下一轮。
-///
-/// root 节点也走同样规则；调用方稍后会用 sum_tree 在更上层重算 root 的总量。
 fn sanitize_tree_subtotals(nodes: &mut [DirectoryNode], _root_path: &Path) {
     for node in nodes.iter_mut() {
         sanitize_tree_subtotals(&mut node.children, _root_path);

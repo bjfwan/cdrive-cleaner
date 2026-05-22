@@ -18,14 +18,32 @@ docs/promo/
 
 直接在浏览器中打开 `index.html` 文件即可预览。
 
-### 部署
+### 部署到 Cloudflare Pages (推荐)
 
-可以将整个 `promo` 文件夹部署到任何静态网站托管服务：
+此页面经过优化，已经完全自包含，非常适合通过 Cloudflare Pages 与 GitHub 自动联动。每次您推送代码至 GitHub，页面都会自动更新。
 
-- GitHub Pages
-- Cloudflare Pages
-- Vercel
-- Netlify
+#### 1. 提交并推送代码
+确保您已将本地最新的修改（包括自包含的 `assets/` 文件夹及更新后的 `index.html`）提交并推送至 GitHub 仓库。
+
+#### 2. 在 Cloudflare Pages 中配置
+1. 登录 [Cloudflare 控制台](https://dash.cloudflare.com/)。
+2. 导航至 **Workers & Pages (Workers 和 Pages)** -> 点击 **Create (创建)** -> 选择 **Pages** 标签页 -> 点击 **Connect to Git (连接到 Git)**。
+3. 授权并选择您的 GitHub 仓库 `bjfwan/cdrive-cleaner`。
+4. 在 **Set up builds and deployments (设置构建和部署)** 页面中进行如下配置：
+   - **Project name (项目名称)**：自定义（如 `cdrive-cleaner` 或 `csd`）。
+   - **Production branch (生产分支)**：选择您的默认分支（如 `main` 或 `master`）。
+   - **Framework preset (框架预设)**：选择 **None**。
+   - **Build command (构建命令)**：**留空**（无需任何构建命令）。
+   - **Build output directory (构建输出目录)**：填写 `docs/promo` ⚠️ *非常关键，这会把此子目录作为网站根目录。*
+   - **Root directory (根目录)**：**留空**。
+5. 点击 **Save and Deploy (保存并部署)**。
+
+#### 3. 绑定您的域名
+1. 部署完成后，进入该 Pages 项目的控制台。
+2. 选择 **Custom domains (自定义域)** 选项卡 -> 点击 **Set up a custom domain (设置自定义域)**。
+3. 输入您在 Cloudflare 上的域名（如 `csd.yourdomain.com`），点击继续。
+4. Cloudflare 会自动帮您在 DNS 中配置 CNAME 解析并申请 SSL 证书。
+5. 绑定成功后，即可通过您的域名访问！此后每次 `git push`，该宣传发布页就会秒级自动完成更新。
 
 ## 内容模块
 
@@ -72,7 +90,7 @@ docs/promo/
 ## 依赖
 
 - Google Fonts (Inter + Noto Sans SC) - 通过 CDN 加载
-- 项目图标 - 引用自 `../../src/assets/app-icon.png`
+- 项目图标 - 引用自 `assets/app-icon.png`
 
 ## 浏览器兼容性
 

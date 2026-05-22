@@ -92,6 +92,8 @@ mod tests {
         let scanner = DiskScanner::new();
         let token = CancellationToken::new();
         let cancel_token = token.clone();
+        token.cancel();
+        let started = Instant::now();
 
         let scan_path = ws.root.clone();
         let scan = tokio::spawn(async move {
@@ -103,10 +105,6 @@ mod tests {
             )
             .await
         });
-
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        let started = Instant::now();
-        token.cancel();
 
         let outcome = tokio::time::timeout(Duration::from_millis(10_000), scan)
             .await
