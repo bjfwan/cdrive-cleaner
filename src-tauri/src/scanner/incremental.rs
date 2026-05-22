@@ -213,14 +213,16 @@ pub fn detect_changes_recursive(
     cached_tree: &[DirectoryNode],
     current_path: &Path,
 ) -> Vec<ChangedDirectory> {
-    detect_changes_recursive_with_clock(cached_tree, current_path, wall_now_secs())
+    detect_changes_recursive_with_clock(cached_tree, current_path, wall_now_secs(), None::<&NoCancel>)
+        .unwrap_or_default()
 }
 
 pub fn detect_changes_recursive_with_clock(
     cached_tree: &[DirectoryNode],
     current_path: &Path,
     wall_now: u64,
-) -> Vec<ChangedDirectory> {
+    cancellation: Option<&impl CancellationLike>,
+) -> Result<Vec<ChangedDirectory>, ()> {
     let cached_nodes: Vec<&DirectoryNode> = cached_tree
         .iter()
         .filter(|node| !path_matches(&node.path, current_path))
@@ -234,6 +236,13 @@ pub fn detect_changes_recursive_with_clock(
 
     if let Ok(entries) = std::fs::read_dir(current_path) {
         for entry in entries.flatten() {
+            // 检查取消信号
+            if let Some(token) = cancellation {
+                if token.is_cancelled() {
+                    return Err(());
+                }
+            }
+
             let entry_path = entry.path();
             let Ok(metadata) = std::fs::symlink_metadata(&entry_path) else {
                 continue;
@@ -268,7 +277,8 @@ pub fn detect_changes_recursive_with_clock(
                             &node.children,
                             &entry_path,
                             wall_now,
-                        ));
+                            cancellation,
+                        )?);
                     }
                     ChangeStatus::New => {}
                 }
@@ -292,7 +302,7 @@ pub fn detect_changes_recursive_with_clock(
         }
     }
 
-    changes
+    Ok(changes)
 }
 
 fn build_file_id_index(nodes: &[DirectoryNode], map: &mut HashMap<u64, String>) {
@@ -1185,7 +1195,13 @@ async fn scan_incremental_internal(
                     let rfc = cached_root_size != current_root_size
                         || cached_root_files != current_root_files;
                     (
-                        detect_changes_recursive(&cached_result.directories, path),
+                        detect_changes_recursive_with_clock(
+                            &cached_result.directories,
+                            path,
+                            wall_now_secs(),
+                            cancellation.as_ref(),
+                        )
+                        .map_err(|_| IncrementalScanError::Cancelled)?,
                         rfc,
                         "usn_full_rebuild_fallback_mtime",
                     )
@@ -1205,7 +1221,13 @@ async fn scan_incremental_internal(
                 let rfc = cached_root_size != current_root_size
                     || cached_root_files != current_root_files;
                 (
-                    detect_changes_recursive(&cached_result.directories, path),
+                    detect_changes_recursive_with_clock(
+                        &cached_result.directories,
+                        path,
+                        wall_now_secs(),
+                        cancellation.as_ref(),
+                    )
+                    .map_err(|_| IncrementalScanError::Cancelled)?,
                     rfc,
                     "mtime",
                 )
