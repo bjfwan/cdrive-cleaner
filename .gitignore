@@ -39,3 +39,4 @@ Thumbs.db
 *.local
 .docs
 .vscode
+.agents
