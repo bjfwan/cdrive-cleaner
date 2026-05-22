@@ -1,12 +1,18 @@
-# CSD · 磁盘空间管理
-
-> **CSD (C-Drive Saver)** —— Windows 桌面端磁盘空间分析与目录迁移工具。
-> 基于 **Tauri 2 + Vue 3 + Rust**，原生 NTFS MFT/USN 加速，支持迁移占位（Junction / Symlink / Hardlink）与全量回滚。
-
-[![CI](https://github.com/bjfwan/cdrive-cleaner/actions/workflows/ci.yml/badge.svg)](https://github.com/bjfwan/cdrive-cleaner/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/bjfwan/cdrive-cleaner?include_prereleases)](https://github.com/bjfwan/cdrive-cleaner/releases)
-[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
-![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6)
+<div align="center">
+  <img src="src/assets/app-icon.png" alt="CSD Logo" width="120" height="120" />
+  
+  # CSD · 磁盘空间管理
+  
+  **CSD (C-Drive Saver)** —— Windows 桌面端磁盘空间分析与目录迁移工具
+  
+  基于 **Tauri 2 + Vue 3 + Rust**，原生 NTFS MFT/USN 加速，支持迁移占位（Junction / Symlink / Hardlink）与全量回滚
+  
+  [![CI](https://github.com/bjfwan/cdrive-cleaner/actions/workflows/ci.yml/badge.svg)](https://github.com/bjfwan/cdrive-cleaner/actions/workflows/ci.yml)
+  [![Release](https://img.shields.io/github/v/release/bjfwan/cdrive-cleaner?include_prereleases)](https://github.com/bjfwan/cdrive-cleaner/releases)
+  [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
+  ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6)
+  
+</div>
 
 ---
 
