@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<title>性能 · CSD</title>
+<link rel="stylesheet" href="styles/main.css">
+<link rel="stylesheet" href="styles/perf.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="bg-mesh">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+  <div class="noise-overlay"></div>
+</div>
+
+<nav class="sticky-nav">
+  <div class="nav-inner">
+    <a class="nav-logo" href="index.html">
+      <img src="assets/app-icon.png" alt="CSD" class="nav-logo-icon">
+      <span>CSD</span>
+    </a>
+    <div class="nav-links">
+      <a href="index.html">
+        <img src="assets/icons/nav-features.svg" alt="" class="nav-icon">功能
+      </a>
+      <a href="workflow.html">
+        <img src="assets/icons/nav-workflow.svg" alt="" class="nav-icon">迁移流程
+      </a>
+      <a href="safety.html">
+        <img src="assets/icons/nav-safety.svg" alt="" class="nav-icon">安全保障
+      </a>
+      <a href="perf.html" class="active">
+        <img src="assets/icons/nav-perf.svg" alt="" class="nav-icon">性能
+      </a>
+    </div>
+    <a class="nav-cta" href="https://github.com/bjfwan/cdrive-cleaner/releases/download/v0.1.8/CSD_0.1.8_x64-setup.exe" target="_blank">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      下载
+    </a>
+  </div>
+</nav>
+
+<div class="container page-transition">
+
+  <!-- Page Header -->
+  <section class="page-hero">
+    <span class="overline">Performance</span>
+    <h1>从源码到性能</h1>
+    <p class="page-hero-desc">CopyFile2 内核 API + Rayon 并行迭代器 + 分级缓冲区，每一个参数都来自真实代码。</p>
+  </section>
+
+  <!-- ===== Key Constants from Source ===== -->
+  <section class="constants-section stagger-reveal">
+    <div class="const-grid">
+      <div class="const-card">
+        <div class="const-label">CopyFile2 API</div>
+        <div class="const-value">Windows 内核级复制</div>
+        <div class="const-desc">大文件自动启用 COPY_FILE_NO_BUFFERING，绕过系统缓存直接 DMA 传输</div>
+      </div>
+      <div class="const-card">
+        <div class="const-label">并行阈值</div>
+        <div class="const-value">512 MB / 128 文件</div>
+        <div class="const-desc">PARALLEL_COPY_MIN_BYTES = 512MB，PARALLEL_COPY_MIN_FILES = 128，满足任一即启用 Rayon 并行</div>
+      </div>
+      <div class="const-card">
+        <div class="const-label">缓冲区分级</div>
+        <div class="const-value">1MB → 8MB → 16MB</div>
+        <div class="const-desc">DEFAULT=1MB，LARGE_FILE(≥128MB)=8MB，HUGE(≥1GB)=16MB，按文件大小自适应</div>
+      </div>
+      <div class="const-card">
+        <div class="const-label">NO_BUFFERING</div>
+        <div class="const-value">≥ 128 MB 触发</div>
+        <div class="const-desc">LARGE_FILE_COPY_THRESHOLD = 128MB，超过此阈值启用无缓冲模式，减少内存拷贝</div>
+      </div>
+      <div class="const-card">
+        <div class="const-label">进度上报</div>
+        <div class="const-value">200 ms 间隔</div>
+        <div class="const-desc">PROGRESS_EMIT_INTERVAL = 200ms，独立线程定期快照 AtomicU64 计数器</div>
+      </div>
+      <div class="const-card">
+        <div class="const-label">空间预留</div>
+        <div class="const-value">1% (64~512MB)</div>
+        <div class="const-desc">required_target_space = 源大小 + clamp(1%, 64MB, 512MB)，防止磁盘满导致失败</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Copy Pipeline ===== -->
+  <section class="perf-section reveal">
+    <div class="section-header">
+      <span class="overline">Pipeline</span>
+      <h2>迁移流水线</h2>
+      <p>从源码 file_migrator.rs 提取的真实执行流程</p>
+    </div>
+
+    <div class="pipeline stagger-reveal">
+      <div class="pipe-step">
+        <div class="pipe-num">1</div>
+        <div class="pipe-content">
+          <h4>Scan & Plan</h4>
+          <p>递归遍历源目录，构建 DirectoryCopyPlan。收集所有文件路径 + FileSignature（size + modified_ns），生成 SourceManifest。</p>
+          <div class="pipe-code">
+            <code>build_directory_copy_plan() → DirectoryCopyPlan</code>
+          </div>
+        </div>
+      </div>
+      <div class="pipe-connector"><div class="pipe-line"></div></div>
+      <div class="pipe-step">
+        <div class="pipe-num">2</div>
+        <div class="pipe-content">
+          <h4>Prepare Target</h4>
+          <p>按路径深度排序创建目标目录树，确保父目录先于子目录创建。</p>
+          <div class="pipe-code">
+            <code>prepare_directory_copy_plan() → mkdir -p sorted by depth</code>
+          </div>
+        </div>
+      </div>
+      <div class="pipe-connector"><div class="pipe-line"></div></div>
+      <div class="pipe-step">
+        <div class="pipe-num">3</div>
+        <div class="pipe-content">
+          <h4>Copy (Serial / Parallel)</h4>
+          <p>小目录串行复制，大目录 Rayon par_iter 并行。每个文件先尝试 CopyFile2，失败降级为缓冲复制。独立线程 200ms 上报进度。</p>
+          <div class="pipe-code">
+            <code>should_parallelize() ? par_iter : iter → copy_file_optimized()</code>
+          </div>
+        </div>
+      </div>
+      <div class="pipe-connector"><div class="pipe-line"></div></div>
+      <div class="pipe-step">
+        <div class="pipe-num">4</div>
+        <div class="pipe-content">
+          <h4>Verify</h4>
+          <p>逐文件验证：源文件 FileSignature 未变 + 目标文件存在 + 大小一致。源文件若在迁移期间被修改，立即报错。</p>
+          <div class="pipe-code">
+            <code>verify_copied_file() → size + modified_ns check</code>
+          </div>
+        </div>
+      </div>
+      <div class="pipe-connector"><div class="pipe-line"></div></div>
+      <div class="pipe-step">
+        <div class="pipe-num">5</div>
+        <div class="pipe-content">
+          <h4>Backup → Rename → Link</h4>
+          <p>源文件重命名为 .backup_temp，创建 Junction/Symlink 指向目标，验证链接有效性。失败则还原备份。</p>
+          <div class="pipe-code">
+            <code>fs::rename(src, .backup_temp) → create_link() → verify_link()</code>
+          </div>
+        </div>
+      </div>
+      <div class="pipe-connector"><div class="pipe-line"></div></div>
+      <div class="pipe-step">
+        <div class="pipe-num">6</div>
+        <div class="pipe-content">
+          <h4>Cleanup</h4>
+          <p>删除 .backup_temp 备份文件，完成迁移。若任一步失败，逆向回滚：删链接 → 还原备份 → 删目标。</p>
+          <div class="pipe-code">
+            <code>cleanup_backup() → MigrationResult { success: true }</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== CopyFile2 vs Buffered ===== -->
+  <section class="perf-section reveal">
+    <div class="section-header">
+      <span class="overline">Copy Engine</span>
+      <h2>双引擎复制策略</h2>
+      <p>CopyFile2 优先，缓冲复制降级</p>
+    </div>
+
+    <div class="engine-compare stagger-reveal">
+      <div class="engine-card ec-primary">
+        <div class="ec-header">
+          <div class="ec-badge ec-badge-primary">Primary</div>
+          <h4>CopyFile2</h4>
+        </div>
+        <div class="ec-features">
+          <div class="ec-feature">
+            <span class="ec-feature-name">COPY_FILE_FAIL_IF_EXISTS</span>
+            <span class="ec-feature-desc">目标文件已存在则失败，防止覆盖</span>
+          </div>
+          <div class="ec-feature">
+            <span class="ec-feature-name">COPY_FILE_NO_BUFFERING</span>
+            <span class="ec-feature-desc">≥128MB 文件绕过系统缓存，DMA 直传</span>
+          </div>
+          <div class="ec-feature">
+            <span class="ec-feature-name">Progress Callback</span>
+            <span class="ec-feature-desc">COPYFILE2_CALLBACK_CHUNK_FINISHED 实时回调</span>
+          </div>
+          <div class="ec-feature">
+            <span class="ec-feature-name">保留 ACL / ADS</span>
+            <span class="ec-feature-desc">内核级复制保留 NTFS 安全描述符和交替数据流</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="engine-card ec-fallback">
+        <div class="ec-header">
+          <div class="ec-badge ec-badge-fallback">Fallback</div>
+          <h4>Buffered Copy</h4>
+        </div>
+        <div class="ec-features">
+          <div class="ec-feature">
+            <span class="ec-feature-name">FILE_FLAG_SEQUENTIAL_SCAN</span>
+            <span class="ec-feature-desc">顺序读取优化，预读缓存友好</span>
+          </div>
+          <div class="ec-feature">
+            <span class="ec-feature-name">分级缓冲区</span>
+            <span class="ec-feature-desc">1MB / 8MB / 16MB 按文件大小自适应</span>
+          </div>
+          <div class="ec-feature">
+            <span class="ec-feature-name">sync_all()</span>
+            <span class="ec-feature-desc">写入后强制 fsync，确保数据落盘</span>
+          </div>
+          <div class="ec-feature">
+            <span class="ec-feature-name">降级触发</span>
+            <span class="ec-feature-desc">CopyFile2 失败时自动降级，记录 buffered_fallback_count</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== CTA ===== -->
+  <section class="cta">
+    <div class="cta-glow"></div>
+    <h2>从源码到性能</h2>
+    <p>每个参数都有据可查</p>
+    <a class="btn btn-primary" href="index.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      返回首页
+    </a>
+  </section>
+
+  <footer class="footer">
+    <p>CSD · 磁盘空间管理 &mdash; <a href="https://github.com/bjfwan/cdrive-cleaner">GitHub</a> &middot; GPL-3.0 &copy; 2026 bjfwan</p>
+  </footer>
+
+</div>
+
+<script>
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) entry.target.classList.add('visible');
+    });
+  }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.reveal, .const-card, .pipe-step, .engine-card').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>

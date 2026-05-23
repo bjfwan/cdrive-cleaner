@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<title>迁移流程 · CSD</title>
+<link rel="stylesheet" href="styles/main.css">
+<link rel="stylesheet" href="styles/workflow.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="bg-mesh">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+  <div class="noise-overlay"></div>
+</div>
+
+<nav class="sticky-nav">
+  <div class="nav-inner">
+    <a class="nav-logo" href="index.html">
+      <img src="assets/app-icon.png" alt="CSD" class="nav-logo-icon">
+      <span>CSD</span>
+    </a>
+    <div class="nav-links">
+      <a href="index.html">
+        <img src="assets/icons/nav-features.svg" alt="" class="nav-icon">功能
+      </a>
+      <a href="workflow.html" class="active">
+        <img src="assets/icons/nav-workflow.svg" alt="" class="nav-icon">迁移流程
+      </a>
+      <a href="safety.html">
+        <img src="assets/icons/nav-safety.svg" alt="" class="nav-icon">安全保障
+      </a>
+      <a href="perf.html">
+        <img src="assets/icons/nav-perf.svg" alt="" class="nav-icon">性能
+      </a>
+    </div>
+    <a class="nav-cta" href="https://github.com/bjfwan/cdrive-cleaner/releases/download/v0.1.8/CSD_0.1.8_x64-setup.exe" target="_blank">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      下载
+    </a>
+  </div>
+</nav>
+
+<div class="container page-transition">
+
+  <!-- Page Header -->
+  <section class="page-hero">
+    <span class="overline">Migration Flow</span>
+    <h1>五步迁移，步步可逆</h1>
+    <p class="page-hero-desc">完整的事务流程设计，每一步都有校验和回退机制。中途失败可重试，迁移成功后随时回滚到原状。</p>
+  </section>
+
+  <!-- ===== Animated Pipeline ===== -->
+  <section class="pipeline">
+    <div class="pipeline-track">
+      <!-- Connection line with animated particles -->
+      <svg class="pipeline-line" viewBox="0 0 1000 120" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="var(--teal)" stop-opacity="0.8"/>
+            <stop offset="50%" stop-color="var(--sky)" stop-opacity="0.6"/>
+            <stop offset="100%" stop-color="var(--emerald)" stop-opacity="0.8"/>
+          </linearGradient>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <line x1="50" y1="60" x2="950" y2="60" stroke="url(#lineGrad)" stroke-width="2" stroke-dasharray="8 4" class="pipeline-line-bg"/>
+        <!-- Animated particles -->
+        <circle r="4" fill="var(--teal)" filter="url(#glow)" class="particle particle-1"/>
+        <circle r="3" fill="var(--sky)" filter="url(#glow)" class="particle particle-2"/>
+        <circle r="3.5" fill="var(--emerald)" filter="url(#glow)" class="particle particle-3"/>
+      </svg>
+
+      <!-- Step Nodes -->
+      <div class="pipeline-steps">
+        <div class="pipe-step" data-step="1">
+          <div class="pipe-node" style="--step-color: var(--teal);">
+            <div class="pipe-node-inner">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            </div>
+            <span class="pipe-num">01</span>
+          </div>
+          <div class="pipe-label">复制</div>
+        </div>
+
+        <div class="pipe-step" data-step="2">
+          <div class="pipe-node" style="--step-color: var(--sky);">
+            <div class="pipe-node-inner">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <span class="pipe-num">02</span>
+          </div>
+          <div class="pipe-label">校验</div>
+        </div>
+
+        <div class="pipe-step" data-step="3">
+          <div class="pipe-node" style="--step-color: var(--emerald);">
+            <div class="pipe-node-inner">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <span class="pipe-num">03</span>
+          </div>
+          <div class="pipe-label">备份</div>
+        </div>
+
+        <div class="pipe-step" data-step="4">
+          <div class="pipe-node" style="--step-color: var(--amber);">
+            <div class="pipe-node-inner">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+            </div>
+            <span class="pipe-num">04</span>
+          </div>
+          <div class="pipe-label">链接</div>
+        </div>
+
+        <div class="pipe-step" data-step="5">
+          <div class="pipe-node" style="--step-color: var(--violet);">
+            <div class="pipe-node-inner">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            </div>
+            <span class="pipe-num">05</span>
+          </div>
+          <div class="pipe-label">清理</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Step Details ===== -->
+  <section class="step-details">
+    <!-- Step 1 -->
+    <div class="step-detail reveal" id="step-1">
+      <div class="step-detail-left">
+        <div class="step-badge" style="--badge-color: var(--teal);">Step 01</div>
+        <h3>CopyFile2 并行复制</h3>
+        <p class="step-detail-desc">
+          利用 Windows CopyFile2 API 的 unbuffered IO 模式，配合 Rust Rayon 并行框架，大文件和小文件分别走不同复制策略，最大化磁盘吞吐。
+        </p>
+        <div class="step-features">
+          <div class="step-feat">
+            <span class="step-feat-dot" style="--dot-color: var(--teal);"></span>
+            <span>大文件走 CopyFile2 unbuffered 模式，绕过系统缓存直接 DMA 传输</span>
+          </div>
+          <div class="step-feat">
+            <span class="step-feat-dot" style="--dot-color: var(--teal);"></span>
+            <span>小文件走 Rayon 并行复制，自动根据 CPU 核心数调整并发度</span>
+          </div>
+          <div class="step-feat">
+            <span class="step-feat-dot" style="--dot-color: var(--teal);"></span>
+            <span>SSD 上 8 线程并行，HDD 上单线程顺序读写，避免磁头抖动</span>
+          </div>
+        </div>
+        <div class="step-metric">
+          <div class="metric-item">
+            <span class="metric-value counter-value" data-target="30" style="--metric-color: var(--teal);">0</span>
+            <span class="metric-unit">%</span>
+            <span class="metric-label">大文件复制速度提升</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-value counter-value" data-target="8" style="--metric-color: var(--teal);">0</span>
+            <span class="metric-unit">线程</span>
+            <span class="metric-label">SSD 最大并行度</span>
+          </div>
+        </div>
+      </div>
+      <div class="step-detail-right">
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-dot" style="background:#ff5f57;"></span>
+            <span class="code-dot" style="background:#febc2e;"></span>
+            <span class="code-dot" style="background:#28c840;"></span>
+            <span class="code-title">copy_engine.rs</span>
+          </div>
+          <pre class="code-body"><code><span class="kw">fn</span> <span class="fn">copy_parallel</span>(src: &amp;Path, dst: &amp;Path) -&gt; Result&lt;()&gt; {
+    <span class="kw">let</span> meta = fs::metadata(src)?;
+    <span class="kw">if</span> meta.len() &gt; LARGE_FILE_THRESHOLD {
+        <span class="cmt">// 大文件: CopyFile2 unbuffered</span>
+        copy_file2_unbuffered(src, dst)?;
+    } <span class="kw">else</span> {
+        <span class="cmt">// 小文件: Rayon 并行</span>
+        files.<span class="fn">par_iter</span>()
+            .<span class="fn">for_each</span>(|f| {
+                fs::copy(&amp;f.src, &amp;f.dst).ok();
+            });
+    }
+    Ok(())
+}</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step-detail step-detail--reverse reveal" id="step-2">
+      <div class="step-detail-left">
+        <div class="step-badge" style="--badge-color: var(--sky);">Step 02</div>
+        <h3>XXHash 完整性校验</h3>
+        <p class="step-detail-desc">
+          复制完成后对源文件和目标文件做 xxHash64 校验比对，确保每一位数据都完整无误。校验不通过自动重试，最多三次。
+        </p>
+        <div class="step-features">
+          <div class="step-feat">
+            <span class="step-feat-dot" style="--dot-color: var(--sky);"></span>
+            <span>xxHash64 极速哈希，4 GB/s 以上吞吐，校验不拖后腿</span>
+          </div>
+          <div class="step-feat">
+            <span class="step-feat-dot" style="--dot-color: var(--sky);"></span>
+            <span>逐文件比对源与目标哈希值，发现不一致立即标记重试</span>
+          </div>
+          <div class="step-feat">
+            <span class="step-feat-dot" style="--dot-color: var(--sky);"></span>
+            <span>三次重试仍失败则中止迁移，已复制文件不受影响</span>
+          </div>
+        </div>
+        <div class="step-metric">
+          <div class="metric-item">
+            <span class="metric-value counter-value" data-target="4" style="--metric-color: var(--sky);">0</span>
+            <span class="metric-unit">GB/s</span>
+            <span class="metric-label">xxHash64 吞吐量</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-value counter-value" data-target="3" style="--metric-color: var(--sky);">0</span>
+            <span class="metric-unit">次</span>
+            <span class="metric-label">最大重试次数</span>
+          </div>
+        </div>
+      </div>
+      <div class="step-detail-right">
+        <div class="verify-visual">
+          <div class="verify-file">
+            <div class="verify-file-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--sky)" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <span class="verify-label">源文件</span>
+            <span class="verify-hash">0xA3F2...8B1C</span>
+          </div>
+          <div class="verify-arrow">
+            <svg viewBox="0 0 40 24" fill="none" stroke="var(--teal)" stroke-width="2"><path d="M4 12h28M26 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="verify-file">
+            <div class="verify-file-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--emerald)" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <span class="verify-label">目标文件</span>
+            <span class="verify-hash">0xA3F2...8B1C</span>
+          </div>
+          <div class="verify-result">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--emerald)" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-5"/></svg>
+            <span>校验通过</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step-detail reveal" id="step-3">
+      <div class="step-detail-left">
+        <div class="step-badge" style="--badge-color: var(--emerald);">Step 03</div>
+        <h3>元数据安全备份</h3>
+        <p class="step-detail-desc">
+          迁移前将原始路径、文件属性、时间戳等元数据写入 SQLite WAL 数据库，即使程序崩溃也能从断点恢复。
+        </p>
+        <div class="step-features">
+          <div class="step-feat">
+            <span class="step-feat-dot" style="--dot-color: var(--emerald);"></span>
+            <span>完整记录原始路径、文件属性、创建/修改/访问时间戳</span>
+          </div>
+          <div class="step-feat">
+            <span class="step-feat-dot" style="--dot-color: var(--emerald);"></span>
+            <span>SQLite WAL 模式支持并发读写，不阻塞其他操作</span>
+          </div>
+          <div class="step-feat">
+            <span class="step-feat-dot" style="--dot-color: var(--emerald);"></span>
+            <span>事务型写入，每步完成后持久化进度，崩溃可恢复</span>
+          </div>
+        </div>
+      </div>
+      <div class="step-detail-right">
+        <div class="db-visual">
+          <div class="db-table">
+            <div class="db-header">migration_records</div>
+            <div class="db-row"><span class="db-field">id</span><span class="db-type">INTEGER PK</span></div>
+            <div class="db-row"><span class="db-field">src_path</span><span class="db-type">TEXT</span></div>
+            <div class="db-row"><span class="db-field">dst_path</span><span class="db-type">TEXT</span></div>
+            <div class="db-row"><span class="db-field">file_hash</span><span class="db-type">TEXT</span></div>
+            <div class="db-row"><span class="db-field">created_at</span><span class="db-type">DATETIME</span></div>
+            <div class="db-row"><span class="db-field">modified_at</span><span class="db-type">DATETIME</span></div>
+            <div class="db-row"><span class="db-field">status</span><span class="db-type">ENUM</span></div>
+          </div>
+          <div class="db-badge">WAL Mode</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="step-detail step-detail--reverse reveal" id="step-4">
+      <div class="step-detail-left">
+        <div class="step-badge" style="--badge-color: var(--amber);">Step 04</div>
+        <h3>Junction / Symlink 透明链接</h3>
+        <p class="step-detail-desc">
+          在原位置创建 NTFS Junction（目录）或 Symlink（文件），所有应用读写操作透明转发到新位置，零感知无感迁移。
+        </p>
+        <div class="step-features">
+          <div class="step-feat">
+            <span class="step-feat-dot" style="--dot-color: var(--amber);"></span>
+            <span>目录迁移创建 NTFS Junction，文件迁移创建 Symlink</span>
+          </div>
+          <div class="step-feat">
+            <span class="step-feat-dot" style="--dot-color: var(--amber);"></span>
+            <span>应用层完全透明，读写操作自动转发到新位置</span>
+          </div>
+          <div class="step-feat">
+            <span class="step-feat-dot" style="--dot-color: var(--amber);"></span>
+            <span>支持 Reparse Point 深度检测，避免嵌套链接问题</span>
+          </div>
+        </div>
+      </div>
+      <div class="step-detail-right">
+        <div class="link-visual">
+          <div class="link-node link-src">
+            <div class="link-node-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+            </div>
+            <span class="link-node-label">C:\Users\...\AppData</span>
+            <span class="link-node-type">Junction →</span>
+          </div>
+          <div class="link-connector">
+            <div class="link-line"></div>
+            <div class="link-pulse"></div>
+          </div>
+          <div class="link-node link-dst">
+            <div class="link-node-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--emerald)" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+            </div>
+            <span class="link-node-label">D:\Migrated\AppData</span>
+            <span class="link-node-type">实际数据</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 5 -->
+    <div class="step-detail reveal" id="step-5">
+      <div class="step-detail-left">
+        <div class="step-badge" style="--badge-color: var(--violet);">Step 05</div>
+        <h3>清理源文件 & 释放空间</h3>
+        <p class="step-detail-desc">
+          确认链接创建成功后，安全移除源文件释放磁盘空间。清理前二次确认链接有效性，确保应用不受影响。
+        </p>
+        <div class="step-features">
+          <div class="step-feat">
+            <span class="step-feat-dot" style="--dot-color: var(--violet);"></span>
+            <span>清理前验证 Junction/Symlink 可访问，确保链接有效</span>
+          </div>
+          <div class="step-feat">
+            <span class="step-feat-dot" style="--dot-color: var(--violet);"></span>
+            <span>删除源文件后更新迁移记录状态为 completed</span>
+          </div>
+          <div class="step-feat">
+            <span class="step-feat-dot" style="--dot-color: var(--violet);"></span>
+            <span>一键回滚：逆向操作恢复到迁移前状态</span>
+          </div>
+        </div>
+      </div>
+      <div class="step-detail-right">
+        <div class="rollback-visual">
+          <div class="rollback-flow">
+            <div class="rollback-step">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+              <span>删除链接</span>
+            </div>
+            <div class="rollback-arrow">→</div>
+            <div class="rollback-step">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--sky)" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <span>复制回原位</span>
+            </div>
+            <div class="rollback-arrow">→</div>
+            <div class="rollback-step">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--emerald)" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span>恢复元数据</span>
+            </div>
+            <div class="rollback-arrow">→</div>
+            <div class="rollback-step">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2"><polyline points="20 6 9 17 4 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>完成回滚</span>
+            </div>
+          </div>
+          <div class="rollback-note">完整逆向操作，恢复到迁移前状态</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Bottom CTA ===== -->
+  <section class="cta">
+    <div class="cta-glow"></div>
+    <h2>安全迁移，放心回滚</h2>
+    <p>五步事务流程，每一步都有保障</p>
+    <a class="btn btn-primary" href="index.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      返回首页
+    </a>
+  </section>
+
+  <footer class="footer">
+    <p>CSD · 磁盘空间管理 &mdash; <a href="https://github.com/bjfwan/cdrive-cleaner">GitHub</a> &middot; GPL-3.0 &copy; 2026 bjfwan</p>
+  </footer>
+
+</div>
+
+<script>
+  // Scroll reveal
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        // Animate counters
+        entry.target.querySelectorAll('.counter-value').forEach(el => {
+          const target = parseInt(el.dataset.target);
+          if (el.dataset.animated) return;
+          el.dataset.animated = 'true';
+          let current = 0;
+          const step = Math.max(1, Math.floor(target / 30));
+          const timer = setInterval(() => {
+            current += step;
+            if (current >= target) { current = target; clearInterval(timer); }
+            el.textContent = current;
+          }, 30);
+        });
+      }
+    });
+  }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>
