@@ -1,0 +1,8 @@
+name = "csd-proxy"
+main = "worker.mjs"
+compatibility_date = "2025-01-01"
+workers_dev = true
+
+routes = [
+  { pattern = "csd-api.likeyou.qzz.io", custom_domain = true }
+]

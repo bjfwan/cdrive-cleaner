@@ -165,6 +165,8 @@ export interface MigrationStats {
   rolled_back_count: number;
 }
 
+export type CloseBehavior = 'exit' | 'tray';
+
 export interface AppSettings {
   defaultTargetDisk: string;
   largeFileThreshold: number;
@@ -172,6 +174,10 @@ export interface AppSettings {
   defaultDeleteMode: DeleteMode;
   theme?: 'light' | 'dark' | 'auto';
   autoCheckUpdate?: boolean;
+  // Track A (v0.1.9 后台扫描 + 托盘)
+  closeBehavior?: CloseBehavior;
+  schedulerEnabled?: boolean;
+  schedulerIdleMinutes?: number;
 }
 
 export interface UpdateInfo {

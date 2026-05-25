@@ -48,6 +48,34 @@
   --color-semantic-danger: #ef4444;
   --color-semantic-info: #3b82f6;
 
+  --risk-safe-soft: #d1fae5;
+  --risk-safe-base: #10b981;
+  --risk-safe-strong: #047857;
+  --risk-safe-text: #065f46;
+  --risk-safe-on: #ffffff;
+  --risk-safe-ring: rgba(16, 185, 129, 0.28);
+
+  --risk-caution-soft: #fef3c7;
+  --risk-caution-base: #f59e0b;
+  --risk-caution-strong: #b45309;
+  --risk-caution-text: #78350f;
+  --risk-caution-on: #ffffff;
+  --risk-caution-ring: rgba(245, 158, 11, 0.32);
+
+  --risk-risky-soft: #fee2e2;
+  --risk-risky-base: #ef4444;
+  --risk-risky-strong: #b91c1c;
+  --risk-risky-text: #7f1d1d;
+  --risk-risky-on: #ffffff;
+  --risk-risky-ring: rgba(239, 68, 68, 0.32);
+
+  --risk-blocked-soft: #f3f4f6;
+  --risk-blocked-base: #9ca3af;
+  --risk-blocked-strong: #4b5563;
+  --risk-blocked-text: #374151;
+  --risk-blocked-on: #ffffff;
+  --risk-blocked-ring: rgba(107, 114, 128, 0.28);
+
   --color-actionable: #14b8a6;
   --color-non-actionable: #6b7280;
 
@@ -83,6 +111,16 @@
   --transition-fast: 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   --transition-base: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   --transition-slow: 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+
+  --motion-press-duration: 60ms;
+  --motion-press-easing: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-fade-duration: 120ms;
+  --motion-fade-easing: ease-out;
+  --motion-stagger-step: 30ms;
+  --motion-stagger-easing: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-toast-duration: 240ms;
+  --motion-count-up-duration: 300ms;
+  --motion-hesitate-shake-duration: 50ms;
 
   --modal-backdrop: rgba(15, 23, 32, 0.55);
 }
@@ -126,6 +164,34 @@
   --color-semantic-caution: #fbbf24;
   --color-semantic-danger: #f87171;
   --color-semantic-info: #60a5fa;
+
+  --risk-safe-soft: rgba(52, 211, 153, 0.16);
+  --risk-safe-base: #34d399;
+  --risk-safe-strong: #6ee7b7;
+  --risk-safe-text: #a7f3d0;
+  --risk-safe-on: #022c22;
+  --risk-safe-ring: rgba(52, 211, 153, 0.36);
+
+  --risk-caution-soft: rgba(251, 191, 36, 0.16);
+  --risk-caution-base: #fbbf24;
+  --risk-caution-strong: #fcd34d;
+  --risk-caution-text: #fde68a;
+  --risk-caution-on: #422006;
+  --risk-caution-ring: rgba(251, 191, 36, 0.4);
+
+  --risk-risky-soft: rgba(248, 113, 113, 0.16);
+  --risk-risky-base: #f87171;
+  --risk-risky-strong: #fca5a5;
+  --risk-risky-text: #fecaca;
+  --risk-risky-on: #450a0a;
+  --risk-risky-ring: rgba(248, 113, 113, 0.4);
+
+  --risk-blocked-soft: rgba(255, 255, 255, 0.06);
+  --risk-blocked-base: #6b7280;
+  --risk-blocked-strong: #9ca3af;
+  --risk-blocked-text: #d1d5db;
+  --risk-blocked-on: #0f1115;
+  --risk-blocked-ring: rgba(156, 163, 175, 0.32);
 
   --color-actionable: #14b8a6;
   --color-non-actionable: #6b7280;

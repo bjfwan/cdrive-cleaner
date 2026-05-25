@@ -1,6 +1,6 @@
 [package]
 name = "cdrive-cleaner"
-version = "0.1.8"
+version = "0.1.9"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -24,7 +24,7 @@ bench = []
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] } # Track A: tray-icon 用于 v0.1.9 后台扫描托盘
 tauri-plugin-shell = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
@@ -63,6 +63,10 @@ bincode = "1"
 aho-corasick = "1"
 zip = "0.6"
 ureq = { version = "2", features = ["json"] }
+
+# Track B: AI client + sanitizer
+# Reuses existing crates only (ureq for HTTP, serde_json for JSON,
+# in-tree SHA-1 in ai/sanitizer.rs — no new dependencies needed).
 
 [dev-dependencies]
 serial_test = "3"

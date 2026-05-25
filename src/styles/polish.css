@@ -133,3 +133,332 @@ button[class*='accent']:active:not(:disabled),
 .step-btn:active:not(:disabled) {
   transform: scale(0.97);
 }
+
+/* ============================================================
+   Button four-state spec (idle / hover / active / disabled / loading)
+   Variants: --primary | --danger | --ghost | --secondary
+   ============================================================ */
+
+.btn-base {
+  --btn-bg: var(--color-surface-strong);
+  --btn-fg: var(--color-text-primary);
+  --btn-border: var(--color-border-medium);
+  --btn-ring: var(--color-highlight-soft);
+  --btn-shadow: var(--shadow-xs);
+  --btn-bg-hover: var(--color-surface-hover);
+  --btn-bg-active: var(--color-surface);
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 2.5rem;
+  padding: 0.55rem 1.1rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--btn-fg);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--btn-shadow);
+  cursor: pointer;
+  transition:
+    background var(--motion-fade-duration) var(--motion-fade-easing),
+    border-color var(--motion-fade-duration) var(--motion-fade-easing),
+    color var(--motion-fade-duration) var(--motion-fade-easing),
+    box-shadow var(--motion-fade-duration) var(--motion-fade-easing),
+    transform var(--motion-press-duration) var(--motion-press-easing);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.btn-base:hover:not(:disabled):not([aria-busy='true']) {
+  background: var(--btn-bg-hover);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-base:active:not(:disabled):not([aria-busy='true']) {
+  background: var(--btn-bg-active);
+  transform: scale(0.97);
+  box-shadow: var(--shadow-xs);
+}
+
+.btn-base:focus-visible {
+  outline: 2px solid var(--btn-ring);
+  outline-offset: 2px;
+}
+
+.btn-base:disabled,
+.btn-base[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+  filter: grayscale(0.2);
+}
+
+.btn-base[aria-busy='true'] {
+  cursor: progress;
+  color: transparent !important;
+  pointer-events: none;
+}
+
+.btn-base[aria-busy='true']::after {
+  content: '';
+  position: absolute;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  color: var(--btn-fg);
+  animation: btn-spin 0.7s linear infinite;
+}
+
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+
+.btn-primary {
+  --btn-bg: var(--color-highlight);
+  --btn-fg: var(--color-text-inverse);
+  --btn-border: transparent;
+  --btn-ring: var(--color-highlight-soft);
+  --btn-shadow: var(--shadow-sm);
+  --btn-bg-hover: color-mix(in srgb, var(--color-highlight) 90%, #000 10%);
+  --btn-bg-active: color-mix(in srgb, var(--color-highlight) 82%, #000 18%);
+}
+
+.btn-danger {
+  --btn-bg: var(--risk-risky-base);
+  --btn-fg: var(--risk-risky-on);
+  --btn-border: transparent;
+  --btn-ring: var(--risk-risky-ring);
+  --btn-shadow: 0 6px 16px var(--risk-risky-ring);
+  --btn-bg-hover: var(--risk-risky-strong);
+  --btn-bg-active: var(--risk-risky-strong);
+}
+
+.btn-danger:hover:not(:disabled):not([aria-busy='true']) {
+  animation: btn-hesitate var(--motion-hesitate-shake-duration) linear 1;
+}
+
+@keyframes btn-hesitate {
+  0%, 100% { transform: translateX(0); }
+  35% { transform: translateX(-1px); }
+  70% { transform: translateX(1px); }
+}
+
+.btn-safe {
+  --btn-bg: var(--risk-safe-base);
+  --btn-fg: var(--risk-safe-on);
+  --btn-border: transparent;
+  --btn-ring: var(--risk-safe-ring);
+  --btn-shadow: 0 6px 16px var(--risk-safe-ring);
+  --btn-bg-hover: var(--risk-safe-strong);
+  --btn-bg-active: var(--risk-safe-strong);
+}
+
+.btn-caution {
+  --btn-bg: var(--risk-caution-base);
+  --btn-fg: var(--risk-caution-on);
+  --btn-border: transparent;
+  --btn-ring: var(--risk-caution-ring);
+  --btn-shadow: 0 6px 16px var(--risk-caution-ring);
+  --btn-bg-hover: var(--risk-caution-strong);
+  --btn-bg-active: var(--risk-caution-strong);
+}
+
+.btn-ghost {
+  --btn-bg: transparent;
+  --btn-fg: var(--color-text-primary);
+  --btn-border: transparent;
+  --btn-shadow: none;
+  --btn-bg-hover: var(--color-surface-muted);
+  --btn-bg-active: var(--color-surface);
+}
+
+.btn-secondary {
+  --btn-bg: var(--color-surface-muted);
+  --btn-fg: var(--color-text-primary);
+  --btn-border: var(--color-border-medium);
+  --btn-bg-hover: var(--color-surface-strong);
+  --btn-bg-active: var(--color-surface);
+}
+
+.btn-sm {
+  min-height: 2rem;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.825rem;
+  border-radius: var(--radius-xs);
+}
+
+.btn-lg {
+  min-height: 3rem;
+  padding: 0.8rem 1.5rem;
+  font-size: 1rem;
+  border-radius: var(--radius-md);
+}
+
+.btn-block {
+  width: 100%;
+}
+
+/* ============================================================
+   Risk badge utility classes
+   ============================================================ */
+
+.risk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.18rem 0.6rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.risk-badge--safe {
+  color: var(--risk-safe-text);
+  background: var(--risk-safe-soft);
+  border: 1px solid var(--risk-safe-ring);
+}
+
+.risk-badge--caution {
+  color: var(--risk-caution-text);
+  background: var(--risk-caution-soft);
+  border: 1px solid var(--risk-caution-ring);
+}
+
+.risk-badge--risky {
+  color: var(--risk-risky-text);
+  background: var(--risk-risky-soft);
+  border: 1px solid var(--risk-risky-ring);
+}
+
+.risk-badge--blocked {
+  color: var(--risk-blocked-text);
+  background: var(--risk-blocked-soft);
+  border: 1px solid var(--risk-blocked-ring);
+}
+
+/* ============================================================
+   Panel fade + list stagger
+   ============================================================ */
+
+.panel-fade-enter-active,
+.panel-fade-leave-active {
+  transition: opacity var(--motion-fade-duration) var(--motion-fade-easing),
+              transform var(--motion-fade-duration) var(--motion-fade-easing);
+}
+
+.panel-fade-enter-from,
+.panel-fade-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.list-stagger > * {
+  animation: list-stagger-in 220ms var(--motion-stagger-easing) both;
+}
+
+.list-stagger > *:nth-child(1) { animation-delay: calc(var(--motion-stagger-step) * 0); }
+.list-stagger > *:nth-child(2) { animation-delay: calc(var(--motion-stagger-step) * 1); }
+.list-stagger > *:nth-child(3) { animation-delay: calc(var(--motion-stagger-step) * 2); }
+.list-stagger > *:nth-child(4) { animation-delay: calc(var(--motion-stagger-step) * 3); }
+.list-stagger > *:nth-child(5) { animation-delay: calc(var(--motion-stagger-step) * 4); }
+.list-stagger > *:nth-child(6) { animation-delay: calc(var(--motion-stagger-step) * 5); }
+.list-stagger > *:nth-child(7) { animation-delay: calc(var(--motion-stagger-step) * 6); }
+.list-stagger > *:nth-child(8) { animation-delay: calc(var(--motion-stagger-step) * 7); }
+.list-stagger > *:nth-child(n+9) { animation-delay: calc(var(--motion-stagger-step) * 8); }
+
+@keyframes list-stagger-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================================
+   Three-state shell: empty / loading / error
+   ============================================================ */
+
+.state-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  padding: 2.5rem 1.5rem;
+  min-height: 12rem;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.state-shell__icon {
+  width: 3rem;
+  height: 3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  color: var(--color-text-tertiary);
+}
+
+.state-shell--empty .state-shell__icon {
+  background: var(--color-highlight-soft);
+  color: var(--color-highlight);
+}
+
+.state-shell--error .state-shell__icon {
+  background: var(--risk-risky-soft);
+  color: var(--risk-risky-text);
+}
+
+.state-shell--loading .state-shell__icon {
+  background: var(--color-highlight-soft);
+  color: var(--color-highlight);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.state-shell__title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.state-shell__hint {
+  font-size: 0.825rem;
+  color: var(--color-text-tertiary);
+  max-width: 28rem;
+}
+
+.state-shell__cta {
+  margin-top: 0.35rem;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.7; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-base,
+  .panel-fade-enter-active,
+  .panel-fade-leave-active,
+  .list-stagger > *,
+  .state-shell--loading .state-shell__icon {
+    animation: none !important;
+    transition: none !important;
+  }
+}

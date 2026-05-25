@@ -5,7 +5,7 @@
     "detect": ["%APPDATA%\\discord"],
     "category": "app_cache",
     "name": "Discord 缓存",
-    "description": "Discord 桌面端 Electron 缓存，可安全删除",
+    "description": "Discord 桌面端 Electron 缓存,可安全删除",
     "targets": [
       {"base": "%APPDATA%\\discord\\Cache\\Cache_Data"},
       {"base": "%APPDATA%\\discord\\Code Cache"},
@@ -14,7 +14,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Discord(Electron 应用)的网页资源、脚本编译结果和 GPU 渲染缓存。下次启动会自动重建,不会影响你的登录、聊天记录、消息草稿、表情包收藏和服务器列表。首次启动比平常慢 1-2 秒。"
   },
   {
     "id": "discord_blob_storage",
@@ -27,7 +28,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Discord 内嵌网页用的临时 Blob 数据(比如刚加载的图片片段)。删了不影响登录态、聊天记录和正在进行的语音/视频,下次访问时会重新拉取。"
   },
   {
     "id": "discord_crashpad",
@@ -40,7 +42,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Discord 崩溃瞬间的内存快照,只给开发者排错用。崩溃事件已过就用不上,留着只占空间。不影响 Discord 任何功能。"
   },
   {
     "id": "discord_logs",
@@ -56,7 +59,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Discord 客户端的调试日志。删了不影响你的账号、好友列表、服务器和消息,Discord 重启后会重新生成新日志。"
   },
   {
     "id": "discord_video_decode",
@@ -69,7 +73,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Discord 记录的本机视频解码能力测试结果,用于自动选最佳分辨率。删了下次开视频通话/看视频时会重新评估一次,完全不影响通话质量。"
   },
   {
     "id": "discord_squirrel_temp",
@@ -82,7 +87,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Discord 自动更新过程中的中转临时文件。Discord 装完后就用不上了,留着只占空间。删了不影响下次自动更新和当前已安装版本。"
   },
   {
     "id": "discord_hook_logs",
@@ -95,7 +101,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Discord 游戏内覆盖层(Overlay)Hook 模块的调试日志。删了不影响游戏中的语音浮窗、聊天弹出和按键设置——这些功能照常工作。"
   },
   {
     "id": "slack_cache",
@@ -112,7 +119,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Slack 的网页资源、脚本编译结果和 GPU 渲染缓存。下次启动会自动重建,不会影响你的登录、工作区、频道列表、消息草稿和最近聊天记录。首次启动慢 1-2 秒。"
   },
   {
     "id": "slack_service_worker",
@@ -125,7 +133,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Slack 用于离线访问的 Service Worker 资源缓存。登录态保存在别处(Local Storage、Cookies),删了不需要重新登录,只是离线缓存的频道历史需要联网时重新加载。"
   },
   {
     "id": "slack_logs",
@@ -138,7 +147,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Slack 桌面客户端的运行调试日志。删了不影响登录态、消息和工作区配置——下次启动会重新生成新日志。"
   },
   {
     "id": "teams_classic_cache",
@@ -156,7 +166,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Teams 经典版的网页/脚本/GPU 缓存。下次启动会自动重建。不影响你的登录、团队列表、频道消息历史以及自定义的会议背景——背景图片单独存在 BackgroundImages 里,本规则不动。首次启动慢一两秒。"
   },
   {
     "id": "teams_classic_logs",
@@ -172,7 +183,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Teams 经典版的运行日志和崩溃转储。删了不影响登录、会议日历和聊天记录——日志只是给微软客服反馈连接/会议异常时用。"
   },
   {
     "id": "teams_new_cache",
@@ -189,7 +201,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "新版 Teams(UWP/MSIX)WebView2 引擎的网页和 GPU 缓存。下次启动会自动重建。不影响登录、团队、聊天历史和会议链接,自定义会议背景在别处(BackgroundImages)不受影响。"
   },
   {
     "id": "teams_new_logs",
@@ -205,7 +218,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "新版 Teams 的运行日志和 UWP 应用的临时状态。删了不影响登录、会议、聊天和文件传输——下次启动重新生成。"
   },
   {
     "id": "telegram_cache",
@@ -218,7 +232,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Telegram 浏览聊天时自动缓存的图片、视频、文档,需要时会从服务器重新下载。**不会影响登录态和聊天记录**(那些在 tdata 根目录,本规则只动 user_data\\cache 子目录)。"
   },
   {
     "id": "telegram_logs",
@@ -231,7 +246,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Telegram 写在根目录的单个 log.txt 调试日志。删了不影响账号、聊天记录、设置和已下载文件。"
   },
   {
     "id": "telegram_dumps",
@@ -244,7 +260,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Telegram 崩溃瞬间的内存快照,只供开发者排错。崩溃已过就用不上,留着只占空间。不影响聊天记录和登录态。"
   },
   {
     "id": "whatsapp_cache",
@@ -261,7 +278,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "WhatsApp 桌面端的网页、GPU 和临时 Blob 缓存。下次启动会自动重建——不会影响与手机的配对状态、聊天记录和媒体文件。首次启动慢 1-2 秒。"
   },
   {
     "id": "whatsapp_crashpad",
@@ -274,7 +292,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "WhatsApp 崩溃时的内存快照,只供开发者排错。崩溃已过就用不上。不影响配对状态和聊天数据。"
   },
   {
     "id": "whatsapp_logs",
@@ -287,7 +306,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "WhatsApp 桌面端的运行调试日志。删了不影响配对、聊天记录和媒体——下次启动会重新生成。"
   },
   {
     "id": "zoom_cache",
@@ -300,7 +320,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Zoom 会议中临时的音视频/图片缓存(注意:不是会议录屏!录屏在用户文档目录,本规则不动)。删了不影响登录、会议日程和云端录像链接。"
   },
   {
     "id": "zoom_logs",
@@ -313,7 +334,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Zoom 客户端的运行日志。删了不影响登录、会议安排和已下载/录制的会议视频——日志仅在你向 Zoom 客服反馈卡顿/掉线时有用。"
   },
   {
     "id": "signal_cache",
@@ -330,7 +352,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Signal 桌面端的网页和 GPU 缓存。下次启动自动重建,不会影响配对状态、加密会话密钥(在数据库里,本规则不动)和聊天记录。首次启动慢 1-2 秒。"
   },
   {
     "id": "signal_crashpad",
@@ -343,7 +366,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Signal 桌面端崩溃时的内存快照,只给开发者排错。崩溃事件已过就用不上,不影响加密会话和配对状态。"
   },
   {
     "id": "signal_logs",
@@ -356,7 +380,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Signal 桌面端的运行日志(不含消息内容)。删了不影响配对状态、加密密钥和聊天数据——这些在加密数据库里。日志只在向 Signal 团队报 bug 时有用。"
   },
   {
     "id": "skype_cache",
@@ -372,7 +397,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Skype 桌面端的网页和 GPU 缓存。下次启动自动重建,不会影响登录、联系人和聊天历史。首次启动慢 1-2 秒。"
   },
   {
     "id": "dingtalk_logs",
@@ -385,7 +411,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "钉钉客户端的滚动调试日志。删了不影响登录态、组织架构、消息记录和钉盘文件——这些在别处。日志只是给钉钉客服反馈卡顿/异常时用。"
   },
   {
     "id": "dingtalk_cache",
@@ -401,7 +428,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "钉钉嵌入网页(工作台、微应用)的资源缓存和 GPU 渲染缓存。下次打开微应用时会重新加载,不影响登录、组织架构和聊天记录。注意:聊天记录的图片/文件存放在 IM 数据库里,本规则不动。"
   },
   {
     "id": "lark_cache",
@@ -418,7 +446,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "飞书桌面端的网页资源、脚本编译和 GPU 缓存。下次启动会自动重建,不会影响登录、组织架构、消息记录、文档和云盘文件——这些都不在 Cache 子目录里。首次启动慢 1-2 秒。"
   },
   {
     "id": "lark_logs",
@@ -431,7 +460,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "飞书桌面端的运行日志。删了不影响登录、组织架构、消息和飞书文档——这些都不在 Logs 里。日志仅在给飞书客服报 bug 时有用。"
   },
   {
     "id": "wecom_cache",
@@ -447,7 +477,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "企业微信内嵌网页(工作台、微文档)的资源缓存和 GPU 渲染缓存。注意:聊天消息、群聊文件、聊天图片在用户 ID 子目录的 IM 数据库里,本规则不动。删了不影响登录态和企业组织架构。"
   },
   {
     "id": "wecom_logs",
@@ -460,7 +491,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "企业微信客户端的运行日志。删了不影响登录、组织架构和消息记录——日志只是给腾讯客服反馈卡顿/异常时用。"
   },
   {
     "id": "wechat_web_cache",
@@ -473,7 +505,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "微信桌面端内嵌浏览器(打开公众号文章、网页时用)的缓存。**不会动你的聊天记录、收到的文件、图片和视频**——这些在 WeChat Files 用户目录里,本规则严格只清 radium\\web\\Cache 子目录。"
   },
   {
     "id": "wechat_logs",
@@ -486,7 +519,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "微信桌面端的运行调试日志(WeChat\\log 子目录)。**不会动 WeChat Files 用户聊天数据库和收到的文件**。删了不影响登录、好友列表和聊天记录,只是给微信客服报 bug 时少一份排错素材。"
   },
   {
     "id": "wechat_mini_program_cache",
@@ -499,7 +533,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "微信小程序运行时下载的临时资源。删了不影响小程序授权记录、登录态和聊天记录——下次打开小程序时会重新拉取需要的资源,启动慢 1-3 秒。"
   },
   {
     "id": "qq_cache",
@@ -516,7 +551,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "QQ 新版桌面客户端(Electron)的网页/脚本/GPU 缓存。下次启动自动重建,不会影响登录、好友列表、群聊和聊天记录——聊天数据库和接收的文件不在这里。首次启动慢 1-2 秒。"
   },
   {
     "id": "qq_logs",
@@ -529,7 +565,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "QQ 桌面客户端的运行日志。删了不影响登录、好友、群聊和接收的文件——日志只是给腾讯客服反馈异常时用。"
   },
   {
     "id": "qq_crashpad",
@@ -542,7 +579,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "QQ 崩溃瞬间的内存快照,只给腾讯工程师看。崩溃事件已过就用不上,不影响 QQ 登录和聊天功能。"
   },
   {
     "id": "discord_canary_cache",
@@ -559,7 +597,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Discord Canary(开发预览版)的网页/脚本/GPU 缓存。下次启动自动重建,不会影响登录和服务器列表。首次启动慢 1-2 秒。"
   },
   {
     "id": "discord_ptb_cache",
@@ -576,7 +615,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Discord PTB(Public Test Build)的网页/脚本/GPU 缓存。下次启动自动重建,不会影响登录、服务器列表和消息草稿。首次启动慢 1-2 秒。"
   },
   {
     "id": "better_discord_temp",
@@ -592,7 +632,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "BetterDiscord 插件框架的临时文件和日志。删了不影响你装的主题、插件和它们的配置——这些在 plugins/themes 子目录,本规则不动。"
   },
   {
     "id": "zoom_crashpad",
@@ -605,7 +646,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Zoom 崩溃时的内存快照,只供 Zoom 工程师排错。崩溃已过就用不上,不影响登录、会议日程和录制视频。"
   },
   {
     "id": "line_cache",
@@ -621,7 +663,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "LINE 桌面端浏览图片/贴图时的网页缓存和 GPU 缓存。下次需要时会重新拉取,不影响登录、好友、群聊和聊天记录。"
   },
   {
     "id": "slack_crashpad",
@@ -634,7 +677,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Slack 崩溃瞬间的内存快照,只给开发者排错。崩溃已过就用不上,不影响工作区、频道、消息和登录态。"
   },
   {
     "id": "element_cache",
@@ -650,7 +694,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Element(Matrix 客户端)的网页和 GPU 缓存。下次启动自动重建,不会影响登录、设备密钥、加密会话和已下载的房间历史——这些在 IndexedDB 数据库里,本规则不动。"
   },
   {
     "id": "thunderbird_cache",
@@ -663,7 +708,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Thunderbird 浏览邮件时的网页/HTML/图片缓存(cache2 子目录)。不会动你的邮件数据库、本地邮箱、地址簿和过滤规则——这些都在 profile 根目录而不是 cache2 里。"
   },
   {
     "id": "thunderbird_crash_reports",
@@ -676,7 +722,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Thunderbird 崩溃时的内存快照。崩溃已过就用不上,不影响邮件账号配置、邮件归档和地址簿。"
   },
   {
     "id": "thunderbird_telemetry",
@@ -689,7 +736,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Thunderbird 等待上传的遥测数据和小型崩溃转储。不影响邮件账号、本地邮件和地址簿——这些在 profile 根目录的其他子目录里。"
   },
   {
     "id": "mailbird_logs",
@@ -702,7 +750,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Mailbird 邮件客户端的运行调试日志。删了不影响登录的邮箱账号、本地邮件归档和已配置的过滤规则。"
   },
   {
     "id": "webex_cache",
@@ -715,7 +764,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Cisco Webex 会议客户端的网页/媒体缓存。下次启动自动重建,不影响登录、会议日程和已下载的会议录像。"
   },
   {
     "id": "webex_logs",
@@ -728,7 +778,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Webex 客户端的运行调试日志。删了不影响登录和会议安排——日志只是给 Cisco 客服反馈卡顿/掉线时用。"
   },
   {
     "id": "feishu_crashpad",
@@ -741,7 +792,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "飞书桌面端崩溃瞬间的内存快照,只供飞书工程师排错。崩溃已过就用不上,不影响登录、消息、文档和云盘数据。"
   },
   {
     "id": "telegram_media_cache",
@@ -754,7 +806,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Telegram 频道、群、聊天里图片/视频的预览缩略图。**不影响会话登录态和聊天记录**(那些在 tdata 根目录,本规则只动 media_cache)。下次浏览历史媒体时会重新拉取小图,慢半秒。"
   },
   {
     "id": "guilded_cache",
@@ -771,7 +824,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Guilded(游戏社区平台)的网页/脚本/GPU 缓存。下次启动自动重建,不会影响登录、服务器、频道列表和消息。"
   },
   {
     "id": "teams_classic_blob",
@@ -787,7 +841,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Teams 经典版的临时 Blob 数据和工作目录。下次启动自动重建,不影响登录、团队列表、会议日程和聊天历史。"
   },
   {
     "id": "skype_logs",
@@ -800,7 +855,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "Skype 桌面端的根目录调试日志文件。删了不影响登录、联系人和聊天记录——这些都在数据库里。日志只是给微软客服反馈通话/连接问题时用。"
   },
   {
     "id": "matrix_cache",
@@ -813,7 +870,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Element 桌面端的运行日志(不含消息内容)。删了不影响登录、加密会话密钥和房间历史——这些在加密数据库里。日志仅在向 Element 报 bug 时有用。"
   },
   {
     "id": "cinny_cache",
@@ -826,7 +884,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Cinny(Matrix 客户端)的网页缓存。下次启动自动重建,不会影响登录、设备密钥和聊天历史。"
   },
   {
     "id": "revolt_cache",
@@ -842,7 +901,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Revolt 桌面端的网页和 GPU 缓存。下次启动自动重建,不会影响登录、服务器、频道列表和消息。"
   },
   {
     "id": "zoom_webview_cache",
@@ -855,7 +915,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Zoom 内嵌网页(登录页、应用市场、白板)的资源缓存。下次启动重新加载,不影响登录、会议日程和录制视频。"
   },
   {
     "id": "dingtalk_crashpad",
@@ -868,7 +929,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "钉钉崩溃瞬间的内存快照,只给阿里工程师排错。崩溃已过就用不上,不影响登录、组织架构和聊天记录。"
   },
   {
     "id": "feishu_service_worker",
@@ -881,7 +943,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "飞书离线工作进程的资源缓存。登录态在 Cookies/LocalStorage 里(本规则不动),删了不需要重新登录——只是离线访问过的文档/资源需要联网时重新加载。"
   },
   {
     "id": "slack_blob_storage",
@@ -894,7 +957,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Slack 内嵌网页临时存放的 Blob 数据(刚加载的图片片段、文件预览)。下次访问会重新拉取,不影响登录、消息草稿和频道收藏。"
   },
   {
     "id": "slack_video_decode",
@@ -907,20 +971,23 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Slack 自动测出来的本机视频解码能力,用于会议时选最佳画质。删了下次开会议时会重新评估一次,不影响通话能力。"
   },
   {
     "id": "discord_update_cache",
     "app_id": "discord",
     "detect": ["%LOCALAPPDATA%\\Discord"],
     "category": "installer_cache",
-    "name": "Discord 更新安装包",
-    "description": "Discord 自动更新下载的旧版安装包",
+    "name": "Discord 更新安装包(含当前版本)",
+    "description": "Discord 自动更新下载的旧版安装包目录;⚠️ 当前正在运行的版本也匹配此模式",
     "targets": [{"base": "%LOCALAPPDATA%\\Discord", "patterns": ["app-*"]}],
-    "risk": "caution",
+    "risk": "risky",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 2,
+    "why_safe": "Discord 用 Squirrel 把每个版本装在 app-{version} 子目录里,**包括你现在正在用的那一个**。删了会让当前 Discord 启动不起来,必须重装。仅当你确定 Discord 已卸载或想强制完全卸载时再勾——日常请保留这条不勾。"
   },
   {
     "id": "wechat_crash",
@@ -933,7 +1000,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "微信桌面端崩溃瞬间的内存快照,只供腾讯工程师排错。**不会动 WeChat Files 用户聊天数据库和接收的文件**——这些在用户 ID 子目录里。"
   },
   {
     "id": "qq_service_worker",
@@ -946,6 +1014,7 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "QQ 新版桌面端离线工作进程的资源缓存。登录态在 Cookies/LocalStorage(本规则不动),删了不需要重新登录,也不影响好友列表和群聊;离线浏览过的内容需要联网时重新拉取。"
   }
 ]

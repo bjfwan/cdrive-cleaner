@@ -10,7 +10,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "你电脑上各种软件运行时的临时草稿区，比如下载缓冲、解压中转。每个用 Temp 的程序都假定它会被清掉，删除不会影响任何已安装软件、你的文档、设置或登录态。"
   },
   {
     "id": "sys_win_temp",
@@ -23,7 +24,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 系统服务和安装程序留下的中转文件，正常运行的进程不会回头读这里。删除不影响你的任何已装软件、Windows Update 进度、用户文档或系统配置。"
   },
   {
     "id": "sys_system_temp",
@@ -36,7 +38,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 11 新分出来的系统临时区，专门放后台服务的一次性中转文件，进程结束后这些就成了垃圾。删除不影响你的任何已装软件或系统设置。"
   },
   {
     "id": "sys_service_profile_temp",
@@ -52,7 +55,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "LocalService / NetworkService 这些系统服务账户用的临时文件，主程序不会回头读它们。删除不会影响 Windows 后台服务的功能或你的任何配置。"
   },
   {
     "id": "sys_systemprofile_temp",
@@ -67,7 +71,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "SYSTEM 账户运行的进程留下的临时文件，进程结束后这些就是垃圾。删除不影响系统服务、计划任务或你的任何已装软件。"
   },
   {
     "id": "sys_prefetch",
@@ -79,8 +84,9 @@
     "targets": [{"base": "%WINDIR%\\Prefetch", "patterns": ["*.pf"]}],
     "risk": "caution",
     "requires_admin": true,
-    "default_selected": false,
-    "clean_subdirs_only": false
+    "default_selected": true,
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 记录的应用启动模式，用来加速后续启动。删除后这些应用前 1-2 次启动会比平时慢一点，之后 Prefetch 会自动重建，不会丢任何你的设置和数据。"
   },
   {
     "id": "sys_software_distribution_download",
@@ -93,33 +99,23 @@
     "risk": "caution",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
-  },
-  {
-    "id": "sys_software_distribution_logs",
-    "app_id": "windows_system",
-    "detect": ["%WINDIR%\\SoftwareDistribution\\DataStore\\Logs"],
-    "category": "windows_update",
-    "name": "Windows Update 数据库日志",
-    "description": "更新服务的事务日志，删除后更新服务会自动重建",
-    "targets": [{"base": "%WINDIR%\\SoftwareDistribution\\DataStore\\Logs"}],
-    "risk": "caution",
-    "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "已经装完的 Windows 更新留下的安装包副本，更新已经合并进系统，这里的二进制纯属备份。删除不会丢任何已装更新、不会影响后续更新检查、不会影响系统稳定性。"
   },
   {
     "id": "sys_software_distribution_log_files",
     "app_id": "windows_system",
     "detect": ["%WINDIR%\\SoftwareDistribution"],
     "category": "windows_update",
-    "name": "SoftwareDistribution 日志",
-    "description": "Windows Update 目录下的 .log 文件",
+    "name": "SoftwareDistribution 根日志",
+    "description": "Windows Update 目录根级 .log 文件（不递归到 DataStore 等子目录）",
     "targets": [{"base": "%WINDIR%\\SoftwareDistribution", "patterns": ["*.log"]}],
+    "max_depth": 0,
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows Update 服务记在根目录的运行日志，仅排查更新失败时有用。删除不影响更新功能本身、不影响已装更新，只会丢失历史排错记录。"
   },
   {
     "id": "sys_delivery_optimization",
@@ -132,7 +128,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 传递优化 P2P 分发缓存的更新片段，相同内容已合并进系统。删除不会回退任何更新、不会影响后续下载，相同片段需要时会再下一遍。"
   },
   {
     "id": "sys_uso_shared_logs",
@@ -145,7 +142,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows Update 编排服务的 ETL 跟踪文件，单纯诊断用。删除不影响任何更新状态、不影响更新历史可见性，仅没法回看上次更新的内部时序。"
   },
   {
     "id": "sys_update_health_tools_logs",
@@ -158,7 +156,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "微软更新健康工具自我修复时记录的日志，仅微软支持人员排查时用得到。删除不影响这个工具继续工作，也不影响你的更新状态。"
   },
   {
     "id": "sys_rempl_logs",
@@ -171,7 +170,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 可靠性更新代理留下的 ETL，仅微软支持人员排查时用得到。删除不影响系统更新、不影响代理继续运行。"
   },
   {
     "id": "sys_windows_logs_cbs",
@@ -181,10 +181,11 @@
     "name": "CBS 组件服务日志",
     "description": "Component Based Servicing 日志和 cab 诊断包，可占数百 MB",
     "targets": [{"base": "%WINDIR%\\Logs\\CBS", "patterns": ["*.cab", "*.log"]}],
-    "risk": "safe",
+    "risk": "risky",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": false
+    "default_selected": false,
+    "clean_subdirs_only": false,
+    "why_safe": "组件服务管理日志，记录 Windows 修复 / 升级 / DISM 操作细节。默认不勾：删除不影响系统运行，但如果你正在用 sfc /scannow 或 DISM 修复系统，删了就没法回看修复历史。"
   },
   {
     "id": "sys_windows_logs_dism",
@@ -194,10 +195,11 @@
     "name": "DISM 日志",
     "description": "部署映像服务和管理工具的日志文件",
     "targets": [{"base": "%WINDIR%\\Logs\\DISM", "patterns": ["*.log"]}],
-    "risk": "safe",
+    "risk": "risky",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": false
+    "default_selected": false,
+    "clean_subdirs_only": false,
+    "why_safe": "DISM 镜像维护工具运行日志。默认不勾：删除不影响系统功能，但如果你正在排查映像或组件问题，删了就丢失上次 DISM 操作的细节。"
   },
   {
     "id": "sys_windows_logs_general",
@@ -205,12 +207,14 @@
     "detect": ["%WINDIR%\\Logs"],
     "category": "app_logs",
     "name": "Windows 通用日志 (ETL/LOG)",
-    "description": "Windows\\Logs 下的 ETL 跟踪和 log 文件，排障信息",
+    "description": "Windows\\Logs 根目录直接放的 ETL/log 文件（不递归到 CBS/DISM/WindowsUpdate 子目录）",
     "targets": [{"base": "%WINDIR%\\Logs", "patterns": ["*.etl", "*.log"]}],
+    "max_depth": 0,
     "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows\\Logs 根目录直接放的 ETL/log 文件（不含 CBS / DISM / WindowsUpdate 等子目录）。默认不勾：删除不影响系统功能，仅在排查启动 / 关机 / 服务故障时会丢失诊断历史。"
   },
   {
     "id": "sys_panther_logs",
@@ -218,16 +222,17 @@
     "detect": ["%WINDIR%\\Panther"],
     "category": "app_logs",
     "name": "Panther 升级日志",
-    "description": "Windows 安装/升级过程的日志，升级完成后无用",
+    "description": "Windows 安装 / 升级过程的日志，升级完成 10 天后无用",
     "targets": [
       {"base": "%WINDIR%\\Panther", "patterns": ["*.log", "*.tmp", "*.xml"]},
       {"base": "%WINDIR%\\Panther\\FastCleanup", "patterns": ["*.log"]},
       {"base": "%WINDIR%\\Panther\\Rollback", "patterns": ["*.txt"]}
     ],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": false
+    "default_selected": false,
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 安装与升级阶段的部署日志。默认不勾：升级完成 10 天内的回滚通道会读这里，如果你刚升过大版本先别删；超过 10 天后清理完全安全。"
   },
   {
     "id": "sys_setupapi_logs",
@@ -237,10 +242,11 @@
     "name": "SetupAPI 日志",
     "description": "设备驱动安装日志 (setupapi.dev.log/setupapi.app.log)，排障用",
     "targets": [{"base": "%WINDIR%\\INF", "patterns": ["*.log*", "*.etl"]}],
-    "risk": "caution",
+    "risk": "risky",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "每次插 USB / 装驱动都会追加的安装记录。默认不勾：删了不影响驱动继续工作，但如果你正在排查设备管理器里的黄叹号或者无法识别的硬件，删了就丢失安装历史。"
   },
   {
     "id": "sys_debug_logs",
@@ -253,7 +259,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 调试日志目录，记录 NetSetup / mrt 等小工具的活动。删除不影响这些工具本身的运行，也不影响你的任何配置。"
   },
   {
     "id": "sys_wer_user_reports",
@@ -266,7 +273,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "你账户下应用崩溃时收集的报告，主要交给微软统计崩溃模式。删除不影响应用恢复、不影响下次崩溃继续上报，已经过的崩溃报告留着也没人会回看。"
   },
   {
     "id": "sys_wer_system_reports",
@@ -279,7 +287,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "系统级 Windows 错误报告，多数是已经过期的崩溃快照。删除不影响系统稳定性、不影响新崩溃继续被记录，可释放数百 MB 到数 GB 空间。"
   },
   {
     "id": "sys_crash_dumps_user",
@@ -292,7 +301,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "应用崩溃瞬间生成的内存快照 .dmp，主要给开发者抓崩溃栈。这个崩溃如果已经过去就用不上，留着只占几百 MB 到数 GB 空间。"
   },
   {
     "id": "sys_minidump",
@@ -302,10 +312,11 @@
     "name": "系统蓝屏小转储",
     "description": "蓝屏时生成的 Minidump 文件，用于 BSOD 排障",
     "targets": [{"base": "%WINDIR%\\Minidump", "patterns": ["*.dmp"]}],
-    "risk": "caution",
+    "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "蓝屏后生成的小型内存转储，用于事后定位 BSOD 原因。删除不影响系统启动 / 驱动 / 已装软件；除非你正在和工程师排查同一次蓝屏，否则没必要保留。"
   },
   {
     "id": "sys_memory_dmp",
@@ -318,7 +329,8 @@
     "risk": "caution",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "蓝屏时写出来的完整内存转储，单文件可达数 GB。默认勾选：除非微软支持工程师让你保留一份用来分析当前这次蓝屏，否则旧 MEMORY.DMP 留着只占空间。"
   },
   {
     "id": "sys_live_kernel_reports",
@@ -328,10 +340,11 @@
     "name": "LiveKernelReports 转储",
     "description": "内核实时诊断报告，GPU 超时等内核事件的转储文件",
     "targets": [{"base": "%WINDIR%\\LiveKernelReports"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "GPU 超时 / 内核挂起等运行中事件的诊断转储。删除不影响系统功能、不影响显卡驱动；除非你正在反复出现这类故障并配合工程师分析，否则可清。"
   },
   {
     "id": "sys_dumpstack_log",
@@ -345,7 +358,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 系统盘根目录的崩溃堆栈索引日志，配合 MEMORY.DMP 使用。删除不影响系统启动和稳定性，下次需要时 Windows 会自动重建。"
   },
   {
     "id": "sys_thumbnail_cache",
@@ -358,7 +372,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "资源管理器为加快文件夹预览图加载而缓存的图标和缩略图。删除后第一次浏览每个文件夹会重新生成，仅多 1-2 秒，不会丢失任何图片本身或你的文件夹设置。"
   },
   {
     "id": "sys_font_cache",
@@ -370,8 +385,9 @@
     "targets": [{"base": "%WINDIR%\\ServiceProfiles\\LocalService\\AppData\\Local", "patterns": ["*FontCache*.dat"]}],
     "risk": "safe",
     "requires_admin": true,
-    "default_selected": false,
-    "clean_subdirs_only": false
+    "default_selected": true,
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 渲染字体用的索引文件，删除后系统会自动重建。重启后首次唤起字体可能慢半秒，不影响任何已装字体、你的文档显示或软件功能。"
   },
   {
     "id": "sys_dotnet_temp",
@@ -389,7 +405,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": ".NET 运行时编译 ASP.NET 页面 / 原生镜像时产生的临时文件，重新运行时按需重建。删除不影响任何已装 .NET 应用、Windows 服务或开发环境。"
   },
   {
     "id": "sys_dotnet_clr_logs",
@@ -402,7 +419,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": ".NET CLR 4.x 自动记录的使用日志，单纯遥测，不被任何应用读取。删除不影响任何 .NET 程序的运行或加载速度。"
   },
   {
     "id": "sys_dotnet_clr_logs_32",
@@ -415,7 +433,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "32 位 .NET CLR 的使用日志，与 64 位版本同源，纯遥测。删除不影响任何 32 位 .NET 程序的运行。"
   },
   {
     "id": "sys_cryptnet_url_cache",
@@ -428,7 +447,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 验证数字证书时从网上拉到的吊销列表副本，有效期到时自动重拉。删除不影响你的网络登录、HTTPS 浏览或代码签名验证。"
   },
   {
     "id": "sys_inet_cache",
@@ -441,7 +461,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "WinINet API 留下的网络资源副本，给 WebView / 系统组件用。删除不影响你的浏览器登录、网页历史、密码，也不影响任何系统服务的网络功能。"
   },
   {
     "id": "sys_inet_cookies",
@@ -454,20 +475,22 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "WinINet 系统级 Cookie，部分老系统组件和企业身份认证依赖。默认不勾：删了可能导致某些系统服务、企业认证组件需要重新登录或重新授权（不影响主流浏览器）。"
   },
   {
     "id": "sys_windows_installer_temp",
     "app_id": "windows_system",
     "detect": ["%WINDIR%\\Installer"],
     "category": "installer_cache",
-    "name": "Windows Installer 临时文件",
-    "description": "MSI 安装时产生的临时 $PatchCache$ 补丁缓存",
+    "name": "Windows Installer 补丁缓存",
+    "description": "MSI 安装时产生的临时 $PatchCache$ 补丁缓存（不动 Installer 根目录的 MSI/MSP）",
     "targets": [{"base": "%WINDIR%\\Installer\\$PatchCache$"}],
     "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "MSI 补丁安装时留下的 $PatchCache$ 备份，正常软件运行不会读它。默认不勾：删了大多数情况无害，但极个别软件做修复 / 卸载时如果回头找补丁会失败。"
   },
   {
     "id": "sys_diagnostics_etl",
@@ -480,7 +503,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 遥测和诊断收集的 ETL 跟踪文件，发到微软那边事件队列的本地副本。删除不影响系统功能，也不影响微软继续收集新数据。"
   },
   {
     "id": "sys_diagnostics_downloaded",
@@ -493,7 +517,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 诊断设置下载下来的 JSON 备份快照，纯历史。删除不影响诊断功能本身，下次需要 Windows 会重新拉取。"
   },
   {
     "id": "sys_diagnostic_log_csp",
@@ -506,7 +531,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "MDM (移动设备管理) 诊断策略产生的日志，仅企业管控环境用得到。删除不影响策略本身的执行，不影响个人电脑的功能。"
   },
   {
     "id": "sys_network_downloader",
@@ -519,7 +545,8 @@
     "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "后台智能传输服务 (BITS) 的临时下载文件。默认不勾：如果有大型下载正在后台进行（Windows Update / Store / 企业部署），删除会中断；无活跃下载时清理完全安全。"
   },
   {
     "id": "sys_wdf_logs",
@@ -532,7 +559,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 驱动框架的运行日志，仅驱动开发者用得到。删除不影响任何驱动的运行、不影响硬件功能。"
   },
   {
     "id": "sys_local_diagnostics",
@@ -545,7 +573,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "你账户下的诊断跟踪文件，与系统遥测同源。删除不影响你的任何应用、Windows 设置或诊断功能本身。"
   },
   {
     "id": "sys_connected_devices_log",
@@ -558,7 +587,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "跨设备体验平台的日志，记录设备配对 / 共享剪贴板等事件。删除不影响\"手机伴侣\"、剪贴板同步等功能继续工作。"
   },
   {
     "id": "sys_explorer_etl",
@@ -571,7 +601,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "文件资源管理器自己留下的 ETL 跟踪文件，仅微软支持工程师用得到。删除不影响资源管理器的功能或你的任何文件视图设置。"
   },
   {
     "id": "sys_wfp_etl",
@@ -584,7 +615,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 筛选平台日志，是防火墙规则审计的内部跟踪。删除不影响防火墙规则、不影响网络连通性、不影响任何安全策略。"
   },
   {
     "id": "sys_perflog_diagnostics",
@@ -600,7 +632,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "性能监视器和系统诊断曾经采集的报告。删除不影响新报告的生成、不影响任何监控任务的运行。"
   },
   {
     "id": "sys_appcompat_programs",
@@ -608,12 +641,13 @@
     "detect": ["%WINDIR%\\AppCompat\\Programs"],
     "category": "app_logs",
     "name": "应用兼容性日志",
-    "description": "AppCompat 程序兼容性的 txt/xml 记录",
+    "description": "AppCompat 程序兼容性的 txt/xml 记录（不动 Amcache.hve）",
     "targets": [{"base": "%WINDIR%\\AppCompat\\Programs", "patterns": ["*.txt", "*.xml"]}],
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "应用兼容性数据库里的 txt / xml 元数据快照（不含核心的 Amcache.hve 注册表配置单元）。删除不影响兼容性 shim 继续生效、不影响任何旧软件的运行。"
   },
   {
     "id": "sys_activity_history",
@@ -626,7 +660,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows Timeline 时间线活动数据库，该功能微软在新版本中已弃用。默认不勾：删了不影响系统，仅丢失\"时间线\"里可见的历史活动列表。"
   },
   {
     "id": "sys_windows_search_temp",
@@ -639,7 +674,8 @@
     "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 搜索索引的 .log / .tmp 工作文件。默认不勾：删了如果命中正在进行的索引操作可能导致索引重建一次，索引本身不会丢，但可能会慢一会儿。"
   },
   {
     "id": "sys_winsat",
@@ -652,7 +688,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 体验指数评估工具的历史评分数据。删除不影响系统功能、不影响硬件评分（需要时可手动 winsat formal 重跑）。"
   },
   {
     "id": "sys_chkdsk_fragments",
@@ -669,7 +706,8 @@
     "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "磁盘检查工具在修复坏簇时把救出来的数据写成的 File*.chk 碎片。默认不勾：如果你正想从丢失的文件里捞回什么，删了就再也找不回来；正常使用电脑没必要保留。"
   },
   {
     "id": "sys_recent_items",
@@ -682,7 +720,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "\"最近使用项\"列表的 .lnk 快捷方式。默认不勾：删了 Win+R / 资源管理器 / 跳转列表里的最近文件会清空，不影响你的任何文档本身或软件功能。"
   },
   {
     "id": "sys_cortana_cache",
@@ -700,7 +739,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Cortana / Copilot 的网络缓存和临时状态。删除不会影响你的 Microsoft 账户登录、不会丢任何对话偏好（这些在云端），下次唤起会重建。"
   },
   {
     "id": "sys_feedback_hub_cache",
@@ -717,7 +757,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "反馈中心应用的缓存数据，不含你已经提交的反馈本身（那些在云端）。删除不影响你的反馈历史可见性，也不影响应用继续工作。"
   },
   {
     "id": "sys_content_delivery_cache",
@@ -734,7 +775,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "锁屏聚焦 / 开始菜单建议下载来的图片和文案，每隔几小时刷新一次。删除后下次会自动重新下载，不影响你已经收藏或设置过的图片。"
   },
   {
     "id": "sys_event_viewer_logs",
@@ -747,7 +789,8 @@
     "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "事件查看器里你自己保存的\"自定义视图\" XML 文件。默认不勾：如果你过去手动建过专门的事件筛选视图，删了就需要重建（不影响事件日志本身）。"
   },
   {
     "id": "sys_d3d_shader_cache",
@@ -760,7 +803,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "DirectX 着色器的编译结果缓存。删除后游戏首次进入场景会再编译一次（通常卡 1-3 秒），不会影响游戏存档、设置或安装。"
   },
   {
     "id": "sys_windows_security_logs",
@@ -768,12 +812,13 @@
     "detect": ["%PROGRAMDATA%\\Microsoft\\Windows Security Health\\Logs"],
     "category": "app_logs",
     "name": "Windows 安全健康日志",
-    "description": "Windows 安全中心的运行日志",
+    "description": "Windows 安全中心（非 Defender 本体）的运行日志",
     "targets": [{"base": "%PROGRAMDATA%\\Microsoft\\Windows Security Health\\Logs"}],
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 安全中心（不是 Defender 本体）的运行日志，记录安全状态变更。删除不影响实时防护、不影响病毒库、不影响任何安全策略。"
   },
   {
     "id": "sys_isolated_storage",
@@ -786,7 +831,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": ".NET 应用沙箱里的独立存储数据。默认不勾：可能保留着某些老 .NET 应用（比如 ClickOnce 应用）的设置和草稿，删了对应应用的相关数据会丢。"
   },
   {
     "id": "sys_application_history",
@@ -799,7 +845,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "ApplicationHistory 目录下旧版 .NET ClickOnce 类应用的历史记录清单，新版应用基本不写这里。删除不影响任何应用的安装或运行。"
   },
   {
     "id": "sys_windows_old",
@@ -812,46 +859,8 @@
     "risk": "risky",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": false
-  },
-  {
-    "id": "sys_windows_bt",
-    "app_id": "windows_system",
-    "detect": ["%SYSTEMDRIVE%\\$Windows.~BT"],
-    "category": "system_temp",
-    "name": "Windows 升级暂存",
-    "description": "Windows 升级下载的暂存文件，升级完成后无用",
-    "targets": [{"base": "%SYSTEMDRIVE%\\$Windows.~BT"}],
-    "risk": "risky",
-    "requires_admin": true,
-    "default_selected": false,
-    "clean_subdirs_only": false
-  },
-  {
-    "id": "sys_windows_ws",
-    "app_id": "windows_system",
-    "detect": ["%SYSTEMDRIVE%\\$Windows.~WS"],
-    "category": "system_temp",
-    "name": "Windows 升级工作集",
-    "description": "Windows 升级过程的工作集目录残留",
-    "targets": [{"base": "%SYSTEMDRIVE%\\$Windows.~WS"}],
-    "risk": "risky",
-    "requires_admin": true,
-    "default_selected": false,
-    "clean_subdirs_only": false
-  },
-  {
-    "id": "sys_windows_upgrade_logs",
-    "app_id": "windows_system",
-    "detect": ["%SYSTEMDRIVE%\\$WINDOWS.~BT\\Sources\\Panther"],
-    "category": "app_logs",
-    "name": "升级 Panther 日志",
-    "description": "Windows 升级过程的详细日志 (在 $WINDOWS.~BT 中)",
-    "targets": [{"base": "%SYSTEMDRIVE%\\$WINDOWS.~BT\\Sources\\Panther"}],
-    "risk": "safe",
-    "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 升级后保留的旧系统完整备份，可占 10-30 GB。默认不勾：删了之后无法再用\"返回上一版\"回滚到旧系统；超过 10 天 Windows 自己也会删。"
   },
   {
     "id": "sys_mrt_logs",
@@ -864,7 +873,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Microsoft 恶意软件删除工具 (MRT) 的运行日志。删除不影响 MRT 自身、不影响系统安全状态。"
   },
   {
     "id": "sys_cu_assistant_logs",
@@ -877,7 +887,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 累积更新助手的 ETL 日志，仅微软支持排错用。删除不影响累积更新的安装或检查。"
   },
   {
     "id": "sys_windows_install_assistant_logs",
@@ -890,7 +901,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 11 安装助手运行时的日志。删除不影响已完成的安装；正在装的时候不要清。"
   },
   {
     "id": "sys_lock_screen_cache",
@@ -907,7 +919,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "锁屏应用 LockApp 的网络缓存和临时文件。删除不影响锁屏画面本身、不影响 Windows Hello 等登录设置。"
   },
   {
     "id": "sys_windows_update_client_cache",
@@ -925,7 +938,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "新版 UWP 形式的 Windows Update 设置页面缓存。删除不影响更新功能、不影响当前更新进度，下次打开\"设置 > Windows Update\"会重新拉取。"
   },
   {
     "id": "sys_tasks_migrated",
@@ -938,7 +952,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 大版本升级后迁移过来但已经被废弃的计划任务（当前生效的任务在 System32\\Tasks，不在这里）。删除不影响任何还在运行的计划任务。"
   },
   {
     "id": "sys_setupcache_dotnet",
@@ -954,7 +969,8 @@
     "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": ".NET Framework 4.x 安装包遗留的 SetupCache 副本。默认不勾：极少数情况下 .NET 修复 / 卸载会回头找这里，没碰过这两个动作的情况下清理完全安全。"
   },
   {
     "id": "sys_urt_temp",
@@ -967,7 +983,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": ".NET 运行时编译过程产生的 URTTemp 临时文件，每次启动按需重建。删除不影响任何 .NET 程序的正常运行。"
   },
   {
     "id": "sys_recycle_bin",
@@ -980,36 +997,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
-  },
-  {
-    "id": "sys_windows_defender_scan_history",
-    "app_id": "windows_defender",
-    "detect": ["%PROGRAMDATA%\\Microsoft\\Windows Defender\\Scans"],
-    "category": "app_logs",
-    "name": "Defender 扫描历史",
-    "description": "Windows Defender 的扫描历史结果和缓存",
-    "targets": [
-      {"base": "%PROGRAMDATA%\\Microsoft\\Windows Defender\\Scans\\History\\Results\\Quick"},
-      {"base": "%PROGRAMDATA%\\Microsoft\\Windows Defender\\Scans\\History\\Results\\Resource"}
-    ],
-    "risk": "safe",
-    "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": false
-  },
-  {
-    "id": "sys_windows_defender_support",
-    "app_id": "windows_defender",
-    "detect": ["%PROGRAMDATA%\\Microsoft\\Windows Defender\\Support"],
-    "category": "app_logs",
-    "name": "Defender Support 日志",
-    "description": "Windows Defender 的支持诊断日志文件",
-    "targets": [{"base": "%PROGRAMDATA%\\Microsoft\\Windows Defender\\Support", "patterns": ["*.log"]}],
-    "risk": "safe",
-    "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "你拖进回收站的文件本体。默认不勾：清空后这些文件无法再从回收站恢复，请先打开回收站确认没有需要的文件再清空。"
   },
   {
     "id": "sys_onedrive_setup_logs",
@@ -1022,7 +1011,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "OneDrive 安装 / 更新流程留下的日志，与已登录账户和同步状态无关。删除不影响 OneDrive 登录态和你的云端文件同步。"
   },
   {
     "id": "sys_onedrive_logs",
@@ -1035,7 +1025,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "OneDrive 客户端运行日志。删除不影响 OneDrive 的同步状态、不影响你的账户登录或云端文件。"
   },
   {
     "id": "sys_token_broker_cache",
@@ -1048,7 +1039,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 账户令牌代理缓存，部分 Microsoft 账户登录态依赖这里的票据。默认不勾：删了部分微软系应用（OneDrive、Store、Office）可能需要重新登录。"
   },
   {
     "id": "sys_webcache",
@@ -1061,7 +1053,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "WinINet / Edge Legacy 系统组件共用的 WebCache 数据库。默认不勾：删了部分系统组件状态会重建一次；仅在 Edge / 浏览器都关闭时清理才安全。"
   },
   {
     "id": "sys_windows_notifications",
@@ -1074,7 +1067,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 通知中心历史通知数据库。默认不勾：删了通知中心里能看到的历史通知会清空，不影响新通知继续接收。"
   },
   {
     "id": "sys_windows_pri_cache",
@@ -1087,7 +1081,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 包资源索引缓存（字符串 / 图标资源），下次使用 UWP 应用时按需重建。删除不影响任何应用的安装或运行。"
   },
   {
     "id": "sys_msipc_logs",
@@ -1100,7 +1095,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Microsoft 信息保护 (RMS / AIP) 客户端的日志，仅企业 IRM 场景写入。删除不影响受 IRM 保护文档的打开权限，也不影响策略本身。"
   },
   {
     "id": "sys_portable_devices_sqm",
@@ -1113,7 +1109,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "插 USB / MTP 设备时产生的 SQM 遥测文件。删除不影响外设连接，也不影响任何设备识别。"
   },
   {
     "id": "sys_unp_logs",
@@ -1126,7 +1123,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 统一更新平台 UNP 留下的日志。删除不影响更新功能，不影响系统状态。"
   },
   {
     "id": "sys_swsetup",
@@ -1139,7 +1137,8 @@
     "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "HP 电脑预装在系统盘根目录的驱动安装包，安装完了就是残留。默认不勾：删了不影响当前已装驱动；如果以后想重装同款驱动需要从 HP 官网重下。"
   },
   {
     "id": "sys_drivers_folder",
@@ -1152,7 +1151,8 @@
     "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "部分 OEM 电脑在系统盘根目录解压的驱动安装文件。默认不勾：删了不影响当前已装驱动，少数厂商工具（如 Dell Update）会回头找这里，先确认无活跃 OEM 工具再清。"
   },
   {
     "id": "sys_intel_installer",
@@ -1165,7 +1165,8 @@
     "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Intel 驱动安装程序在 C:\\Intel 解压的临时文件，装完即无用，可达数 GB。默认不勾：清理不影响已装的 Intel 显卡 / 网卡 / 芯片组驱动，仅在重装时需要再下载安装包。"
   },
   {
     "id": "sys_amd_installer",
@@ -1178,7 +1179,8 @@
     "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "AMD 驱动安装程序在 C:\\AMD 解压的临时文件，装完即无用。默认不勾：清理不影响已装的 AMD 显卡 / CPU 驱动，仅在重装时需要重下载。"
   },
   {
     "id": "sys_nvidia_installer",
@@ -1191,7 +1193,8 @@
     "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "NVIDIA 驱动安装程序在 C:\\NVIDIA 解压的临时文件，可达数 GB。默认不勾：清理不影响已装 N 卡驱动，仅在重装 / 回滚驱动版本时需要从 NVIDIA 官网重新下载。"
   },
   {
     "id": "sys_dell_installer",
@@ -1204,7 +1207,8 @@
     "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Dell 驱动 / 工具的安装包解压目录，安装完即无用。默认不勾：清理不影响已装 Dell 软件和驱动，仅重装时需要重新下载。"
   },
   {
     "id": "sys_windows_store_cache",
@@ -1221,7 +1225,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Microsoft Store 的网络缓存和临时文件。删除不影响你的微软账户登录、已购应用列表或正在进行的下载（下载的应用安装在别处）。"
   },
   {
     "id": "sys_windows_photos_cache",
@@ -1238,7 +1243,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 照片应用的缩略图和临时缓存。删除不影响你的相册、原始图片或最近编辑记录。"
   },
   {
     "id": "sys_maps_cache",
@@ -1254,7 +1260,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 地图应用的离线地图和搜索缓存。删除后下次需要时重新下载，不影响你已经标记的位置和路线收藏。"
   },
   {
     "id": "sys_clipchamp_cache",
@@ -1270,7 +1277,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Clipchamp 视频编辑器的网络缓存和临时素材（不含你的工程，工程在 LocalState\\projects）。删除不影响你的视频项目和已导出文件。"
   },
   {
     "id": "sys_package_cache",
@@ -1283,7 +1291,8 @@
     "risk": "risky",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Visual Studio 和 VC++ Redistributable 的完整安装包缓存，可达数 GB。默认不勾：删了大多数软件正常使用没事，但 VS / VC++ 运行库的修复 / 卸载 / 离线安装会失败，需要重新下载。"
   },
   {
     "id": "sys_windows_error_identity",
@@ -1296,7 +1305,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 错误身份服务的标识缓存，纯内部使用。删除不影响错误报告功能、不影响你的应用运行。"
   },
   {
     "id": "sys_windows_caches_db",
@@ -1309,7 +1319,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 应用的字体 / 资源缓存数据库，下次需要时自动重建。删除不影响你的文档显示、字体可用性或软件功能。"
   },
   {
     "id": "sys_windows_action_center",
@@ -1322,7 +1333,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "通知中心 / 操作中心的图标缓存。删除不影响通知功能本身，下次有新通知会重建图标。"
   },
   {
     "id": "sys_windows_setup_logs",
@@ -1335,7 +1347,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 安装诊断工具 SetupDiag 产生的报告。删除不影响系统功能，仅在排查升级失败时会丢失上次报告。"
   },
   {
     "id": "sys_windows_mosetup",
@@ -1348,7 +1361,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 升级介质操作 (MoSetup) 的日志。删除不影响升级功能本身、不影响已完成的升级。"
   },
   {
     "id": "sys_windows_sih_logs",
@@ -1361,7 +1375,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Server Initiated Healing 修复代理的日志。删除不影响修复功能继续运行、不影响系统状态。"
   },
   {
     "id": "sys_temp_internet_files",
@@ -1374,7 +1389,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "旧版 IE 时代的 Temporary Internet Files 路径，新系统已基本不写入。删除不影响你的 Chrome / Edge / Firefox 登录、历史或缓存。"
   },
   {
     "id": "sys_windows_old_setup",
@@ -1387,7 +1403,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 升级辅助工具创建的 $GetCurrent 临时目录，升级完成即无用。删除不影响已升级的 Windows 系统。"
   },
   {
     "id": "sys_windows_sysreset",
@@ -1400,7 +1417,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows \"重置此电脑\" 操作失败后留下的诊断目录，仅在失败一次后存在。删除不影响系统功能、不影响后续\"重置此电脑\"再次运行。"
   },
   {
     "id": "sys_windows_insider_cache",
@@ -1416,7 +1434,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 预览体验计划 Insider Hub 应用的缓存。删除不影响你的 Insider 通道订阅、不影响下次预览版下载。"
   },
   {
     "id": "sys_widgets_cache",
@@ -1433,7 +1452,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 11 小组件面板的网络缓存。删除后小组件下次刷新时重新拉取，不影响你已经添加的小组件配置。"
   },
   {
     "id": "sys_start_menu_cache",
@@ -1449,7 +1469,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 11 开始菜单的缓存和临时状态。删除不影响你的开始菜单固定项、最近使用列表或搜索功能。"
   },
   {
     "id": "sys_windows_copilot_cache",
@@ -1465,7 +1486,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows Copilot AI 助手的本地缓存。删除不影响你的微软账户登录、Copilot 设置或对话偏好（这些在云端）。"
   },
   {
     "id": "sys_wsreset_cache",
@@ -1478,7 +1500,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Microsoft Store 应用商店下载缓存。删除不影响已购应用、不影响登录态，相当于在命令行运行了一次 wsreset.exe。"
   },
   {
     "id": "sys_uwp_general_temp",
@@ -1492,6 +1515,7 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "所有 UWP 应用的 TempState 一级目录（不含 LocalState / 配置），单次运行的临时草稿区。默认不勾：极少数 UWP 应用把未保存草稿写在这里，删除前请先关闭所有 UWP 应用。"
   }
 ]

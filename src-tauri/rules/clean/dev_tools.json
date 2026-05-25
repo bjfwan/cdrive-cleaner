@@ -14,14 +14,15 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "这些是 VS Code 内嵌 Chromium 的网页缓存、字节码副本和 GPU 着色器缓存，下次启动会自动重建。不会影响你的扩展、设置、键位、主题、登录账号，只是首次启动会稍慢几秒。"
   },
   {
     "id": "vscode_cached_extensions",
     "app_id": "vscode",
     "detect": ["%APPDATA%\\Code"],
     "category": "dev_cache",
-    "name": "VS Code 扩展缓存",
+    "name": "VS Code 扩展安装包缓存",
     "description": "VS Code 扩展下载缓存和 VSIX 包，删除后按需重下",
     "targets": [
       {"base": "%APPDATA%\\Code\\CachedExtensions"},
@@ -30,7 +31,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "这是扩展市场下载时留下的 VSIX 安装包副本，已安装的扩展本体在 .vscode\\extensions 目录里不受影响。删了仅当你下次更新或重装扩展时，需要从市场重新下一遍。"
   },
   {
     "id": "vscode_crashpad",
@@ -43,7 +45,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "VS Code 在崩溃时生成的 .dmp 内存转储，除了反馈给微软排查 bug 之外对你没用。删了不影响任何功能，下次再崩才会重新生成。"
   },
   {
     "id": "vscode_logs",
@@ -56,20 +59,22 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "按日期归档的扩展运行日志和主进程日志，几个月不清能堆出几百 MB。删了不影响你的扩展、设置、项目，仅当你正在向扩展作者反馈 bug 时才需要保留。"
   },
   {
     "id": "vscode_service_worker",
     "app_id": "vscode",
     "detect": ["%APPDATA%\\Code"],
     "category": "dev_cache",
-    "name": "VS Code Service Worker",
+    "name": "VS Code Service Worker 缓存",
     "description": "VS Code Service Worker 缓存",
     "targets": [{"base": "%APPDATA%\\Code\\Service Worker"}],
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "VS Code 内嵌网页视图（预览 Markdown、Webview 扩展）的 Service Worker 离线缓存，删了下次打开预览时浏览器引擎会自动重建，不影响扩展功能本身。"
   },
   {
     "id": "cursor_cache",
@@ -88,7 +93,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Cursor 基于 VS Code 同款 Electron，这些是网页缓存、字节码副本、GPU 缓存和扩展安装包副本。删了不影响你的 AI 对话历史、登录账号、扩展本体和编辑器设置，下次启动会自动重建。"
   },
   {
     "id": "cursor_logs",
@@ -101,7 +107,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Cursor 按日期归档的运行日志，主要是扩展输出和主进程调试信息。删了不影响 AI 模型设置、对话历史、登录账号，仅当你正在排查崩溃问题时才需保留。"
   },
   {
     "id": "cursor_crashpad",
@@ -114,7 +121,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "Cursor 崩溃时产生的 .dmp 内存转储文件，仅用于反馈给开发者排查问题。删了不影响任何功能，下次崩溃才会再生成。"
   },
   {
     "id": "windsurf_cache",
@@ -131,7 +139,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windsurf 是基于 VS Code 的 AI 编辑器，这些是 Chromium 引擎的网页和 GPU 缓存。删了不影响 Codeium 账号、AI 上下文、扩展和设置，下次启动会自动重建。"
   },
   {
     "id": "windsurf_logs",
@@ -144,7 +153,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windsurf 按日期归档的运行日志，主要是扩展输出和 AI 网络请求记录。删了不影响你的账号和 AI 上下文记忆，仅在排查崩溃或扩展异常时才需保留。"
   },
   {
     "id": "trae_cache",
@@ -161,7 +171,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Trae 是字节跳动的 AI 编辑器，基于 VS Code Electron。这些是网页加载缓存、字节码副本和 GPU 着色器缓存。删了不影响你的 Trae 账号、AI 对话、扩展和设置，下次启动自动重建。"
   },
   {
     "id": "jetbrains_caches",
@@ -171,10 +182,11 @@
     "name": "JetBrains IDE 缓存",
     "description": "IntelliJ/WebStorm/PyCharm 等 IDE 索引和缓存，删除后重建索引",
     "targets": [{"base": "%LOCALAPPDATA%\\JetBrains", "subdirs": ["IntelliJIdea*\\caches", "WebStorm*\\caches", "PyCharm*\\caches", "CLion*\\caches", "GoLand*\\caches", "Rider*\\caches", "DataGrip*\\caches", "RustRover*\\caches"]}],
-    "risk": "caution",
+    "risk": "safe",
     "requires_admin": false,
-    "default_selected": false,
-    "clean_subdirs_only": true
+    "default_selected": true,
+    "clean_subdirs_only": true,
+    "why_safe": "JetBrains 全家桶的依赖缓存和编译产物缓存（不含本地历史），打开项目时会重建。删了不影响你的代码、配置、插件、登录账号，仅首次打开大项目时索引会重新生成，需等待几分钟。"
   },
   {
     "id": "jetbrains_index",
@@ -184,10 +196,11 @@
     "name": "JetBrains IDE 索引",
     "description": "JetBrains 全家桶索引目录，删除后打开项目时重建",
     "targets": [{"base": "%LOCALAPPDATA%\\JetBrains", "subdirs": ["IntelliJIdea*\\index", "WebStorm*\\index", "PyCharm*\\index", "CLion*\\index", "GoLand*\\index", "Rider*\\index", "RustRover*\\index"]}],
-    "risk": "caution",
+    "risk": "safe",
     "requires_admin": false,
-    "default_selected": false,
-    "clean_subdirs_only": true
+    "default_selected": true,
+    "clean_subdirs_only": true,
+    "why_safe": "JetBrains 全文搜索和代码导航的倒排索引，打开项目时按需重建。删了不影响代码本身、运行配置、Git 集成。大项目首次打开后需要等几分钟到十几分钟完成索引才能用搜索。"
   },
   {
     "id": "jetbrains_logs",
@@ -200,7 +213,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "JetBrains IDE 按日期切割的 idea.log，主要记录插件错误和后台任务调试信息。删了不影响 IDE 设置、项目配置、Git 仓库，仅在排查 IDE 自身崩溃时才需要保留。"
   },
   {
     "id": "jetbrains_tmp",
@@ -213,7 +227,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "IDE 临时解压的插件包、调试器临时输出、JSP 编译中间文件。这些文件 IDE 退出后通常不会自动清理，删了不影响插件本体和项目，重启 IDE 后按需重新生成。"
   },
   {
     "id": "vs_component_model_cache",
@@ -226,20 +241,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
-  },
-  {
-    "id": "vs_extensions_cache",
-    "app_id": "visual_studio",
-    "detect": ["%LOCALAPPDATA%\\Microsoft\\VisualStudio"],
-    "category": "dev_cache",
-    "name": "Visual Studio 扩展缓存",
-    "description": "VS 扩展下载缓存和临时文件",
-    "targets": [{"base": "%LOCALAPPDATA%\\Microsoft\\VisualStudio\\Packages\\_Instances"}],
-    "risk": "safe",
-    "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "VS 的 MEF 扩展点发现缓存，损坏时官方教程也会让你删这个目录。删了首次启动 VS 多花 30-60 秒重扫一遍扩展，但不影响项目、设置、扩展本身和登录账号。"
   },
   {
     "id": "vs_logs",
@@ -252,7 +255,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Visual Studio 启动时记录的扩展加载顺序和错误的 ActivityLog.xml 历史，仅在排查启动慢或扩展异常时有用。删了不影响项目和扩展本体，下次启动会重新写入。"
   },
   {
     "id": "vs_webview2_cache",
@@ -265,7 +269,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "VS 内嵌 WebView2（用于显示起始页、Live Share、账号面板等）的网页资源缓存。删了不影响你的微软账号登录态和扩展，下次打开嵌入式面板时浏览器组件会自动重建。"
   },
   {
     "id": "npm_cache",
@@ -275,10 +280,11 @@
     "name": "npm 全局缓存",
     "description": "npm 下载的包缓存，删除后 install 需重新下载",
     "targets": [{"base": "%APPDATA%\\npm-cache"}],
-    "risk": "caution",
+    "risk": "safe",
     "requires_admin": false,
-    "default_selected": false,
-    "clean_subdirs_only": true
+    "default_selected": true,
+    "clean_subdirs_only": true,
+    "why_safe": "npm 已下载包的本地副本（_cacache），下次 install 同版本时直接命中，删了仅需在联网时重下。不影响 node_modules 中已装好的依赖，也不影响 package.json 和 package-lock.json。"
   },
   {
     "id": "pnpm_cache",
@@ -291,7 +297,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "pnpm 的内容寻址存储（CAS）是所有项目 node_modules 软链接的源头，删了所有现存项目下次启动前都得重新 pnpm install。日常不勾，仅当确认要全机重新装依赖且联网畅通时再勾。"
   },
   {
     "id": "yarn_cache",
@@ -301,10 +308,11 @@
     "name": "Yarn 缓存",
     "description": "Yarn v1 全局包缓存目录",
     "targets": [{"base": "%LOCALAPPDATA%\\Yarn\\Cache"}],
-    "risk": "caution",
+    "risk": "safe",
     "requires_admin": false,
-    "default_selected": false,
-    "clean_subdirs_only": true
+    "default_selected": true,
+    "clean_subdirs_only": true,
+    "why_safe": "Yarn v1 已下载包的本地副本，下次 yarn install 同版本直接命中。不影响项目中已安装的 node_modules，也不影响 yarn.lock 锁定信息，删了仅在联网时重下。"
   },
   {
     "id": "bun_cache",
@@ -314,10 +322,11 @@
     "name": "Bun 安装缓存",
     "description": "Bun 运行时的包安装缓存",
     "targets": [{"base": "%USERPROFILE%\\.bun\\install\\cache"}],
-    "risk": "caution",
+    "risk": "safe",
     "requires_admin": false,
-    "default_selected": false,
-    "clean_subdirs_only": true
+    "default_selected": true,
+    "clean_subdirs_only": true,
+    "why_safe": "Bun 包管理器下载的 npm 包压缩副本，下次 bun install 同版本直接命中。不影响已生成的 node_modules、bun.lockb 锁定信息和 Bun 二进制本身，删了联网时重下即可。"
   },
   {
     "id": "pip_cache",
@@ -325,12 +334,13 @@
     "detect": ["%LOCALAPPDATA%\\pip\\Cache"],
     "category": "dev_cache",
     "name": "pip 缓存",
-    "description": "pip 下载的 wheel 缓存，删除后 install 需重新下载",
+    "description": "pip 下载的 wheel 和 HTTP 缓存，删除后 install 需重新下载",
     "targets": [{"base": "%LOCALAPPDATA%\\pip\\Cache"}],
-    "risk": "caution",
+    "risk": "safe",
     "requires_admin": false,
-    "default_selected": false,
-    "clean_subdirs_only": true
+    "default_selected": true,
+    "clean_subdirs_only": true,
+    "why_safe": "pip 下载 wheel 时留下的 HTTP 响应缓存和 wheel 编译副本，下次 pip install 同版本直接命中。不影响已 install 到虚拟环境里的包和 requirements.txt，删了联网重下即可。"
   },
   {
     "id": "conda_pkgs",
@@ -346,7 +356,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Conda 解压后的包源副本（用于多 env 硬链接共享），删了已建的 env 仍能用，但创建新 env 或修复时要重下数 GB。日常不勾，仅当确认网速 OK 且不急用 conda 时再勾。"
   },
   {
     "id": "cargo_registry_cache",
@@ -356,10 +367,11 @@
     "name": "Cargo 注册表缓存",
     "description": "Rust Cargo 下载的 crate 压缩包缓存",
     "targets": [{"base": "%USERPROFILE%\\.cargo\\registry\\cache"}],
-    "risk": "caution",
+    "risk": "safe",
     "requires_admin": false,
-    "default_selected": false,
-    "clean_subdirs_only": true
+    "default_selected": true,
+    "clean_subdirs_only": true,
+    "why_safe": "Cargo 下载的 .crate 压缩包副本，下次 cargo build 同版本依赖时按需重下。不影响项目里已编译的 target 目录、Cargo.lock 锁定信息和已安装的工具链。"
   },
   {
     "id": "cargo_registry_src",
@@ -369,10 +381,11 @@
     "name": "Cargo 注册表源码",
     "description": "Cargo 解压的 crate 源代码，可按需重建",
     "targets": [{"base": "%USERPROFILE%\\.cargo\\registry\\src"}],
-    "risk": "caution",
+    "risk": "safe",
     "requires_admin": false,
-    "default_selected": false,
-    "clean_subdirs_only": true
+    "default_selected": true,
+    "clean_subdirs_only": true,
+    "why_safe": "Cargo 从 .crate 压缩包里解压出来供编译的源代码副本，下次 cargo build 时会从 cache 自动重新解压。不影响项目代码、Cargo.lock 和工具链，仅首次编译会多花几秒重解压。"
   },
   {
     "id": "rustup_tmp",
@@ -385,7 +398,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "rustup 安装/更新工具链时下载的临时压缩包，安装完成后本该自动清理但常残留。删了不影响你已装好的 stable/nightly 工具链和 cargo，下次 rustup update 时再生成。"
   },
   {
     "id": "gradle_caches",
@@ -398,7 +412,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Gradle 全局下载的依赖 jar 和模块元数据，所有 Java/Android 项目共享。删了 build.gradle 不丢，但所有项目下次构建会重下数百 MB 到数 GB 依赖。日常不勾，仅当确认网速 OK 时再勾。"
   },
   {
     "id": "gradle_daemon_logs",
@@ -411,7 +426,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Gradle 守护进程按版本切割的运行日志，主要记录构建错误和编译输出。删了不影响构建脚本、依赖缓存和已运行的 Daemon 进程本身，下次构建会写入新日志。",
+    "max_depth": 3
   },
   {
     "id": "gradle_wrapper_dists",
@@ -424,7 +441,8 @@
     "risk": "risky",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "删了不影响项目代码和 build.gradle，但每个使用 gradle wrapper 的项目下次构建都会卡住，要重下对应版本的 Gradle 发行包（约 100MB/版本）。日常不勾，仅在确定项目暂时不用且网速 OK 时再勾。"
   },
   {
     "id": "maven_repository",
@@ -434,10 +452,11 @@
     "name": "Maven 本地仓库",
     "description": "Maven 下载的依赖本地缓存，可达数 GB",
     "targets": [{"base": "%USERPROFILE%\\.m2\\repository"}],
-    "risk": "risky",
+    "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "删了不影响 pom.xml 和源码，但所有 Java 项目下次构建都会从 Maven 中央仓库重下依赖，量大时数 GB 起步。日常不勾，仅当 ~/.m2/settings.xml 仓库地址国内可达且确认要清空时再勾。"
   },
   {
     "id": "nuget_cache",
@@ -450,7 +469,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "NuGet 查询包列表时缓存的 JSON 响应（仅元数据，非包体本身），下次 restore 时按需重新请求服务器。不影响 .nuget\\packages 里已下载的包和项目里的 .csproj 引用。"
   },
   {
     "id": "nuget_packages_cache",
@@ -460,10 +480,11 @@
     "name": "NuGet 包全局缓存",
     "description": "NuGet 全局包缓存目录，删除后 restore 重下",
     "targets": [{"base": "%USERPROFILE%\\.nuget\\packages"}],
-    "risk": "risky",
+    "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "所有 .NET 项目共享的 NuGet 包仓库（PackageReference 模式直接引用这里），删了 .csproj 不丢，但所有项目下次 dotnet restore 都要重下数百 MB 到数 GB。日常不勾，仅在确认要全面清空时勾。"
   },
   {
     "id": "go_mod_cache",
@@ -476,20 +497,22 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Go 下载模块的 zip 副本和 sumdb 校验缓存，删了所有 Go 项目下次 go build 都要重下依赖（注意 Go 模块是只读的，再用 go mod tidy 会重新装）。日常不勾，确认网络通畅时再勾。"
   },
   {
     "id": "docker_temp",
     "app_id": "docker",
     "detect": ["%LOCALAPPDATA%\\Docker"],
-    "category": "dev_cache",
+    "category": "app_logs",
     "name": "Docker Desktop 日志",
     "description": "Docker Desktop 的运行日志",
     "targets": [{"base": "%LOCALAPPDATA%\\Docker\\log"}],
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Docker Desktop 主进程和后端 vm 的运行日志，仅在排查 Docker 启动失败时有用。删了不影响你的容器、镜像、volume 数据（这些在 vm-state 里，本工具绝不会动），仅删字面日志。"
   },
   {
     "id": "dotnet_telemetry",
@@ -502,7 +525,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "dotnet CLI 攒着待上报给微软的命令使用记录（仅命令名和时长，不含代码）。删了不影响 dotnet 工具链运行和你的项目，下次执行 dotnet 命令时再生成。"
   },
   {
     "id": "dotnet_native_images",
@@ -515,7 +539,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": ".NET CLR 预编译的本机镜像，加速程序启动用。删了首次启动 dotnet 命令多花几秒，但不影响 SDK 版本、项目代码和已编译的程序集，CLR 会在需要时按需重新生成。"
   },
   {
     "id": "android_sdk_tmp",
@@ -528,7 +553,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Android SDK Manager 下载平台/工具时的临时解压目录，安装完成后本该自清但常残留。删了不影响已装好的 platforms、build-tools、emulator 镜像和 AVD 虚拟设备。"
   },
   {
     "id": "android_avd_cache",
@@ -541,7 +567,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "AVD 模拟器运行时的临时缓存（与 avd 目录下的虚拟磁盘镜像不同），删了不影响已创建的虚拟设备、SDK 平台和你的 KVM/HAXM 配置，下次启动模拟器自动重建。"
   },
   {
     "id": "vscode_workspacestorage",
@@ -549,12 +576,13 @@
     "detect": ["%APPDATA%\\Code"],
     "category": "dev_cache",
     "name": "VS Code 工作区存储",
-    "description": "VS Code 旧工作区存储数据（已关闭的项目残留）",
+    "description": "VS Code 每个项目的本地状态（断点、折叠、未保存编辑器列表）",
     "targets": [{"base": "%APPDATA%\\Code\\User\\workspaceStorage"}],
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "每个项目目录单独存的窗口状态（打开过的文件、断点、折叠、未保存的临时编辑器、Git 装饰），删了项目下次打开时这些细节都得重建。日常不勾，仅当工作区已不再使用时勾。"
   },
   {
     "id": "vscode_code_cache_2",
@@ -567,7 +595,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "V8 引擎对 JS 模块的字节码预编译副本，加速二次启动用。删了不影响扩展、设置、项目状态，仅首次启动时多花几秒重新编译热点 JS。"
   },
   {
     "id": "cursor_service_worker",
@@ -580,7 +609,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Cursor 内嵌 Webview（Markdown 预览、AI 面板等）的 Service Worker 离线缓存，删了不影响 AI 对话和登录态，下次打开 Webview 时浏览器引擎自动重建。"
   },
   {
     "id": "cursor_code_cache",
@@ -593,7 +623,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "V8 引擎对 Cursor 内部 JS 模块的字节码预编译副本。删了不影响扩展、AI 对话历史、登录账号，仅首次启动多花几秒重新编译热点代码。"
   },
   {
     "id": "windsurf_crashpad",
@@ -606,7 +637,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "Windsurf 崩溃时产生的 .dmp 内存转储，仅用于反馈给 Codeium 开发者排查 bug。删了不影响 AI 上下文、扩展和账号，下次崩才会再生。"
   },
   {
     "id": "trae_logs",
@@ -619,7 +651,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Trae 按日期归档的扩展和主进程运行日志。删了不影响 Trae 账号、AI 对话历史和扩展，仅当你正在反馈 bug 给字节跳动团队时才需保留。"
   },
   {
     "id": "trae_crashpad",
@@ -632,7 +665,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "Trae 崩溃时产生的内存转储 .dmp，仅用于反馈给字节跳动开发者排查问题。删了不影响任何功能和你的账号，下次崩溃才会再生成。"
   },
   {
     "id": "jetbrains_local_history",
@@ -645,7 +679,8 @@
     "risk": "risky",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "这是 IDE 在你每次保存/重构时悄悄记的文件变更历史（VCS 之外的最后救命稻草），删了之后过去几小时几天误删的代码就找不回来了。日常不勾，仅当你已确认所有项目最近都已提交到 Git 时再勾。"
   },
   {
     "id": "vs_temp",
@@ -658,20 +693,22 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Visual Studio 编译、调试、扩展安装时的内部临时目录，VS 关闭后常残留。删了不影响项目、扩展、调试器配置和登录账号，下次操作时按需重建。"
   },
   {
     "id": "vs_feedback",
     "app_id": "visual_studio",
     "detect": ["%LOCALAPPDATA%\\Microsoft\\VisualStudio\\Feedback"],
     "category": "app_logs",
-    "name": "Visual Studio 反馈",
+    "name": "Visual Studio 反馈数据",
     "description": "VS 用户反馈和遥测收集的数据",
     "targets": [{"base": "%LOCALAPPDATA%\\Microsoft\\VisualStudio\\Feedback"}],
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "VS 反馈中心采集的截图、性能 trace 和待上传文件，已提交过的反馈微软那边都有。删了不影响 VS 设置、扩展、项目，仅会清掉本地待上传的反馈草稿。"
   },
   {
     "id": "pip_http_cache",
@@ -684,7 +721,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "pip 在向 PyPI 查询包元数据时缓存的 HTTP 响应（仅元数据非 wheel 本身），下次 install 时按需重新请求。不影响已安装的包和虚拟环境里的依赖。"
   },
   {
     "id": "pip_wheels",
@@ -697,7 +735,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "pip 把源码包编译成 wheel 后缓存在这里加速下次安装。不影响虚拟环境里已安装好的包，删了仅当下次 install 同版本 sdist 时再重新编译一遍。"
   },
   {
     "id": "uv_cache",
@@ -707,10 +746,11 @@
     "name": "uv (Python) 缓存",
     "description": "uv Python 包管理器的下载缓存",
     "targets": [{"base": "%LOCALAPPDATA%\\uv\\cache"}],
-    "risk": "caution",
+    "risk": "safe",
     "requires_admin": false,
-    "default_selected": false,
-    "clean_subdirs_only": true
+    "default_selected": true,
+    "clean_subdirs_only": true,
+    "why_safe": "uv（Rust 写的 Python 包管理器）下载 wheel 和包元数据的缓存副本，下次 uv pip install 同版本直接命中。不影响 uv 创建的虚拟环境和 pyproject.toml 锁定信息。"
   },
   {
     "id": "cargo_target_debug",
@@ -720,23 +760,29 @@
     "name": "Cargo 全局 target",
     "description": "Cargo 全局安装的编译中间文件",
     "targets": [{"base": "%USERPROFILE%\\.cargo\\target"}],
-    "risk": "caution",
+    "risk": "safe",
     "requires_admin": false,
-    "default_selected": false,
-    "clean_subdirs_only": true
+    "default_selected": true,
+    "clean_subdirs_only": true,
+    "why_safe": "cargo install 全局工具时遗留的编译中间产物（已装的二进制在 .cargo\\bin，不动）。删了不影响 cargo install 装好的 CLI 工具，仅当下次重装某个工具时多花点时间重编译。"
   },
   {
     "id": "deno_cache",
     "app_id": "deno",
     "detect": ["%LOCALAPPDATA%\\deno"],
     "category": "dev_cache",
-    "name": "Deno 缓存",
+    "name": "Deno 模块缓存",
     "description": "Deno 运行时下载的模块和编译缓存",
-    "targets": [{"base": "%LOCALAPPDATA%\\deno"}],
+    "targets": [
+      {"base": "%LOCALAPPDATA%\\deno\\deps"},
+      {"base": "%LOCALAPPDATA%\\deno\\gen"},
+      {"base": "%LOCALAPPDATA%\\deno\\npm"}
+    ],
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Deno 下载的远程依赖和编译后的 V8 字节码缓存（不含 deno.json 配置）。删了所有 Deno 项目下次 deno run 都会重新下载远程依赖并重编译。日常不勾，仅当网络通畅时再勾。"
   },
   {
     "id": "composer_cache",
@@ -746,10 +792,11 @@
     "name": "Composer 缓存",
     "description": "PHP Composer 包管理器下载缓存",
     "targets": [{"base": "%LOCALAPPDATA%\\Composer\\cache"}],
-    "risk": "caution",
+    "risk": "safe",
     "requires_admin": false,
-    "default_selected": false,
-    "clean_subdirs_only": true
+    "default_selected": true,
+    "clean_subdirs_only": true,
+    "why_safe": "Composer 下载的 PHP 包 zip 副本和 Packagist 元数据缓存，下次 composer install 同版本直接命中。不影响项目的 vendor 目录和 composer.json/composer.lock。"
   },
   {
     "id": "ruby_gem_cache",
@@ -759,10 +806,11 @@
     "name": "Ruby Gem 缓存",
     "description": "Ruby Gem 下载的包缓存文件",
     "targets": [{"base": "%LOCALAPPDATA%\\gem\\cache"}],
-    "risk": "caution",
+    "risk": "safe",
     "requires_admin": false,
-    "default_selected": false,
-    "clean_subdirs_only": true
+    "default_selected": true,
+    "clean_subdirs_only": true,
+    "why_safe": "Ruby Gem 下载的 .gem 包副本（已安装的 gem 在别处），下次 bundle install 同版本时按需重下。不影响项目的 Gemfile.lock 和已安装到 ruby gemset 里的 gem。"
   },
   {
     "id": "flutter_cache",
@@ -775,7 +823,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Flutter SDK 下载的 Dart SDK、引擎二进制和 Material 字体资源，删了 flutter doctor 会立刻报错并提示重下数百 MB。日常不勾，仅当确认 flutter 暂时不用且网络畅通时再勾。"
   },
   {
     "id": "gradle_native",
@@ -788,7 +837,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Gradle 在启动时探测系统终端、文件系统能力的本地探针结果缓存。删了 Gradle 下次启动会重新探测（多花 1-2 秒），不影响构建脚本、依赖和你的项目。"
   },
   {
     "id": "git_for_windows_tmp",
@@ -801,7 +851,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "Git fetch/clone 时在系统 Temp 残留的中间 pack 文件，操作完成后本该删但偶尔残留。仅匹配 pack_* 和 .git_* 前缀，不影响仓库内的 .git/objects 和你的代码。",
+    "max_depth": 2
   },
   {
     "id": "github_desktop_logs",
@@ -814,7 +866,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "GitHub Desktop 按日期切割的运行日志，主要记录 Git 操作和网络请求调试信息。删了不影响你的仓库列表、GitHub 账号登录态和待提交的更改，下次启动会写新日志。"
   },
   {
     "id": "postman_cache",
@@ -831,7 +884,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "Postman 基于 Electron，这些是网页加载缓存、V8 字节码副本和 GPU 缓存。不影响你的 Postman 账号、Collections 集合、Environments 环境变量和请求历史，下次启动自动重建。"
   },
   {
     "id": "postman_logs",
@@ -844,7 +898,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Postman 主进程和插件的运行日志，主要记录请求错误和同步异常。删了不影响 Collections、Environments 和你登录的账号，仅当你正在排查 Postman 自身崩溃时才需保留。"
   },
   {
     "id": "sourcetree_logs",
@@ -857,7 +912,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "SourceTree 操作 Git 时记录的 .log 文件，主要记录命令调用和错误堆栈。仅匹配 *.log 后缀，不影响你的仓库书签、SSH 密钥配置和 Atlassian 账号。",
+    "max_depth": 3
   },
   {
     "id": "insomnia_cache",
@@ -873,7 +930,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "Insomnia 基于 Electron，这是网页和 GPU 渲染缓存。不影响你的请求集合、环境变量、登录账号和导入的 OpenAPI 规范，下次启动自动重建。"
   },
   {
     "id": "wsl_tmp",
@@ -886,7 +944,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "WSL Ubuntu UWP 包的临时下载目录（注意：不是你的 Linux home 或 ext4.vhdx 镜像，那些在 LocalState 里完全不动）。删了不影响你的 Ubuntu 文件系统、apt 包和用户数据。"
   },
   {
     "id": "terminal_cache",
@@ -902,7 +961,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows Terminal 的 UWP 临时状态目录（与 LocalState 下的 settings.json 配置完全分开）。删了不影响你的配色方案、profile 设置和键位绑定，下次启动按需重建。"
   },
   {
     "id": "sublime_text_cache",
@@ -915,7 +975,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Sublime Text 的文件索引和已安装包的解析缓存，不含 Packages\\User 下的用户设置和快捷键。删了首次打开大文件夹时重建索引（多花几秒），不影响插件本体和配色。"
   },
   {
     "id": "sublime_text_logs",
@@ -928,7 +989,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Sublime Text 更新检查和插件加载错误的日志记录。删了不影响许可证、用户设置、已安装包和键位绑定，仅当你正在排查启动问题时才需保留。"
   },
   {
     "id": "mongodb_compass_cache",
@@ -944,7 +1006,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "MongoDB Compass 基于 Electron，这是网页和 GPU 渲染缓存。不影响你保存的数据库连接、收藏的查询和 Atlas 登录账号，下次启动自动重建。"
   },
   {
     "id": "dbeaver_logs",
@@ -957,7 +1020,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "DBeaver Eclipse 工作区里的 .log 文件，主要记录插件错误和 JDBC 异常。仅匹配 *.log 后缀，不影响你的数据库连接配置、保存的 SQL 脚本和驱动设置。",
+    "max_depth": 3
   },
   {
     "id": "heidiSQL_logs",
@@ -970,20 +1035,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
-  },
-  {
-    "id": "datagrip_cache",
-    "app_id": "jetbrains",
-    "detect": ["%LOCALAPPDATA%\\JetBrains\\DataGrip2024.1"],
-    "category": "dev_cache",
-    "name": "DataGrip 缓存",
-    "description": "JetBrains DataGrip 数据库 IDE 的缓存",
-    "targets": [{"base": "%LOCALAPPDATA%\\JetBrains", "subdirs": ["DataGrip*\\caches", "DataGrip*\\tmp"]}],
-    "risk": "safe",
-    "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": false,
+    "why_safe": "HeidiSQL 的 .log 调试文件。仅匹配 *.log 后缀，不影响 portable_settings.txt 里的数据库连接、用户名密码和会话历史。",
+    "max_depth": 2
   },
   {
     "id": "azure_data_studio_cache",
@@ -1000,7 +1054,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "Azure Data Studio 基于 VS Code Electron，这是网页加载缓存、字节码副本和 GPU 缓存。不影响你的数据库连接配置、Azure 账号登录态和扩展，下次启动自动重建。"
   },
   {
     "id": "electron_crashpad_general",
@@ -1013,7 +1068,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "系统 Temp 下各种 Electron 应用（如 Skype、Slack、Discord 等）通用的崩溃 dmp 转储。这些已发往各自厂商或永远不会上传，删了不影响任何应用功能。"
   },
   {
     "id": "yarn_berry_cache",
@@ -1023,10 +1079,11 @@
     "name": "Yarn Berry 缓存",
     "description": "Yarn v2/v3/v4 (Berry) 全局缓存",
     "targets": [{"base": "%LOCALAPPDATA%\\Yarn\\Berry\\cache"}],
-    "risk": "caution",
+    "risk": "safe",
     "requires_admin": false,
-    "default_selected": false,
-    "clean_subdirs_only": true
+    "default_selected": true,
+    "clean_subdirs_only": true,
+    "why_safe": "Yarn Berry (v2+) 的全局 zip 包缓存（注意：项目里启用了 zero-install 时缓存在项目内 .yarn 里，那个不动）。删了仅当下次 yarn install 时联网重下。"
   },
   {
     "id": "cypress_cache",
@@ -1039,7 +1096,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Cypress 按版本下载的测试浏览器二进制和 Electron 副本（每版本约 500MB）。删了项目下次 cypress run 会卡住重下对应版本。日常不勾，仅当确认项目暂不跑 e2e 测试时再勾。"
   },
   {
     "id": "playwright_browsers",
@@ -1052,7 +1110,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Playwright 自动下载的 Chromium/Firefox/WebKit 测试用浏览器（共约 1-2GB）。删了项目下次 playwright test 会卡住重下，且需要重新执行 npx playwright install。日常不勾。"
   },
   {
     "id": "puppeteer_browsers",
@@ -1065,7 +1124,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Puppeteer 安装时下载的固定版本 Chrome for Testing（约 300MB）。删了项目下次跑 puppeteer 脚本会失败，需重新执行 npm install 或 npx puppeteer browsers install。日常不勾。"
   },
   {
     "id": "electron_builder_cache",
@@ -1078,7 +1138,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "electron-builder 打包时下载的 NSIS、Wine、Electron 二进制副本。删了你下一次 electron-builder 打包会重下对应组件（200-300MB），不影响项目代码和配置。"
   },
   {
     "id": "electron_gyp_cache",
@@ -1091,7 +1152,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "node-gyp 编译 C++ 原生模块时下载的 Node 头文件和 node.lib，按 Node 版本归档。删了下次安装含 native 模块（如 better-sqlite3）的包时按需重下几 MB，不影响 npm 自身。"
   },
   {
     "id": "turbo_cache",
@@ -1104,7 +1166,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Turborepo 跨包构建产物的本地缓存哈希池，加速 monorepo 重复构建用。删了不影响代码、turbo.json 配置和远程 Vercel 缓存（如配置了），下次 turbo build 会按需重建。"
   },
   {
     "id": "vite_cache",
@@ -1117,7 +1180,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Vite 全局预构建依赖的 esbuild 产物（项目级缓存在 node_modules/.vite 里不动）。删了 vite dev 首次启动多花几秒重新 pre-bundle，不影响项目代码和 vite.config.js。"
   },
   {
     "id": "nx_cache",
@@ -1130,7 +1194,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Nx 跨项目构建产物的本地哈希池，加速 monorepo 增量构建用。删了不影响 nx.json 配置和远程 Nx Cloud 缓存，下次 nx build 按需重新执行任务并填充缓存。"
   },
   {
     "id": "tauri_build_cache",
@@ -1143,7 +1208,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Tauri CLI 打包时下载的 WiX 工具集、NSIS 和 WebView2 安装包缓存。删了项目下次 tauri build 会重下对应工具（50-100MB），不影响 tauri.conf.json 和 src-tauri 源码。"
   },
   {
     "id": "python_mypy_cache",
@@ -1156,7 +1222,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "mypy 增量类型检查的中间结果（.mypy_cache 全局副本）。删了不影响项目代码和 mypy.ini 配置，下次 mypy 检查时多花几秒全量重新分析。"
   },
   {
     "id": "python_pytest_cache",
@@ -1169,7 +1236,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "pytest 记录的上次失败用例列表（用于 --lf/--ff 选项加速重跑）。删了不影响测试代码、conftest.py 和 pytest.ini，仅会丢失上次 run 的失败用例集。"
   },
   {
     "id": "rust_analyzer_cache",
@@ -1182,7 +1250,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "rust-analyzer 二进制下载缓存和升级时遗留的旧版本副本。删了不影响 VS Code/Vim 里已配置好的 rust-analyzer 路径，下次自动更新时重下。"
   },
   {
     "id": "helm_cache",
@@ -1195,7 +1264,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Helm 从仓库下载的 chart 压缩包和索引缓存（不含 kubeconfig 和已部署 release）。删了 helm install 时按需重下，不影响你的 K8s 集群连接配置。"
   },
   {
     "id": "terraform_plugin_cache",
@@ -1208,7 +1278,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Terraform provider 插件（AWS/Azure/GCP 等）的二进制下载副本（约几百 MB 起步），所有项目共享。删了所有项目下次 terraform init 都要联网重下对应 provider。日常不勾。"
   },
   {
     "id": "nvm_temp",
@@ -1221,7 +1292,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "nvm-windows 在 nvm install 时遗留的临时下载压缩包，安装完本该自清但常残留。删了不影响已安装的各版本 Node（在 nvm 根目录的版本号子目录里）和当前激活的版本。"
   },
   {
     "id": "volta_cache",
@@ -1234,7 +1306,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Volta 下载 Node/npm/yarn 各版本时的压缩包缓存，安装完成后不再需要。删了不影响已装好的工具链（在 tools 目录里）和项目 package.json 里 pin 的 volta 版本。"
   },
   {
     "id": "fnm_cache",
@@ -1247,7 +1320,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "fnm 为每个 shell 会话生成的临时符号链接目录（每开个 PowerShell 就堆一个），关闭 shell 后本该清掉但常残留。删了不影响已安装的 Node 版本和 fnm 配置。"
   },
   {
     "id": "wrangler_cache",
@@ -1260,7 +1334,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "wrangler 下载 Workers 运行时（workerd）和 wrangler 自身更新包的缓存。删了不影响 wrangler.toml 配置和 Cloudflare 账号登录态，下次 wrangler dev 时按需重下。"
   },
   {
     "id": "vercel_cache",
@@ -1273,6 +1348,7 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Vercel CLI 在 vercel deploy 时缓存的构建产物和 update-notifier 的检查记录。删了不影响 .vercel 项目链接信息和 Vercel 账号登录态，下次部署按需重建。"
   }
 ]

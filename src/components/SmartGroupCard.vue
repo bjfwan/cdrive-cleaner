@@ -300,10 +300,10 @@ function onItemLeave() {
   font-size: 0.7rem;
   font-weight: 700;
 }
-.risk[data-risk='safe'] { background: rgba(15, 159, 110, 0.12); color: #0d8a5f; }
-.risk[data-risk='caution'] { background: rgba(217, 119, 6, 0.12); color: #b45309; }
-.risk[data-risk='blocked'] { background: rgba(220, 38, 38, 0.12); color: #b91c1c; }
-.risk[data-risk='unknown'] { background: rgba(107, 114, 128, 0.12); color: #4b5563; }
+.risk[data-risk='safe'] { background: var(--risk-safe-soft); color: var(--risk-safe-text); }
+.risk[data-risk='caution'] { background: var(--risk-caution-soft); color: var(--risk-caution-text); }
+.risk[data-risk='blocked'] { background: var(--risk-risky-soft); color: var(--risk-risky-text); }
+.risk[data-risk='unknown'] { background: var(--risk-blocked-soft); color: var(--risk-blocked-text); }
 
 .item-path {
   margin-top: 0.18rem;

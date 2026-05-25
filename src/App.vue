@@ -13,7 +13,7 @@ import { TOAST_KEY } from './composables/useToast';
 import { useCart } from './composables/useCart';
 import type { AppSettings, DeleteMode, DeleteResult, DiskInfo, ScanCapabilities, ScanResult, ToastType, UpdateInfo } from './types';
 import { formatBytes } from './utils/format';
-import { getSettings } from './utils/settings';
+import { getSettings, syncTrackASettingsToBackend } from './utils/settings';
 import { checkForUpdates, shouldAutoCheck, markChecked } from './utils/updater';
 
 const Settings = defineAsyncComponent(() => import('./components/Settings.vue'));
@@ -28,6 +28,9 @@ const GamesView = defineAsyncComponent(() => import('./components/GamesView.vue'
 // detach (event listeners + reactive state) when not scanning.
 const DeepScanProgress = defineAsyncComponent(() => import('./components/DeepScanProgress.vue'));
 const UpdateDialog = defineAsyncComponent(() => import('./components/UpdateDialog.vue'));
+const AiSuggestions = defineAsyncComponent(() => import('./components/AiSuggestions.vue'));
+const Privacy = defineAsyncComponent(() => import('./components/Privacy.vue'));
+import { aiStore } from './store/ai';
 
 const disks = ref<DiskInfo[]>([]);
 const selectedDisk = ref<string>('');
@@ -52,7 +55,12 @@ const showWelcome = ref(false);
 const showOnboarding = ref(false);
 const showCommandPalette = ref(false);
 const showMigrateDialog = ref(false);
-const activeTab = ref<'workspace' | 'games' | 'junk'>('workspace');
+const activeTab = ref<'workspace' | 'games' | 'junk' | 'ai'>('workspace');
+const showPrivacy = ref(false);
+const aiState = aiStore.state;
+let unlistenTrayShow: (() => void) | null = null;
+let unlistenSchedulerRun: (() => void) | null = null;
+let unlistenSchedulerDone: (() => void) | null = null;
 const gameDetectionDone = ref(false);
 const migrateTargetItem = ref<{ path: string; name: string; size: number; file_count: number } | null>(null);
 const cartBusy = ref(false);
@@ -157,15 +165,78 @@ onMounted(async () => {
 
   await loadDisks();
   loadUserSettings();
+  // Track A：把本地保存的关闭/调度偏好同步到 Rust 端 settings.json，
+  // 这样 close 事件处理和调度 tick 看到的设置就是用户上次的选择。
+  void syncTrackASettingsToBackend(getSettings());
   checkFirstLaunch();
   window.addEventListener('keydown', onGlobalKey);
   void notifyOnGameDetection();
   void resumePendingScanIntent();
   void autoCheckForUpdates();
+  void aiStore.pullFromBackend();
+  void aiStore.installSuggestionListener();
+  try {
+    unlistenTrayShow = await listen('tray-show-window', () => {
+      activeTab.value = 'workspace';
+    });
+  } catch {
+    // tray events unavailable in this build; ignored.
+  }
+
+  // Track A: 后台扫描调度器
+  try {
+    unlistenSchedulerRun = await listen<{ scanId?: string; scan_id?: string; path?: string; kind?: 'incremental' | 'full'; forced?: boolean }>(
+      'scheduler-run-scan',
+      async (event) => {
+        const payload = event.payload || {};
+        const scanId = payload.scanId || payload.scan_id || payload.path || selectedDisk.value || 'C:\\';
+        const targetDisk = payload.path || scanId;
+        if (deepScanning.value) {
+          console.log('[scheduler] skip run-scan: another scan in flight', payload);
+          return;
+        }
+        // 切到对应的磁盘再跑深度扫描；现有 startDeepScan 会复用 selectedDisk
+        if (targetDisk && targetDisk !== selectedDisk.value) {
+          selectedDisk.value = targetDisk;
+          await Promise.resolve();
+        }
+        try {
+          await startDeepScan();
+          await invoke('cmd_scheduler_mark_scan_done', {
+            scanId,
+            kind: payload.kind ?? 'incremental',
+          });
+        } catch (err) {
+          console.warn('[scheduler] run-scan failed', err);
+        }
+      },
+    );
+    unlistenSchedulerDone = await listen<{ scanId?: string; scan_id?: string }>(
+      'scheduler-scan-done',
+      (event) => {
+        console.log('[scheduler] scan-done', event.payload);
+      },
+    );
+  } catch {
+    // scheduler events unavailable in this build; ignored.
+  }
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onGlobalKey);
+  if (unlistenTrayShow) {
+    unlistenTrayShow();
+    unlistenTrayShow = null;
+  }
+  if (unlistenSchedulerRun) {
+    unlistenSchedulerRun();
+    unlistenSchedulerRun = null;
+  }
+  if (unlistenSchedulerDone) {
+    unlistenSchedulerDone();
+    unlistenSchedulerDone = null;
+  }
+  aiStore.uninstallSuggestionListener();
 });
 
 function onGlobalKey(e: KeyboardEvent) {
@@ -525,6 +596,15 @@ function openHistory() {
 function closeHistory() {
   showHistory.value = false;
 }
+
+watch(
+  () => aiState.settings.enabled,
+  (enabled) => {
+    if (!enabled && activeTab.value === 'ai') {
+      activeTab.value = 'workspace';
+    }
+  },
+);
 
 function onSettingsSaved(newSettings: AppSettings) {
   appSettings.value = newSettings;
@@ -1020,6 +1100,12 @@ async function resumePendingScanIntent() {
                 :class="{ active: activeTab === 'junk' }"
                 @click="activeTab = 'junk'"
               >垃圾清理</button>
+              <button
+                v-if="aiState.settings.enabled"
+                class="workspace-tab"
+                :class="{ active: activeTab === 'ai' }"
+                @click="activeTab = 'ai'"
+              >AI 建议</button>
             </div>
             <div class="workspace-chip" :data-tone="scanCapabilityTone" :title="scanCapabilityLabel">
               <span>后端</span>
@@ -1087,6 +1173,13 @@ async function resumePendingScanIntent() {
 
           <JunkCleanView v-if="activeTab === 'junk'" />
 
+          <AiSuggestions
+            v-if="activeTab === 'ai'"
+            @open-migrate="openMigrateSingle"
+            @go-settings="openSettings"
+            @go-privacy="showPrivacy = true"
+          />
+
           <div v-if="error" class="error">{{ error }}</div>
         </div>
       </div>
@@ -1108,6 +1201,13 @@ async function resumePendingScanIntent() {
       @restart-onboarding="showOnboarding = true"
       @show-about="showWelcome = true"
       @check-update="manualCheckForUpdates"
+      @show-privacy="showPrivacy = true"
+      @show-ai-suggestions="activeTab = 'ai'"
+    />
+
+    <Privacy
+      :show="showPrivacy"
+      @close="showPrivacy = false"
     />
 
     <div v-if="showHistory" class="modal-overlay" @click="closeHistory">
@@ -1174,6 +1274,7 @@ async function resumePendingScanIntent() {
       :confirm-text="cartConfirm.deleteMode === 'permanent' ? '我确认永久删除' : '继续执行'"
       cancel-text="再想想"
       :type="cartConfirm.type"
+      :high-risk="cartConfirm.deleteMode === 'permanent' && cartConfirm.deleteCount > 0"
       @confirm="confirmCart"
       @cancel="cancelCartConfirm"
     />

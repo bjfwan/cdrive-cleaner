@@ -47,6 +47,11 @@ pub struct CleanRuleConfig {
     /// See `JunkRule::max_depth` for semantics.
     #[serde(default)]
     pub max_depth: Option<u32>,
+    /// User-facing safety explanation: "why deleting this is OK".
+    /// Populated by the rule-audit pass; missing entries surface as
+    /// "未补充" placeholder in the UI so authors notice the gap.
+    #[serde(default)]
+    pub why_safe: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -261,6 +266,9 @@ struct PreparedRule {
     default_selected: bool,
     clean_subdirs_only: bool,
     max_depth: Option<u32>,
+    /// Pre-leaked why_safe string; None when the rule's JSON config did not
+    /// provide one. Surfaces in the UI as a "未补充" placeholder.
+    why_safe: Option<&'static str>,
     /// Pre-expanded detect paths. None entries arose from missing env vars at
     /// preparation time; we keep them to log "this rule's detect path could
     /// not resolve" only once.
@@ -342,6 +350,10 @@ fn prepare_all_rules() -> Vec<PreparedRule> {
         let description: &'static str = Box::leak(cfg.description.into_boxed_str());
         let patterns: &'static [&'static str] =
             Box::leak(patterns_owned.into_boxed_slice());
+        let why_safe: Option<&'static str> = cfg
+            .why_safe
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| -> &'static str { Box::leak(s.into_boxed_str()) });
 
         prepared.push(PreparedRule {
             id,
@@ -353,6 +365,7 @@ fn prepare_all_rules() -> Vec<PreparedRule> {
             default_selected: cfg.default_selected,
             clean_subdirs_only: cfg.clean_subdirs_only,
             max_depth,
+            why_safe,
             detect_paths,
             target_paths,
             patterns,
@@ -415,6 +428,7 @@ pub fn load_json_rules() -> Vec<JunkRule> {
             default_selected: p.default_selected,
             clean_subdirs_only: p.clean_subdirs_only,
             max_depth: p.max_depth,
+            why_safe: p.why_safe,
         });
     }
 

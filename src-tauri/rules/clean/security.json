@@ -7,10 +7,11 @@
     "name": "Defender 支持日志",
     "description": "Windows Defender 支持诊断日志",
     "targets": [{"base": "%PROGRAMDATA%\\Microsoft\\Windows Defender\\Support", "patterns": ["*.log", "*.old"]}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": false
+    "default_selected": false,
+    "clean_subdirs_only": false,
+    "why_safe": "Windows Defender 自身的诊断日志，不是病毒库也不是隔离区。删了不影响实时防护和扫描能力,但当 Defender 自己出问题(比如扫描卡住、定义更新失败)你拿不到给微软支持的排错记录。日常没毛病时可以勾,正在排查 Defender 问题就别动。"
   },
   {
     "id": "defender_scans_backup",
@@ -23,7 +24,8 @@
     "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Defender 引擎/定义更新时保留的回滚备份。删了不会丢隔离区里的样本(那是 Quarantine 目录,本规则不动)、也不影响日常防护,但万一最新一次定义更新出问题,Defender 无法回滚到旧版本。默认不勾,确实想释放磁盘再考虑。"
   },
   {
     "id": "malwarebytes_logs",
@@ -33,10 +35,11 @@
     "name": "Malwarebytes 日志",
     "description": "Malwarebytes 反恶意软件的扫描和运行日志",
     "targets": [{"base": "%PROGRAMDATA%\\Malwarebytes\\MBAMService\\Logs"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "Malwarebytes 实时防护与扫描的运行日志。删了不影响扫描能力和实时拦截,但失去历史威胁记录——如果你最近遭遇可疑文件/弹窗想回查是哪个进程触发,日志没了就查不到。日常勾它无碍,正在排查感染事件先别动。"
   },
   {
     "id": "malwarebytes_scan_results",
@@ -46,10 +49,11 @@
     "name": "Malwarebytes 扫描结果",
     "description": "Malwarebytes 历史扫描结果文件",
     "targets": [{"base": "%PROGRAMDATA%\\Malwarebytes\\MBAMService\\ScanResults"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "历次扫描发现的威胁清单与处理结果。删了不影响实时防护和后续扫描,但你看不到上次扫到了什么、哪些被清掉了——如果你怀疑误报想恢复某个文件,扫描结果没了就找不到引用。默认不勾,先确认历史记录用不上再删。"
   },
   {
     "id": "kaspersky_logs",
@@ -62,10 +66,11 @@
       {"base": "%PROGRAMDATA%\\Kaspersky Lab\\AVP21.0\\Report"},
       {"base": "%PROGRAMDATA%\\Kaspersky Lab\\AVP21.0\\Temp"}
     ],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "卡巴斯基的扫描报告和临时文件。删了不影响实时防护和病毒库,但失去历次扫描的详细报告——客服排查时常会让你导出报告,删了就没了。Temp 一般无碍,Report 里有你电脑的安全事件历史,默认不勾。"
   },
   {
     "id": "norton_logs",
@@ -75,10 +80,11 @@
     "name": "Norton 日志",
     "description": "Norton 安全软件的运行日志和本地转储",
     "targets": [{"base": "%LOCALAPPDATA%\\Norton\\Logs"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "诺顿运行过程的本地日志。删了不影响实时防护和扫描结果,但失去近期事件历史——如果近期有威胁拦截、误报或软件冲突想回查,只能从日志找。日常没事可以勾,排查问题期间先别动。"
   },
   {
     "id": "eset_logs",
@@ -91,10 +97,11 @@
       {"base": "%PROGRAMDATA%\\ESET\\ESET Security\\Logs"},
       {"base": "%PROGRAMDATA%\\ESET\\ESET Security\\Oldfiles"}
     ],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "ESET 的扫描日志和旧版本备份文件。删了不影响病毒库和实时防护,但失去历史扫描记录,Oldfiles 删了无法回滚到上一版引擎。日常勾它无碍,刚升过 ESET 或正在排查防护问题先别动。"
   },
   {
     "id": "avast_logs",
@@ -104,10 +111,11 @@
     "name": "Avast 日志",
     "description": "Avast 杀毒软件的运行日志文件",
     "targets": [{"base": "%PROGRAMDATA%\\AVAST Software\\Avast\\log"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "Avast 的服务运行日志。删了不影响病毒定义和实时防护,但失去近期拦截、扫描和软件升级的事件历史。日常勾它无碍;如果近期有奇怪的拦截行为或弹窗想回查原因,日志删了就追不回来。"
   },
   {
     "id": "huorong_logs",
@@ -117,10 +125,11 @@
     "name": "火绒日志",
     "description": "火绒安全软件的运行和扫描日志",
     "targets": [{"base": "%PROGRAMDATA%\\Huorong\\Sysdiag\\log"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "火绒安全服务的运行日志。删了不影响病毒库和主动防御,但失去近期拦截、入侵防御事件的历史记录——给火绒客服反馈问题时经常要导出这些日志。日常勾它无碍,正在处理可疑事件先别动。"
   },
   {
     "id": "360safe_logs",
@@ -133,10 +142,11 @@
       {"base": "%APPDATA%\\360Safe\\360ScanLog"},
       {"base": "%APPDATA%\\360Safe\\Clean\\OKClean", "patterns": ["*.log"]}
     ],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "360 安全卫士的扫描历史和清理日志。删了不影响病毒库和主动防御功能,但你看不到上次体检、清理时具体处理过什么——担心 360 清错文件想回查就没办法了。日常没事可以勾,担心误清除先留着。"
   },
   {
     "id": "ccleaner_logs",
@@ -149,7 +159,9 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "CCleaner 自己的运行日志,记录它每次跑了哪些规则。删了不影响 CCleaner 任何功能,你的自定义清理规则、计划任务、配置都不在这里。"
   },
   {
     "id": "avg_logs",
@@ -159,10 +171,11 @@
     "name": "AVG 日志",
     "description": "AVG 杀毒软件的运行日志",
     "targets": [{"base": "%PROGRAMDATA%\\AVG\\Antivirus\\log"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "AVG 的服务日志。删了不影响病毒库和实时防护,但失去近期威胁拦截、文件扫描的历史。日常勾它无碍,正在排查 AVG 拦截或冲突问题先别动。"
   },
   {
     "id": "windows_defender_temp",
@@ -172,10 +185,11 @@
     "name": "Defender 临时文件",
     "description": "Windows Defender 扫描时的临时文件",
     "targets": [{"base": "%PROGRAMDATA%\\Microsoft\\Windows Defender\\Scans\\MetaStore"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "Defender 扫描元数据缓存,记录上次扫到哪了、文件指纹等。删了 Defender 会自动重建,不影响隔离区和病毒库——但下次启动扫描时会先全量重新建索引,可能比平常慢一些。默认不勾,扫描计划紧的话别动。"
   },
   {
     "id": "bitdefender_logs",
@@ -185,10 +199,11 @@
     "name": "Bitdefender 日志",
     "description": "Bitdefender 杀毒软件的运行和扫描日志",
     "targets": [{"base": "%PROGRAMDATA%\\Bitdefender\\Endpoint Security\\Logs"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "Bitdefender 端点防护的运行日志。删了不影响实时防护和病毒库,但失去近期威胁拦截记录——企业环境下经常需要这些日志给安全管理员回查事件。默认不勾,个人用户日常没事可勾。"
   },
   {
     "id": "tencent_security_logs",
@@ -198,10 +213,12 @@
     "name": "腾讯电脑管家日志",
     "description": "腾讯电脑管家的运行和扫描日志",
     "targets": [{"base": "%PROGRAMDATA%\\Tencent\\QQPCMgr", "patterns": ["*.log"]}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": false
+    "default_selected": false,
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "腾讯电脑管家在各版本子目录下的 *.log 日志文件。删了不影响病毒库和实时防护,但失去最近体检、清理、加速的历史。日常勾它无碍,担心电脑管家清错东西想回查就先留着。"
   },
   {
     "id": "wisecleaner_logs",
@@ -214,7 +231,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Wise Disk Cleaner 自己跑过哪些清理任务的日志。删了不影响它的清理规则、配置和计划任务,你的自定义设置都在别处。"
   },
   {
     "id": "adguard_logs",
@@ -227,7 +245,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "AdGuard 广告拦截器的服务运行日志。删了不影响过滤规则、白名单、订阅源等任何配置,广告拦截照常工作。"
   },
   {
     "id": "glasswire_logs",
@@ -237,10 +256,11 @@
     "name": "GlassWire 日志",
     "description": "GlassWire 网络防火墙的运行日志",
     "targets": [{"base": "%PROGRAMDATA%\\GlassWire\\service\\log"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "GlassWire 网络监控服务的内部日志(注意:不是它的网络活动数据库)。删了不影响实时监控和警报,但服务自身出问题排查时缺线索。如果你专门用 GlassWire 回查可疑外联,默认不勾;只是装着没怎么用可以勾。"
   },
   {
     "id": "surfshark_logs",
@@ -253,7 +273,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Surfshark VPN 客户端运行过程的本地日志,不包含访问的网站和流量内容。删了不影响登录态、连接配置和已选服务器列表,VPN 重连照常。"
   },
   {
     "id": "nordvpn_logs",
@@ -266,7 +287,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "NordVPN 客户端运行日志,不含浏览记录。删了不影响登录、连接配置或服务器收藏夹,只是给 NordVPN 客服反馈连接问题时少了排错线索。"
   },
   {
     "id": "windscribe_logs",
@@ -279,7 +301,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windscribe VPN 客户端的运行日志。删了不影响账号登录、连接偏好和已订阅服务器,VPN 功能照常。"
   },
   {
     "id": "clash_logs",
@@ -292,7 +315,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Clash 代理的运行日志。删了不影响订阅、规则集、节点配置和已选代理模式——你的 config.yaml 和订阅都不在这里。代理服务照常工作。"
   },
   {
     "id": "v2rayn_logs",
@@ -305,7 +329,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "v2rayN 客户端 GUI 的运行日志。删了不影响节点列表、订阅、路由规则和系统代理设置,代理服务照常。"
   },
   {
     "id": "keepass_backup",
@@ -318,7 +343,8 @@
     "risk": "risky",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "KeePass 自动保留的密码数据库历史备份(.kdbx 旧版本)。这是你密码库损坏或误改时的最后一道恢复线——如果当前主数据库出问题,这些备份能救命。除非你已经在别处(云盘、外部备份)有完整备份,否则绝对不要勾。删完没了就真没了。"
   },
   {
     "id": "1password_logs",
@@ -328,10 +354,11 @@
     "name": "1Password 日志",
     "description": "1Password 密码管理器的运行日志",
     "targets": [{"base": "%LOCALAPPDATA%\\1Password\\logs"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "1Password 客户端的运行日志(不含密码内容,但包含同步、解锁等元数据)。删了不影响登录态、保险库和密码——所有数据都在云端。但如果你最近遇到 1Password 同步失败或自动填充异常想给客服反馈,日志没了就缺排错依据。"
   },
   {
     "id": "bitwarden_logs",
@@ -341,10 +368,11 @@
     "name": "Bitwarden 日志",
     "description": "Bitwarden 密码管理器的运行日志",
     "targets": [{"base": "%APPDATA%\\Bitwarden\\logs"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "Bitwarden 桌面客户端的运行日志(不含密码,但包含同步事件等元数据)。删了不影响登录态和保险库——密码全在云端。但近期遇到同步、自动填充问题想反馈,日志没了就缺排错信息。"
   },
   {
     "id": "bitwarden_cache",
@@ -360,7 +388,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Bitwarden 桌面端(Electron)的网页资源和 GPU 渲染缓存。下次启动会自动重建,不会影响你的登录态、本地解锁密码或离线保险库副本。首次启动慢 1-2 秒。"
   },
   {
     "id": "protonvpn_logs",
@@ -373,7 +402,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "ProtonVPN 客户端运行日志,不含访问的网站记录。删了不影响登录态、服务器收藏和 Kill Switch 等设置。"
   },
   {
     "id": "expressvpn_logs",
@@ -386,7 +416,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "ExpressVPN 客户端运行日志,不含浏览记录。删了不影响登录、服务器选择和协议设置,VPN 重连照常。"
   },
   {
     "id": "windows_firewall_logs",
@@ -399,7 +430,8 @@
     "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Windows 防火墙记录的连接放行/拦截详情。日常用户多数没开启这个日志,文件通常为空或很小。但如果你或公司 IT 正用它审计可疑外联,删了就没历史可查。默认不勾,有人主动开启过日志时务必保留。"
   },
   {
     "id": "windows_smartscreen_cache",
@@ -412,7 +444,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "SmartScreen 缓存的程序声誉数据。删了下次首次运行常用程序时,系统会重新向微软查一次「这个程序是否安全」,几秒钟事——不会影响实际防护能力,也不会丢任何应用本身。"
   },
   {
     "id": "crowdstrike_logs",
@@ -422,10 +455,11 @@
     "name": "CrowdStrike Falcon 日志",
     "description": "CrowdStrike 端点安全产品的运行日志",
     "targets": [{"base": "%PROGRAMDATA%\\CrowdStrike\\Logs"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "CrowdStrike Falcon 端点防护代理的本地日志。删了不影响实时防护和云端策略,但失去近期遥测、事件记录的本地副本——企业 IT/安全团队经常依靠这些日志做事件响应。除非个人电脑装着没在管理,默认不勾。"
   },
   {
     "id": "carbonblack_logs",
@@ -435,10 +469,11 @@
     "name": "Carbon Black 日志",
     "description": "VMware Carbon Black 端点安全的日志",
     "targets": [{"base": "%PROGRAMDATA%\\CarbonBlack\\Logs"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "VMware Carbon Black 端点防护代理的本地日志。删了不影响实时防护和云端策略,但失去近期入侵检测事件的本地记录——企业 SOC 团队回溯事件时常需要。公司管理的电脑默认不勾,等 IT 给指示。"
   },
   {
     "id": "winscp_logs",
@@ -451,7 +486,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "WinSCP 文件传输的会话调试日志。删了不影响已保存的站点、密码、密钥和同步任务——这些都在配置文件里不在日志里。日志只是排查连接异常用。"
   },
   {
     "id": "filezilla_logs",
@@ -464,6 +500,7 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "FileZilla 的传输日志。删了不影响站点管理器中的服务器配置、密码、队列记录——这些不在 *.log 里。日志只是排查连接和传输失败用。"
   }
 ]

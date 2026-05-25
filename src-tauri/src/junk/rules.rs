@@ -34,6 +34,7 @@ pub struct JunkRule {
     pub default_selected: bool,
     pub clean_subdirs_only: bool,
     pub max_depth: Option<u32>,
+    pub why_safe: Option<&'static str>,
 }
 
 pub(super) fn env_path(var: &str, suffix: &str) -> Option<String> {
@@ -86,6 +87,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("你的应用临时草稿区——安装包解压、压缩软件预览、浏览器下载临时块都堆在这里。Windows 不会主动告诉任何软件 \"这文件还在\"，软件用完一次就忘了它。已被某个进程打开的文件会被自动跳过，**不会动到正在用的临时数据**。"),
         },
     );
 
@@ -103,6 +105,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("和上面一个道理，是软件以 LocalAppData 形态存的临时区。Visual Studio、Office、各类下载器在这里堆了大量解压残骸。**不影响任何软件的设置、登录态、用户数据**，正在被进程打开的文件会被跳过。"),
         },
     );
 
@@ -120,6 +123,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("系统级临时目录，主要是安装包、Windows 更新、系统服务的中转文件。一次会话结束就没用了，**不影响已安装软件**。需要管理员权限才能清理，正在使用的文件会被自动跳过。"),
         },
     );
 
@@ -137,6 +141,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("Windows 记录\"哪些程序刚启动过\"的预读取索引（*.pf）。删除后下一次启动这些程序时，Windows 会重新生成对应索引，仅那一次会慢 0.5-1 秒。**不会影响任何程序的功能或数据**。"),
         },
     );
 
@@ -154,6 +159,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("Windows Update 下载完、已经装好的更新包二进制。装完之后就再也用不到了，过 10 天 Windows 自己也会清。**不影响系统补丁状态**——已经装上的补丁不会因为这个被卸载。"),
         },
     );
 
@@ -171,6 +177,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("Windows Update 给自己排错用的日志。**不参与系统打补丁、不参与回滚**，删了不影响任何系统功能。仅当你在和微软支持工程师一起诊断更新失败时才有用。"),
         },
     );
 
@@ -191,6 +198,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("公司/校园网常见的 P2P 更新分发缓存——Windows 自动从局域网其他机器拉更新包到这里中转。常达数 GB。**不影响更新成功率**，只影响你下次成为\"分发源\"的速度。"),
         },
     );
 
@@ -208,6 +216,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: false,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("Windows 大版本升级或功能更新的部署日志。升级完成后 10 天内 Windows 还可能回滚用到这些日志，**所以默认不勾**。如果你升级很久了并且没遇到问题，可以勾上清理。"),
         },
     );
 
@@ -225,6 +234,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: false,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("驱动/INF 安装时写的日志。日常用不到，但如果你正在排查\"某个硬件不工作\"\"设备管理器有黄叹号\"，删了就**没法回看安装过程**。默认不勾选。"),
         },
     );
 
@@ -242,6 +252,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("资源管理器为了让你打开文件夹时图标加载更快而存的缩略图索引（thumbcache_*.db / iconcache_*.db）。删除后第一次浏览每个文件夹会重新生成，**只多 1-2 秒**。常用于解决\"缩略图显示错乱\"的问题。"),
         },
     );
 
@@ -257,6 +268,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
         default_selected: false,
         clean_subdirs_only: true,
         max_depth: None,
+        why_safe: Some("C 盘回收站。清空之后里面的文件**无法从回收站还原**，确认其中没有需要的文件再勾选。默认不勾。"),
     });
 
     push_rule_if_paths(
@@ -273,6 +285,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("应用崩溃瞬间 Windows 抓取的内存快照（.dmp）。仅在你需要把这个崩溃报告给开发者时才有用。**这个崩溃已经过去了，留着也没用**。"),
         },
     );
 
@@ -290,6 +303,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("Windows 错误报告（WER）攒下来等着发给微软的数据。删了不影响系统、也不影响已安装软件，仅影响\"如果以后某次 BSOD 你想给微软看历史报告\"这一极少数场景。"),
         },
     );
 
@@ -307,6 +321,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("WER 错误报告归档区（系统级）——已经上报过给微软的副本。微软那边早收到了，本地这一份纯粹是历史存档。删了不影响任何东西。"),
         },
     );
 
@@ -324,6 +339,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("WER 错误报告排队上报区（系统级）。即使删了排队中的内容，下次出现错误时 Windows 会重新生成新的报告。**不影响系统功能**。"),
         },
     );
 
@@ -341,6 +357,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("WER 在生成报告时的临时中转文件。报告生成完就用不上了。删了不影响任何东西。"),
         },
     );
 
@@ -358,6 +375,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("蓝屏时 Windows 抓取的小型内核内存转储（*.dmp）。给微软或硬件厂商排查蓝屏原因用的。**蓝屏已经发生过了，留着这份历史样本对你没用**。如果你**正在**排查蓝屏问题，请先取消勾选。"),
         },
     );
 
@@ -375,6 +393,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("内核挂起时（不是蓝屏，是某次 IO 卡死）Windows 抓取的诊断数据，体积常达数百 MB。仅微软排障使用。**这次挂起已经过去了，对你没用**——但如果你正在和微软工程师诊断挂起问题，请取消勾选。"),
         },
     );
 
@@ -395,6 +414,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: false,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Windows 7/8 时代留下的纯文本更新日志（WindowsUpdate.log），新版 Windows 已经不再写入这个文件。如果你的机器是从老版本升级来的，这条可以清。新装机器通常根本没有这个文件。默认不勾。"),
         },
     );
 
@@ -412,6 +432,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: false,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("Windows 组件存储（CBS）操作日志，SFC /scannow、DISM 等工具的运行记录。删了**不影响 SFC/DISM 当前的工作**，但会**失去过去几次操作的记录**——如果你正在排查\"系统文件被破坏\"的问题，请取消勾选。默认不勾。"),
         },
     );
 
@@ -429,6 +450,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: false,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("DISM（部署映像服务）的操作日志。和上面 CBS 是同一道理，仅排障保留，但正在排查映像问题时不要删。默认不勾。"),
         },
     );
 
@@ -449,6 +471,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: false,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("Windows 字体子系统（FontCache 服务）为加速字体渲染而缓存的索引。删除后服务自启会重建，**重建过程中首次唤起字体可能慢半秒，无其他影响**。需要管理员权限。"),
         },
     );
 
@@ -466,6 +489,7 @@ fn os_layer_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("当前用户的字体渲染缓存。和上面同理，删了系统自动重建，仅首次渲染慢半秒。**不影响任何已安装字体**。"),
         },
     );
 

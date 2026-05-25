@@ -8,6 +8,8 @@ import { formatBytes } from '../utils/format';
 import { useToast } from '../composables/useToast';
 import { IconSpinner, IconFolder } from './icons';
 import DiskSelect from './DiskSelect.vue';
+import FeatureIntro from './FeatureIntro.vue';
+import { stateCopy } from '../utils/state-copy';
 
 interface Props {
   folders: KnownFolderInfo[];
@@ -211,9 +213,17 @@ async function redirectAll() {
     </header>
 
     <div class="redirect-body">
+      <FeatureIntro
+        storage-key="folder-redirect"
+        what="把「下载/文档/图片/桌面」这类 Windows 已知文件夹的默认存储位置改到其他盘。"
+        when="C 盘塞不下、又不想每次手动选下载位置；或者刚换大盘想把存储重心挪过去。"
+        outcome="改完之后所有应用按「默认存储位置」保存的新文件会直接落到其他盘；已经存在的文件会一起搬过去。"
+        reversibility="reversible"
+        reversibility-note="同一列表里可以随时点「还原」改回 C 盘"
+      />
       <div v-if="loading" class="redirect-loading">
         <div class="redirect-spinner"></div>
-        <span>检测已知文件夹…</span>
+        <span>{{ stateCopy.folderRedirect.loading.title }}</span>
       </div>
 
       <template v-else>
@@ -237,7 +247,7 @@ async function redirectAll() {
         </div>
 
         <div v-if="redirectableFolders.length === 0 && alreadyRedirected.length === 0" class="redirect-empty">
-          暂无可检测的已知文件夹
+          {{ stateCopy.folderRedirect.empty.title }} · {{ stateCopy.folderRedirect.empty.description }}
         </div>
 
         <div v-else class="redirect-table">
@@ -303,7 +313,7 @@ async function redirectAll() {
                 @click="redirectFolder(folder)"
               >
                 <IconSpinner v-if="executingId === folder.id" :size="14" />
-                <span v-else>迁移</span>
+                <span v-else>搬到 {{ targetDisk || '目标盘' }}</span>
               </button>
             </span>
           </div>
@@ -319,7 +329,7 @@ async function redirectAll() {
             @click="redirectAll"
           >
             <IconSpinner v-if="executingAll" :size="14" />
-            <span v-else>一键全部重定向</span>
+            <span v-else>一键把全部搬到 {{ targetDisk || '目标盘' }}</span>
           </button>
         </div>
       </template>

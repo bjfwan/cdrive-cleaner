@@ -13,7 +13,9 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "NVIDIA 遥测组件和驱动下载器的运行日志。删了不影响驱动本身、显卡控制面板和 NVIDIA App,显卡照常工作。仅当你正在排查 GeForce Experience/驱动安装异常想找线索时,日志才有用。"
   },
   {
     "id": "nvidia_downloader",
@@ -26,7 +28,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "GeForce Experience/NVIDIA App 下载过的驱动安装包,装完就没用了,可释放几百 MB 到几 GB。删了不影响已安装的驱动和显卡——下次有新驱动会重新下载。"
   },
   {
     "id": "nvidia_nv_cache",
@@ -39,7 +42,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "NVIDIA 驱动为加速 OpenGL/Vulkan 程序启动而保存的编译后着色器缓存。删了不影响游戏存档、画质设置和驱动配置,只会让最近玩过的游戏首次启动时再编译一次 shader,可能多花几秒到十几秒,之后恢复正常。"
   },
   {
     "id": "nvidia_crash_dumps",
@@ -52,7 +56,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "NVIDIA 驱动/服务崩溃时的内存转储,只有 NVIDIA 工程师能读懂。崩溃事件已过去就用不上了,留着只占空间。不影响显卡功能。"
   },
   {
     "id": "amd_radeon_logs",
@@ -65,7 +70,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "AMD 显卡组件下的运行日志文件。删了不影响 Radeon 软件的所有配置——你的画质预设、每游戏配置、超频参数都不在这里。日志只在你向 AMD 客服报问题时才用得上。"
   },
   {
     "id": "amd_radeon_cache",
@@ -82,7 +89,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Radeon Software 界面用的网页缓存和 Vulkan 着色器缓存。删了不影响你的画质设置、显卡 BIOS、风扇曲线和每游戏配置。Vulkan 游戏首次启动会重新编译 shader,可能多花几秒。"
   },
   {
     "id": "amd_kdb_logs",
@@ -95,7 +103,9 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "AMD 驱动内核侧调试日志,只供 AMD 工程师调试用。删了不影响显卡功能、驱动设置或任何用户数据。"
   },
   {
     "id": "amd_auto_update_logs",
@@ -108,7 +118,9 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "AMD 驱动自动更新检查的运行日志。删了不影响驱动版本和更新通知——下次还是会按计划检查更新。"
   },
   {
     "id": "intel_shader_cache",
@@ -121,7 +133,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Intel 核显为加速游戏/3D 程序启动而缓存的编译后 shader。删了不影响游戏存档和驱动设置——只会让最近玩过的游戏首次启动时再编译一次,多花几秒到十几秒,之后恢复正常。"
   },
   {
     "id": "intel_installer_logs",
@@ -134,7 +147,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "Intel 驱动安装、显卡控制中心、DSA 等组件的日志。删了不影响 Intel 显卡控制中心的用户预设(配色、性能档位)、设备驱动版本和系统功能。日志仅在排查驱动安装失败时有用。"
   },
   {
     "id": "realtek_logs",
@@ -147,7 +162,9 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "Realtek 声卡/网卡驱动安装时写下的过程日志。删了不影响音频效果、声卡均衡器、网卡设置和已安装的驱动版本。"
   },
   {
     "id": "dell_logs",
@@ -163,7 +180,9 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "max_depth": 3,
+    "why_safe": "Dell SupportAssist 和驱动更新服务的日志和缓存。删了不影响保修信息、SupportAssist 巡检计划和驱动版本——下次它会重新生成。仅在你正等 Dell 客服回查机器自检报告时建议先留着。"
   },
   {
     "id": "hp_logs",
@@ -176,7 +195,9 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "HP Support Assistant、HP CoolSense 等工具的运行日志。删了不影响保修信息、设备序列号、已安装驱动和工具配置——这些都不在 *.log 文件里。"
   },
   {
     "id": "lenovo_logs",
@@ -189,7 +210,9 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "联想 Vantage、系统更新等工具的日志。删了不影响保修信息、电池保护模式、显示模式、键盘灯亮度等用户配置——这些在配置文件不在日志里。"
   },
   {
     "id": "asus_logs",
@@ -202,7 +225,9 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "华硕 Armoury Crate、Aura Sync、AI Suite 等工具的运行日志。删了不影响 Aura 灯效配置、风扇曲线、性能档位等用户设置——它们存在配置文件里不在日志中。"
   },
   {
     "id": "corsair_logs",
@@ -218,7 +243,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "iCUE 服务端和客户端的运行日志。删了不影响你的灯光预设、宏命令、键位映射、风扇曲线等——这些都在 profiles 配置里不在 logs 里。"
   },
   {
     "id": "logitech_logs",
@@ -231,7 +257,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "罗技 G Hub、Options、SetPoint 等的运行日志。删了不影响鼠标 DPI 档位、键盘宏、灯效配置和每应用配置——这些在 settings/profiles 里不在日志中。"
   },
   {
     "id": "razer_logs",
@@ -244,7 +272,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Razer Synapse 3 的运行日志。删了不影响你的 Chroma 灯效、键盘宏、DPI 阶梯、每游戏配置——它们都在云端账号或本地 profiles 里。"
   },
   {
     "id": "steelseries_logs",
@@ -257,7 +286,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "SteelSeries GG 的运行日志。删了不影响 Engine 配置、Moments 录像偏好、灯效和按键映射——这些不在 logs 子目录。"
   },
   {
     "id": "msi_center_logs",
@@ -270,7 +300,9 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "微星 MSI Center、Dragon Center 等工具的运行日志。删了不影响你的性能档位、键盘灯效、风扇曲线和 Mystic Light 配置——这些存在 profiles 里不在日志中。"
   },
   {
     "id": "nvidia_installer_temp",
@@ -283,7 +315,9 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "NVIDIA 驱动安装器的过程日志(不包含安装包本体——本规则只匹配 *.log 文件)。删了不影响驱动卸载和已安装版本,只是失去这次安装的过程记录。"
   },
   {
     "id": "nvidia_ngx_logs",
@@ -296,7 +330,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "NVIDIA NGX(DLSS、RTX Voice、Broadcast 后端)的运行日志。删了不影响 DLSS 在游戏里的画质模式、RTX 功能可用性,以及任何你装过的 NGX 模型。"
   },
   {
     "id": "amd_installer_temp",
@@ -309,7 +344,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Radeon Software 自动下载过的驱动安装包,装完就没用了——可以释放数 GB。删了不影响已安装的驱动和你的 Radeon 设置,下次有新版本时会重新下载。"
   },
   {
     "id": "hyperx_logs",
@@ -322,7 +358,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "HyperX NGENUITY 外设管理软件的运行日志。删了不影响耳机均衡器、键盘宏、灯效预设等用户配置——这些在 profiles 里不在日志中。"
   },
   {
     "id": "creative_labs_logs",
@@ -335,7 +372,9 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "Creative/Sound Blaster 声卡驱动和 Sound Blaster Command 工具的运行日志。删了不影响音效预设、均衡器、Scout 模式等用户配置——这些都不在 *.log 里。"
   },
   {
     "id": "samsung_magician_logs",
@@ -348,7 +387,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "三星 Magician SSD 工具的运行日志。删了不影响 SSD 健康度数据(由固件自身维护)、固件版本、Rapid Mode 等配置和性能基准记录。"
   },
   {
     "id": "crucial_storage_logs",
@@ -361,7 +401,9 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "英睿达 Storage Executive 工具的运行日志。删了不影响 SSD 健康监控、固件版本、Momentum Cache 等设置——这些不在日志中。"
   },
   {
     "id": "display_driver_uninstaller_logs",
@@ -374,7 +416,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "DDU 卸载显卡驱动时记录的操作日志。删了不影响 DDU 本身和你已经卸载/重装的驱动状态。仅在你刚跑过 DDU 想回查清理细节时建议先留着。"
   },
   {
     "id": "nzxt_cam_logs",
@@ -387,7 +430,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "NZXT CAM 硬件监控工具的运行日志。删了不影响 CAM 的传感器读数、风扇/水冷曲线、灯效配置——这些不在 *.log 里。"
   },
   {
     "id": "hwinfo_logs",
@@ -397,10 +442,11 @@
     "name": "HWiNFO 传感器日志",
     "description": "HWiNFO 硬件监控的传感器记录日志",
     "targets": [{"base": "%PROGRAMFILES%\\HWiNFO64", "patterns": ["*.CSV", "*.HTM"]}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "HWiNFO 你主动开启 Logging 后录下来的传感器时序数据(CSV/HTM)。这些是你为调试散热、超频、电源问题特意保留的——不是软件自己生成的日志垃圾。删了就没法回看那次跑分/压测时温度功耗曲线。除非你确认数据已分析完,默认不勾。"
   },
   {
     "id": "afterburner_logs",
@@ -410,10 +456,11 @@
     "name": "MSI Afterburner 日志",
     "description": "MSI Afterburner 显卡超频工具的帧率记录日志",
     "targets": [{"base": "%PROGRAMFILES(X86)%\\MSI Afterburner", "patterns": ["*.hml"]}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Afterburner / RivaTuner 你主动录制的帧率时序数据(.hml)——给跑分、对比超频效果用的。不是软件自己写的日志垃圾,删了那次评测数据就没了。除非已经分析完了,默认不勾。"
   },
   {
     "id": "hp_swsetup",
@@ -421,12 +468,13 @@
     "detect": ["%SYSTEMDRIVE%\\SWSetup"],
     "category": "installer_cache",
     "name": "HP SWSetup 残留",
-    "description": "HP 电脑预装驱动和软件的安装包，安装后无用",
+    "description": "HP 电脑预装驱动和软件的安装包,安装后无用",
     "targets": [{"base": "%SYSTEMDRIVE%\\SWSetup"}],
     "risk": "caution",
     "requires_admin": true,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "HP 电脑出厂时放在 C 盘根目录的驱动/软件解压包,装完后变成几 GB 的死文件。删了不影响已安装的驱动和工具——但如果你以后要重装系统并希望保留出厂驱动,删之前先备份。默认不勾,确认有备份再勾。"
   },
   {
     "id": "lenovo_drivers_temp",
@@ -439,7 +487,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Lenovo Vantage 下载的笔记本工具插件缓存。删了 Vantage 下次用到时会重新下载,不影响保修状态、电池模式、显示设置等核心功能。"
   },
   {
     "id": "asus_armoury_logs",
@@ -452,7 +501,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Armoury Crate 应用与服务的内部日志。删了不影响你的 Aura 灯效配置、场景预设、性能档位和登录账号——这些都不在 Logs 目录里。"
   },
   {
     "id": "dell_support_assist_downloads",
@@ -465,7 +515,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "SupportAssist 自动下载过的驱动/BIOS 安装包,装完就没用了。删了不影响已安装的驱动和保修状态,下次需要更新时会重新下载。"
   },
   {
     "id": "dell_support_assist_logs",
@@ -478,7 +529,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "SupportAssist 代理的运行日志。删了不影响保修信息、设备 ID 和巡检计划。仅在你正等 Dell 客服回查最近一次诊断报告时建议先留着。"
   },
   {
     "id": "amd_ryzen_master_cache",
@@ -491,7 +543,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Ryzen Master 界面用的 QML 编译缓存。删了不影响你保存的超频 profile、电压曲线、PBO 设置——这些在配置文件里。首次启动慢 1-2 秒。"
   },
   {
     "id": "logitech_ghub_cache",
@@ -507,7 +560,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "G HUB 的网页/资源缓存和运行日志。删了不影响你的 DPI 档位、按键宏、灯效预设和每应用配置——这些在 settings 数据库里不在 cache/logs 里。"
   },
   {
     "id": "razer_crashes",
@@ -520,7 +574,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Razer Synapse 崩溃时生成的内存转储,只有 Razer 工程师能读懂。崩溃事件已经过去就用不上,留着只占空间。"
   },
   {
     "id": "nvidia_broadcast_cache",
@@ -533,7 +588,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "NVIDIA Broadcast 界面和效果链的运行时缓存。删了不影响背景虚化、降噪、目光对齐等效果可用性,也不会丢你的设备和直播预设——首次启动慢一两秒。"
   },
   {
     "id": "intel_dsa_logs",
@@ -546,7 +602,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Intel DSA(Driver & Support Assistant)的运行日志。删了不影响驱动版本检测、扫描计划和已安装驱动——下次扫描会自动重生成日志。"
   },
   {
     "id": "nvidia_app_cache",
@@ -559,7 +616,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "新版 NVIDIA App 的界面和资源缓存。删了不影响你的登录态、游戏滤镜、ShadowPlay 配置和驱动版本——首次启动会重新加载几秒。"
   },
   {
     "id": "nvidia_app_logs",
@@ -572,7 +630,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "新版 NVIDIA App 的运行日志。删了不影响登录态、驱动管理、游戏覆盖层和你的滤镜/录像配置——这些都不在 Logs 里。"
   },
   {
     "id": "amd_radeon_crash",
@@ -585,7 +644,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Radeon Software 崩溃时的内存转储,只有 AMD 工程师能读懂。崩溃事件已过就用不上,不影响显卡正常工作。"
   },
   {
     "id": "corsair_crash",
@@ -598,7 +658,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "iCUE 崩溃时的内存快照,只有 Corsair 工程师能读懂。崩溃事件已过就用不上,你的灯光预设、宏命令、配置文件都在 profiles 里不受影响。"
   },
   {
     "id": "elgato_logs",
@@ -611,6 +672,7 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Elgato Stream Deck、Game Capture、Wave Link 等工具的运行日志。删了不影响 Stream Deck 按键布局、录制偏好、混音设置——这些在 profiles 里不在 *.log 中。"
   }
 ]

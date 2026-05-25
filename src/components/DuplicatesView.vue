@@ -7,6 +7,8 @@ import { useToast } from '../composables/useToast';
 import { useSelectionSet } from '../composables/useSelectionSet';
 import VirtualList from './VirtualList.vue';
 import { IconSuccess } from './icons';
+import FeatureIntro from './FeatureIntro.vue';
+import { stateCopy } from '../utils/state-copy';
 
 interface DuplicateFile {
   path: string;
@@ -366,6 +368,14 @@ function formatModified(value: string) {
 
 <template>
   <div class="dupe">
+    <FeatureIntro
+      storage-key="duplicates"
+      what="从 ≥ 100 MB 的大文件里找出内容完全一致的副本（按内容指纹判定，名字不同也能识别）。"
+      when="盘里同一份素材/安装包/备份反复出现，或者刚从其他地方迁移完想去重时。"
+      outcome="默认替你勾上「每组保留最新的一份，删掉旧副本」。清理走永久删除，无法从回收站还原。"
+      reversibility="irreversible"
+      reversibility-note="去重删除不进回收站，请确认每组都保留了至少 1 份"
+    />
     <header class="dupe-head">
       <div class="dupe-head-copy">
         <h3>重复文件</h3>
@@ -409,14 +419,14 @@ function formatModified(value: string) {
 
     <div v-else-if="groups.length === 0 && hasDeepScanned" class="dupe-empty">
       <div class="dupe-empty-mark"><IconSuccess :size="28" /></div>
-      <h4>没有发现重复文件</h4>
-      <p>在 ≥ 100 MB 的大文件里没有找到 size + hash 都一致的副本。</p>
+      <h4>{{ stateCopy.duplicates.empty.title }}</h4>
+      <p>{{ stateCopy.duplicates.empty.description }}</p>
     </div>
 
     <div v-else-if="groups.length === 0" class="dupe-empty">
       <div class="dupe-empty-mark dupe-empty-mark--info">i</div>
-      <h4>请先完成一次深度扫描</h4>
-      <p>重复文件分析依赖于扫描结果里的大文件清单。</p>
+      <h4>请先做一次深度扫描</h4>
+      <p>重复文件分析依赖于扫描结果里的大文件清单。先回「磁盘」页面点「开始扫描」。</p>
     </div>
 
     <ul v-else class="dupe-list">
@@ -542,11 +552,11 @@ function formatModified(value: string) {
   background: var(--color-highlight);
   color: var(--color-text-inverse);
   border-color: transparent;
-  box-shadow: 0 10px 22px rgba(15, 118, 110, 0.22);
+  box-shadow: 0 10px 22px var(--color-highlight-soft);
 }
 
 .dupe-btn--primary:hover:not(:disabled) {
-  box-shadow: 0 14px 26px rgba(15, 118, 110, 0.3);
+  box-shadow: 0 14px 26px var(--color-highlight-soft);
 }
 
 .dupe-btn--ghost {
@@ -560,14 +570,14 @@ function formatModified(value: string) {
 }
 
 .dupe-btn--danger {
-  background: var(--color-error);
-  color: var(--color-text-inverse);
+  background: var(--risk-risky-base);
+  color: var(--risk-risky-on);
   border-color: transparent;
-  box-shadow: 0 10px 22px rgba(220, 38, 38, 0.24);
+  box-shadow: 0 10px 22px var(--risk-risky-ring);
 }
 
 .dupe-btn--danger:hover:not(:disabled) {
-  box-shadow: 0 14px 28px rgba(220, 38, 38, 0.32);
+  box-shadow: 0 14px 28px var(--risk-risky-ring);
 }
 
 .dupe-scanning {
@@ -637,7 +647,7 @@ function formatModified(value: string) {
 }
 
 .dupe-empty-mark--info {
-  background: rgba(37, 99, 235, 0.12);
+  background: var(--color-accent-wash);
   color: var(--color-info);
   font-family: var(--font-display);
 }

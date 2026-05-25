@@ -2,24 +2,41 @@
 import { ref, computed, onBeforeUnmount, shallowRef, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { ElCollapse, ElCollapseItem, ElCheckbox, ElTag } from 'element-plus';
+import { ElCollapse, ElCollapseItem, ElCheckbox } from 'element-plus';
 import 'element-plus/es/components/collapse/style/css';
 import 'element-plus/es/components/collapse-item/style/css';
 import 'element-plus/es/components/checkbox/style/css';
-import 'element-plus/es/components/tag/style/css';
-import type { JunkScanResult, JunkItem, JunkCleanResult, JunkCategory, JunkCleanError } from '../types/junk';
+import type {
+  JunkScanResult,
+  JunkItem,
+  JunkCleanResult,
+  JunkCategory,
+  JunkCleanError,
+  DryRunReport,
+  DryRunInput,
+  JunkFeedback,
+  JunkRiskLevel,
+} from '../types/junk';
 
-import { CATEGORY_LABELS, CMD_SCAN_JUNK, CMD_CLEAN_JUNK } from '../types/junk';
+import {
+  CATEGORY_LABELS,
+  CMD_SCAN_JUNK,
+  CMD_CLEAN_JUNK,
+  CMD_DRY_RUN_JUNK,
+  CMD_REPORT_JUNK_FEEDBACK,
+} from '../types/junk';
 import { formatBytes } from '../utils/format';
 import IconSpinner from './icons/scan/IconSpinner.vue';
-import IconRiskSafe from './icons/status/IconRiskSafe.vue';
-import IconRiskMedium from './icons/status/IconRiskMedium.vue';
-import IconRiskDanger from './icons/status/IconRiskDanger.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
 import JunkSkippedRulesDialog from './JunkSkippedRulesDialog.vue';
 import JunkPresets from './JunkPresets.vue';
 import MiddlePath from './MiddlePath.vue';
 import VirtualList from './VirtualList.vue';
+import FeatureIntro from './FeatureIntro.vue';
+import RiskBadge from './RiskBadge.vue';
+import WhyCleanable from './WhyCleanable.vue';
+import DryRunPreview from './DryRunPreview.vue';
+import { stateCopy } from '../utils/state-copy';
 import { useToast } from '../composables/useToast';
 import { useJunkScanCache } from '../composables/useJunkScanCache';
 import { useSelectionSet } from '../composables/useSelectionSet';
@@ -454,22 +471,10 @@ function toggleGroup(group: CategoryGroup, on: boolean | string | number) {
   bumpSize(delta);
 }
 
-function riskLabel(risk: JunkItem['risk_level']): string {
-  if (risk === 'safe') return '安全';
-  if (risk === 'caution') return '注意';
-  return '风险';
-}
-
-function riskTagType(risk: JunkItem['risk_level']): 'success' | 'warning' | 'danger' {
-  if (risk === 'safe') return 'success';
-  if (risk === 'caution') return 'warning';
-  return 'danger';
-}
-
-function riskIconFor(risk: JunkItem['risk_level']) {
-  if (risk === 'safe') return IconRiskSafe;
-  if (risk === 'caution') return IconRiskMedium;
-  return IconRiskDanger;
+function badgeLevelFor(risk: JunkRiskLevel): 'safe' | 'caution' | 'risky' {
+  if (risk === 'safe') return 'safe';
+  if (risk === 'caution') return 'caution';
+  return 'risky';
 }
 
 function categoryRiskColor(category: JunkCategory): string {
@@ -480,6 +485,16 @@ function categoryRiskColor(category: JunkCategory): string {
 
 const confirmOpen = ref(false);
 const confirmMode = ref<'recycle' | 'permanent'>('recycle');
+
+const dryRunOpen = ref(false);
+const dryRunReport = shallowRef<DryRunReport | null>(null);
+const dryRunLoading = ref(false);
+const pendingMode = ref<'recycle' | 'permanent'>('recycle');
+
+const feedbackOpen = ref(false);
+const feedbackTarget = ref<JunkItem | null>(null);
+const feedbackNote = ref('');
+const feedbackSending = ref(false);
 
 const skipDialogOpen = ref(false);
 
@@ -518,15 +533,105 @@ const confirmText = computed(() =>
   confirmMode.value === 'permanent' ? '永久删除' : '清理到回收站',
 );
 
-function openConfirm(mode: 'recycle' | 'permanent') {
+async function requestDryRun(mode: 'recycle' | 'permanent') {
   if (checked.size === 0) return;
   if (status.value === 'cleaning' || status.value === 'scanning') return;
-  confirmMode.value = mode;
-  confirmOpen.value = true;
+  if (dryRunLoading.value) return;
+  pendingMode.value = mode;
+  dryRunLoading.value = true;
+  const items: DryRunInput[] = [];
+  for (const path of checked.value) {
+    const idx = itemIndex.get(path);
+    if (!idx) continue;
+    items.push({ path, rule_id: idx.item.rule_id, size_bytes: idx.item.size });
+  }
+  try {
+    const report = await invoke<DryRunReport>(CMD_DRY_RUN_JUNK, { items });
+    dryRunReport.value = report;
+    dryRunOpen.value = true;
+  } catch (err) {
+    showToast('预检失败', String(err), 'error');
+  } finally {
+    dryRunLoading.value = false;
+  }
+}
+
+function dryRunCancel() {
+  if (status.value === 'cleaning') return;
+  dryRunOpen.value = false;
+  dryRunReport.value = null;
+}
+
+function dryRunConfirm() {
+  const report = dryRunReport.value;
+  if (!report) return;
+  const allowed = new Set(report.will_delete.map((p) => p.path));
+  const filtered: string[] = [];
+  for (const path of checked.value) {
+    if (allowed.has(path)) filtered.push(path);
+  }
+  if (filtered.length === 0) {
+    dryRunOpen.value = false;
+    dryRunReport.value = null;
+    showToast('没有可清理项', '所有目标都被安全检查跳过', 'warning');
+    return;
+  }
+  checked.replace(filtered);
+  recomputeSelectedSize();
+  dryRunOpen.value = false;
+  dryRunReport.value = null;
+  confirmMode.value = pendingMode.value;
+  if (pendingMode.value === 'permanent' || selectedSize.value > 1073741824) {
+    confirmOpen.value = true;
+  } else {
+    void performClean();
+  }
 }
 
 function cancelConfirm() {
   confirmOpen.value = false;
+}
+
+function openFeedback(item: JunkItem) {
+  feedbackTarget.value = item;
+  feedbackNote.value = '';
+  feedbackOpen.value = true;
+}
+
+function cancelFeedback() {
+  if (feedbackSending.value) return;
+  feedbackOpen.value = false;
+  feedbackTarget.value = null;
+  feedbackNote.value = '';
+}
+
+async function submitFeedback() {
+  const target = feedbackTarget.value;
+  if (!target) return;
+  const note = feedbackNote.value.trim();
+  if (!note) {
+    showToast('请填写描述', '简短说明这条为什么不该清', 'info');
+    return;
+  }
+  feedbackSending.value = true;
+  const payload: JunkFeedback = {
+    path: target.path,
+    rule_id: target.rule_id,
+    rule_name: target.rule_name,
+    user_note: note,
+    reported_at_iso: new Date().toISOString(),
+  };
+  try {
+    await invoke(CMD_REPORT_JUNK_FEEDBACK, { feedback: payload });
+    showToast('反馈已记录', '感谢反馈，下个版本会优化此规则', 'success');
+    feedbackOpen.value = false;
+    feedbackTarget.value = null;
+    feedbackNote.value = '';
+  } catch (err) {
+    showToast('反馈失败', String(err), 'error');
+  } finally {
+    feedbackSending.value = false;
+  }
 }
 
 async function performClean() {
@@ -626,6 +731,14 @@ function isGroupActive(category: JunkCategory): boolean {
 
 <template>
   <div class="junk">
+    <FeatureIntro
+      storage-key="junk"
+      what="自动找出 Windows 和应用产生的临时垃圾，分类列出每一项的来源、大小、风险标签。"
+      when="感觉系统卡顿、C 盘红条、或者上次清理超过 30 天。"
+      outcome="勾选 → 一键清理。默认走 Windows 回收站可还原；勾「永久删除」才会绕过回收站。"
+      reversibility="reversible"
+      reversibility-note="多数项目下次软件运行会自动重新生成"
+    />
     <header class="junk-head">
       <div class="junk-head-copy">
         <h3>垃圾清理</h3>
@@ -766,18 +879,20 @@ function isGroupActive(category: JunkCategory): boolean {
                 <div class="junk-row-meta">
                   <span class="junk-row-count">{{ (item as JunkItem).file_count }} 个文件</span>
                   <span class="junk-row-size">{{ formatBytes((item as JunkItem).size) }}</span>
-                  <ElTag
-                    class="junk-row-risk"
-                    :type="riskTagType((item as JunkItem).risk_level)"
-                    size="small"
-                    effect="light"
-                    round
+                  <RiskBadge :level="badgeLevelFor((item as JunkItem).risk_level)" />
+                  <WhyCleanable
+                    :why-safe="(item as JunkItem).why_safe"
+                    :rule-name="(item as JunkItem).rule_name"
+                    :risk="(item as JunkItem).risk_level"
+                  />
+                  <button
+                    type="button"
+                    class="junk-feedback-btn"
+                    @click.stop="openFeedback(item as JunkItem)"
+                    title="这条规则识别有误？告诉我们"
                   >
-                    <span class="junk-risk-inner">
-                      <component :is="riskIconFor((item as JunkItem).risk_level)" :size="12" />
-                      <span>{{ riskLabel((item as JunkItem).risk_level) }}</span>
-                    </span>
-                  </ElTag>
+                    这条不对？
+                  </button>
                 </div>
               </div>
             </VirtualList>
@@ -841,8 +956,8 @@ function isGroupActive(category: JunkCategory): boolean {
       class="junk-empty"
     >
       <div class="junk-empty-mark"><IconSuccess :size="28" /></div>
-      <h4>没有发现垃圾文件</h4>
-      <p>系统已经很干净了，可以稍后再来扫描。</p>
+      <h4>{{ stateCopy.junk.empty.title }}</h4>
+      <p>{{ stateCopy.junk.empty.description }}</p>
     </div>
 
     <footer
@@ -856,17 +971,19 @@ function isGroupActive(category: JunkCategory): boolean {
       <div class="junk-foot-actions">
         <button
           class="junk-btn junk-btn--primary"
-          :disabled="selectedCount === 0"
-          @click="openConfirm('recycle')"
+          :disabled="selectedCount === 0 || dryRunLoading"
+          @click="requestDryRun('recycle')"
         >
-          清理到回收站
+          <IconSpinner v-if="dryRunLoading && pendingMode === 'recycle'" :size="14" />
+          <span>{{ dryRunLoading && pendingMode === 'recycle' ? '预检中…' : '清理到回收站' }}</span>
         </button>
         <button
           class="junk-btn junk-btn--danger"
-          :disabled="selectedCount === 0"
-          @click="openConfirm('permanent')"
+          :disabled="selectedCount === 0 || dryRunLoading"
+          @click="requestDryRun('permanent')"
         >
-          永久删除
+          <IconSpinner v-if="dryRunLoading && pendingMode === 'permanent'" :size="14" />
+          <span>{{ dryRunLoading && pendingMode === 'permanent' ? '预检中…' : '永久删除' }}</span>
         </button>
       </div>
     </footer>
@@ -878,6 +995,7 @@ function isGroupActive(category: JunkCategory): boolean {
       :type="confirmType"
       :confirm-text="confirmText"
       cancel-text="取消"
+      :high-risk="confirmMode === 'permanent' || selectedSize > 1073741824"
       @confirm="performClean"
       @cancel="cancelConfirm"
     />
@@ -888,6 +1006,38 @@ function isGroupActive(category: JunkCategory): boolean {
       @close="closeSkipDialog"
       @rescan="rescanFromSkipDialog"
     />
+
+    <DryRunPreview
+      :show="dryRunOpen"
+      :report="dryRunReport"
+      :busy="status === 'cleaning'"
+      :mode="pendingMode"
+      @cancel="dryRunCancel"
+      @confirm="dryRunConfirm"
+    />
+
+    <div v-if="feedbackOpen && feedbackTarget" class="junk-fb-overlay" @click.self="cancelFeedback">
+      <div class="junk-fb-dialog" role="dialog" aria-labelledby="junk-fb-title">
+        <h3 id="junk-fb-title">这条规则不对？</h3>
+        <p class="junk-fb-meta">
+          规则：<strong>{{ feedbackTarget.rule_name }}</strong>
+        </p>
+        <p class="junk-fb-path">{{ feedbackTarget.path }}</p>
+        <textarea
+          v-model="feedbackNote"
+          class="junk-fb-input"
+          rows="4"
+          placeholder="为什么这条不该被识别为可清？（例：这是我的配置文件，不是缓存）"
+          :disabled="feedbackSending"
+        />
+        <div class="junk-fb-actions">
+          <button class="btn-base btn-secondary" type="button" :disabled="feedbackSending" @click="cancelFeedback">取消</button>
+          <button class="btn-base btn-primary" type="button" :disabled="feedbackSending || !feedbackNote.trim()" @click="submitFeedback">
+            {{ feedbackSending ? '提交中…' : '提交反馈' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -964,11 +1114,11 @@ function isGroupActive(category: JunkCategory): boolean {
   background: var(--color-highlight);
   color: var(--color-text-inverse);
   border-color: transparent;
-  box-shadow: 0 10px 22px rgba(15, 118, 110, 0.22);
+  box-shadow: 0 10px 22px var(--color-highlight-soft);
 }
 
 .junk-btn--primary:hover:not(:disabled) {
-  box-shadow: 0 14px 26px rgba(15, 118, 110, 0.3);
+  box-shadow: 0 14px 26px var(--color-highlight-soft);
 }
 
 .junk-btn--ghost {
@@ -982,14 +1132,14 @@ function isGroupActive(category: JunkCategory): boolean {
 }
 
 .junk-btn--danger {
-  background: var(--color-error);
-  color: var(--color-text-inverse);
+  background: var(--risk-risky-base);
+  color: var(--risk-risky-on);
   border-color: transparent;
-  box-shadow: 0 10px 22px rgba(220, 38, 38, 0.24);
+  box-shadow: 0 10px 22px var(--risk-risky-ring);
 }
 
 .junk-btn--danger:hover:not(:disabled) {
-  box-shadow: 0 14px 28px rgba(220, 38, 38, 0.32);
+  box-shadow: 0 14px 28px var(--risk-risky-ring);
 }
 
 .junk-scanning {
@@ -1147,8 +1297,8 @@ function isGroupActive(category: JunkCategory): boolean {
 }
 
 .junk-clean-result {
-  border: 1px solid rgba(15, 118, 110, 0.18);
-  background: rgba(15, 118, 110, 0.05);
+  border: 1px solid var(--risk-safe-ring);
+  background: var(--risk-safe-soft);
   border-radius: var(--radius-md);
   padding: 0.9rem 1rem;
   display: flex;
@@ -1157,13 +1307,13 @@ function isGroupActive(category: JunkCategory): boolean {
 }
 
 .junk-clean-result--warning {
-  border-color: rgba(245, 158, 11, 0.24);
-  background: rgba(245, 158, 11, 0.06);
+  border-color: var(--risk-caution-ring);
+  background: var(--risk-caution-soft);
 }
 
 .junk-clean-result--danger {
-  border-color: rgba(220, 38, 38, 0.2);
-  background: rgba(220, 38, 38, 0.05);
+  border-color: var(--risk-risky-ring);
+  background: var(--risk-risky-soft);
 }
 
 .junk-clean-result-head {
@@ -1533,5 +1683,97 @@ function isGroupActive(category: JunkCategory): boolean {
   background: rgba(96, 165, 250, 0.12);
   border-color: rgba(96, 165, 250, 0.28);
   color: var(--color-info);
+}
+
+.junk-feedback-btn {
+  border: 1px dashed var(--color-border-medium);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  padding: 0.18rem 0.5rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.junk-feedback-btn:hover {
+  color: var(--color-warning);
+  border-color: var(--risk-caution-ring);
+  background: var(--risk-caution-soft);
+}
+
+.junk-fb-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--modal-backdrop);
+  z-index: 2400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.junk-fb-dialog {
+  width: min(440px, 100%);
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-medium);
+  box-shadow: var(--shadow-xl);
+  padding: 1.25rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.junk-fb-dialog h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.junk-fb-meta {
+  font-size: 0.84rem;
+  color: var(--color-text-secondary);
+}
+
+.junk-fb-meta strong {
+  color: var(--color-text-primary);
+}
+
+.junk-fb-path {
+  font-size: 0.78rem;
+  color: var(--color-text-tertiary);
+  word-break: break-all;
+  padding: 0.45rem 0.6rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-xs);
+}
+
+.junk-fb-input {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.88rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-medium);
+  background: var(--color-surface-strong);
+  color: var(--color-text-primary);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.junk-fb-input:focus-visible {
+  outline: none;
+  border-color: var(--color-highlight);
+  box-shadow: 0 0 0 3px var(--color-highlight-soft);
+}
+
+.junk-fb-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin-top: 0.3rem;
 }
 </style>

@@ -13,7 +13,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Adobe 全家桶（Premiere、After Effects、Audition）为每个素材生成的快速预览索引和峰值文件，首次重新打开素材时会重建，预览会卡 1-2 秒。不会影响你的工程文件、剪辑序列、笔刷、动作、自动保存。"
   },
   {
     "id": "adobe_peak_files",
@@ -26,7 +27,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Audition 和 Premiere 为音频文件预渲染的波形图缓存（.pkf），下次打开同一个音频会重新分析，长素材首次显示波形会等几秒。不会影响你的多轨工程、效果链、混音设置。"
   },
   {
     "id": "adobe_camera_raw_cache",
@@ -39,7 +41,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Camera Raw 把 RAW 文件解码后的中间数据缓存在这里，下次重新打开同一张 RAW 会再解码一次，慢几秒。不会影响你的预设（.xmp）、白平衡调整、镜头校正配置文件——那些都存在原图旁边。"
   },
   {
     "id": "adobe_bridge_cache",
@@ -52,7 +55,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Bridge 浏览图片库时生成的缩略图和元数据预览，重新进入文件夹会再次生成缩略图，万张以上的图库要等几分钟。不会影响你打的星级评分、关键字、标签——那些写在文件的 XMP 里。"
   },
   {
     "id": "adobe_logs",
@@ -68,7 +72,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Adobe Application Manager 和后台服务的纯文本运行日志，只在向 Adobe 报修时才有用。删了不影响任何软件功能，也不会清掉你的激活信息、订阅状态——那些在 OOBE 数据库里。"
   },
   {
     "id": "spotify_cache",
@@ -81,10 +86,11 @@
       {"base": "%LOCALAPPDATA%\\Spotify\\Storage"},
       {"base": "%LOCALAPPDATA%\\Spotify\\Data"}
     ],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "Storage 和 Data 里存放着流媒体缓存和你下载到本地的离线歌曲。如果你订阅了 Premium 并已下载歌单到本地，删了之后再听就要重新下载（最多十几 GB 流量）。不影响登录、关注、歌单——那些在云端。"
   },
   {
     "id": "spotify_browser_cache",
@@ -97,7 +103,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Spotify 客户端内嵌的 CEF 浏览器用来渲染歌词、广告、艺人主页的 HTTP 缓存，重启客户端会自动回填。不影响你的登录会话、下载的歌曲、本地播放列表。"
   },
   {
     "id": "netease_music_cache",
@@ -110,7 +117,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "网易云客户端听歌时在内存外的二级流媒体缓存（不是你点了下载的本地音乐），再听同一首会重新缓冲几秒。不影响你的下载目录、登录账号、收藏歌单——那些独立保存在用户音乐目录和云端。"
   },
   {
     "id": "qqmusic_cache",
@@ -123,7 +131,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "QQ 音乐在线试听产生的临时流媒体片段，重听会再次缓冲几秒。不影响你设置的下载目录中的本地音乐、收藏歌单、登录状态——歌单在云端，下载文件在「下载」目录里，跟这个缓存无关。"
   },
   {
     "id": "vlc_art_cache",
@@ -136,7 +145,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "VLC 为 MP3/视频抓取并保存的专辑封面和视频首帧缩略图。再次播放同一文件会重新抓一次。不影响你的快捷键配置、播放列表（.xspf）、字幕首选项——那些都在 vlcrc 配置文件里。"
   },
   {
     "id": "obs_logs",
@@ -149,7 +159,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "OBS 每次启动写的纯文本运行日志，只在直播掉帧/录制崩了时拿去发帖求助才有用。不会动你的场景集合（scenes）、配置文件（profiles）、录制过的视频文件——录像保存路径完全独立。"
   },
   {
     "id": "obs_crashes",
@@ -162,7 +173,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "OBS 崩溃时生成的内存转储文件，单个常达几百 MB。除非你正在排查崩溃问题、要把 dump 交给开发者，否则没用。不会触及你的场景配置、推流密钥、录像。"
   },
   {
     "id": "obs_browser_cache",
@@ -175,7 +187,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "OBS 浏览器源（直播弹幕、计时器、Twitch 通知挂件）的 CEF HTTP 缓存，下次启动浏览器源会重新下载页面资源，加载多一两秒。不会清掉浏览器源的 URL 配置、Cookies、自定义 CSS——那些在隔壁文件里。"
   },
   {
     "id": "davinci_logs",
@@ -188,20 +201,22 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "达芬奇启动、渲染、GPU 调用的纯文本日志，只在排查崩溃和渲染失败时才用得到。不会动到你的项目库（PostgreSQL 数据库）、CacheClip 缓存盘、调色节点——那些独立存放。"
   },
   {
     "id": "blender_recent",
     "app_id": "blender",
     "detect": ["%APPDATA%\\Blender Foundation\\Blender"],
     "category": "app_cache",
-    "name": "Blender 最近文件和缓存",
-    "description": "Blender 3D 的 recent-files 列表和临时缓存",
+    "name": "Blender 缓存",
+    "description": "Blender 3D 各版本的缓存子目录",
     "targets": [{"base": "%APPDATA%\\Blender Foundation\\Blender", "subdirs": ["4.0\\cache", "3.6\\cache", "4.1\\cache"]}],
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Blender 各版本目录下的 cache 子文件夹，存放预渲染、流体烟雾的中间缓存，重新打开工程需要重新烘焙，复杂场景要等几分钟。不会触及你的启动文件（startup.blend）、插件配置、最近文件列表——那些在 config 子目录里。"
   },
   {
     "id": "audacity_logs",
@@ -217,7 +232,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 2,
+    "why_safe": "Audacity 上一次会话的运行日志 lastlog.txt 和崩溃报告，只在汇报 bug 时有用。不会动你的 audacity.cfg（快捷键、设备配置）、插件目录、工程文件（.aup3）——那些都在别的位置。"
   },
   {
     "id": "potplayer_logs",
@@ -225,12 +242,14 @@
     "detect": ["%APPDATA%\\PotPlayerMini64"],
     "category": "app_logs",
     "name": "PotPlayer 日志",
-    "description": "PotPlayer 播放器的使用记录和日志",
+    "description": "PotPlayer 播放器的日志文件",
     "targets": [{"base": "%APPDATA%\\PotPlayerMini64", "patterns": ["*.log"]}],
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 2,
+    "why_safe": "PotPlayer 的运行日志 .log 文件，记录解码失败、渲染器切换等事件，只为排错存在。不会触及播放历史、收藏夹、字幕匹配设置、皮肤——那些在 PotPlayerMini64.ini 和子目录里。"
   },
   {
     "id": "foobar2000_crash",
@@ -243,7 +262,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Foobar2000 崩溃时生成的内存转储，单个可达几百 MB，只在向插件作者反馈崩溃时有意义。不会动你的媒体库索引、DSP 链、组件配置、皮肤布局——那些都是单独的 .cfg 文件。"
   },
   {
     "id": "adobe_lightroom_cache",
@@ -256,7 +276,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Lightroom 在 LOCALAPPDATA 下的预览和 ACR 解码缓存，重新进入照片网格会按需重建预览，第一次浏览大目录要等几分钟。不会触及你的目录数据库（.lrcat，那个在「文档」里）、星级评分、虚拟副本、修改记录。"
   },
   {
     "id": "adobe_premiere_cache",
@@ -264,12 +285,13 @@
     "detect": ["%LOCALAPPDATA%\\Adobe\\Premiere Pro"],
     "category": "app_cache",
     "name": "Premiere Pro 缓存",
-    "description": "Adobe Premiere Pro 的音视频媒体缓存",
+    "description": "Adobe Premiere Pro 的本地缓存目录",
     "targets": [{"base": "%LOCALAPPDATA%\\Adobe\\Premiere Pro\\Cache"}],
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Premiere 在 LOCALAPPDATA 下的本地缓存子目录，存放转码代理、波形索引等中间数据，首次播放每段素材会重编码代理，预览会卡 1-2 秒。不会触及你的工程文件（.prproj）、Project AutoSave、剪辑序列——那些都在「文档」目录里。"
   },
   {
     "id": "adobe_after_effects_cache",
@@ -282,7 +304,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "AE 在 LOCALAPPDATA 下的本地缓存，存放合成的预渲染帧，下次合成要重新算。复杂特效合成首次预览要等几分钟到十几分钟。不会触及你的项目文件（.aep）、自动保存、表达式预设、动画预设——那些都在「文档」目录。"
   },
   {
     "id": "adobe_cc_installer",
@@ -295,7 +318,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Creative Cloud 安装器下载好且已经装完的安装包临时副本，几 GB 起步。下次升级会重新下载。不影响你的订阅、登录、已安装的 PS/PR/AE——那些有独立的安装目录和注册信息。"
   },
   {
     "id": "spotify_update_cache",
@@ -308,7 +332,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Spotify 自动更新下载好的新版本安装包（已经装完了，留作回滚也基本用不上），常占几百 MB。不影响当前能用的 Spotify、登录账号、本地下载的歌曲。"
   },
   {
     "id": "bilibili_cache",
@@ -321,7 +346,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "B站桌面客户端边看边缓存的视频流和首页推荐封面，重新打开同一个视频会再次缓冲。不是你「离线下载」点下来的视频——那些保存在另外的下载目录里，跟这里无关。也不影响登录、关注、收藏。"
   },
   {
     "id": "obs_profiler",
@@ -334,7 +360,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "OBS 内置性能分析器每次启动写的 CSV 性能采样，只在调优 CPU/GPU 占用时才看。不会触及你的场景集合、推流配置、过滤器链——那些保存在 scenes 和 profiles 子目录。"
   },
   {
     "id": "itunes_cache",
@@ -342,7 +369,7 @@
     "detect": ["%LOCALAPPDATA%\\Apple Computer\\iTunes"],
     "category": "app_cache",
     "name": "iTunes 缓存",
-    "description": "iTunes 专辑封面和同步缓存",
+    "description": "iTunes 下载的 iOS 设备固件",
     "targets": [
       {"base": "%LOCALAPPDATA%\\Apple Computer\\iTunes\\iPhone Software Updates"},
       {"base": "%LOCALAPPDATA%\\Apple Computer\\iTunes\\iPad Software Updates"}
@@ -350,7 +377,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "iTunes 为升级/恢复 iPhone iPad 下载的 .ipsw 固件镜像，单个 5-8 GB。下次刷机会重新下载。不会触及你的 iOS 备份（在 MobileSync\\Backup 里）、媒体库（iTunes Music）、播放列表。"
   },
   {
     "id": "kugou_cache",
@@ -358,12 +386,13 @@
     "detect": ["%APPDATA%\\KuGou8"],
     "category": "app_cache",
     "name": "酷狗音乐缓存",
-    "description": "酷狗音乐的歌曲和歌词缓存",
+    "description": "酷狗音乐的临时流媒体缓存",
     "targets": [{"base": "%APPDATA%\\KuGou8\\Temp"}],
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "酷狗在线听歌生成的临时流媒体缓存，再听同一首会重新缓冲几秒。不是你点了「下载」保存到本地的歌曲——那些在你设置的下载目录里。也不影响登录、收藏、歌单。"
   },
   {
     "id": "mpv_watch_later",
@@ -376,7 +405,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "mpv 用 Q 退出时保存的每个视频的播放进度（哈希命名），删了之后重新打开视频会从头开始播。如果你在追长剧/纪录片想接着上次看的位置，先取消勾选。不影响 input.conf、字幕设置。"
   },
   {
     "id": "handbrake_logs",
@@ -389,7 +419,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "HandBrake 每次转码的纯文本进度日志（x264/x265 参数、每帧码率），只在压制掉帧时拿去问社区才用得到。不会动你的自定义预设、队列文件、压制队列——那些在隔壁 .json 和 .xml 里。"
   },
   {
     "id": "shotcut_logs",
@@ -402,7 +433,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 2,
+    "why_safe": "Shotcut 启动和渲染的纯文本运行日志，崩了或导出失败时才拿来排错。不会触及你的工程文件（.mlt）、自定义滤镜预设、布局、最近文件——那些在 .ini 配置和 presets 子目录里。"
   },
   {
     "id": "gimp_tmp",
@@ -412,10 +445,11 @@
     "name": "GIMP 临时文件",
     "description": "GIMP 图片编辑器的临时交换文件",
     "targets": [{"base": "%LOCALAPPDATA%\\Temp\\gimp"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "GIMP 处理大图时的磁盘交换文件，软件运行中包含当前未保存的图层和撤销历史。如果 GIMP 正在打开着——尤其是处理一张大图还没保存——先关掉 GIMP 再勾选，否则当前编辑会丢。"
   },
   {
     "id": "inkscape_recent",
@@ -428,7 +462,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Inkscape 各扩展运行时生成的中间缓存，下次调用扩展会重新生成。不会触及你的 preferences.xml（快捷键、网格设置）、模板、字体收藏夹——那些都在上一级目录单独存放。"
   },
   {
     "id": "figma_cache",
@@ -445,7 +480,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Figma 桌面端（Electron）的 HTTP 缓存、GPU 着色器缓存和 JS 代码缓存，重启客户端会自动回填，首次打开复杂文件会多花几秒。不影响登录会话、最近文件列表、离线文件——那些在 DesktopProfile 子目录。"
   },
   {
     "id": "figma_logs",
@@ -458,7 +494,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Figma 桌面客户端的纯文本运行日志，只在向 Figma 报告崩溃/同步异常时上传给客服才有用。不会触及你的登录会话、最近打开文件列表、离线文件——那些独立存放。"
   },
   {
     "id": "canva_cache",
@@ -471,7 +508,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Canva 桌面端 Electron 内核的 HTTP 缓存，存的是模板缩略图、素材图等可重新下载的资源。重新打开会多缓冲一两秒。不影响登录、作品（云端保存）、最近文件列表。"
   },
   {
     "id": "kdenlive_logs",
@@ -484,7 +522,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 2,
+    "why_safe": "Kdenlive 启动、MLT 渲染、效果链调用的纯文本日志，仅排错使用。不会触及你的工程文件（.kdenlive）、代理视频缓存目录、自定义效果预设——那些在你设置的项目缓存路径里。"
   },
   {
     "id": "streamlabs_cache",
@@ -500,7 +540,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Streamlabs OBS（Electron 客户端）的 HTTP 和 GPU 缓存，重启后会自动回填。不会动你的场景集合、推流密钥、过滤器、警报配置——那些都在 SceneCollections 和 settings 子目录里。"
   },
   {
     "id": "streamlabs_logs",
@@ -516,7 +557,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "Streamlabs 底层 OBS 引擎的运行日志和崩溃 Minidump，崩溃 dump 单个可达几百 MB。仅在向 Streamlabs 报告故障时有用。不影响场景、滤镜、警报、订阅状态。"
   },
   {
     "id": "musescore_cache",
@@ -529,7 +571,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "MuseScore 4 缓存的中间数据，下次打开同一份乐谱会重新生成。不会动你的乐谱文件（.mscz）、SoundFont（.sf2/.sf3）、Muse Hub 下载内容、首选项——那些在 Scores 和 SoundFonts 子目录里。"
   },
   {
     "id": "tidal_cache",
@@ -542,7 +585,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "TIDAL 客户端的 HTTP 缓存（封面、专辑描述等元数据），重新打开会再次缓冲。不是你订阅 HiFi 后下载到本地的离线音乐——那些在 Downloaded 子目录里，跟这里无关。"
   },
   {
     "id": "youtube_music_cache",
@@ -555,7 +599,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "YouTube Music 桌面端（非官方 Electron 客户端）的 HTTP 缓存，重启会自动回填。不影响登录状态、自定义主题、插件配置——那些在 user-data 别的子目录里。"
   },
   {
     "id": "capcut_cache",
@@ -571,7 +616,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "剪映客户端的素材缩略图和媒体预览缓存，下次打开同一段素材会重新解析，时间轴预览首次会卡一下。不会动你的草稿工程、模板下载、登录账号——剪映的草稿在 User Data 下另一个独立子目录里。"
   },
   {
     "id": "capcut_logs",
@@ -584,7 +630,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "剪映桌面端的运行日志（启动、导入、导出耗时记录），仅排错使用，常累积上百 MB。不会动你的草稿工程、模板、登录账号——那些独立存放在 User Data 的草稿子目录里。"
   },
   {
     "id": "adobe_photoshop_temp",
@@ -592,12 +639,13 @@
     "detect": ["%LOCALAPPDATA%\\Adobe\\Photoshop"],
     "category": "app_cache",
     "name": "Photoshop 临时文件",
-    "description": "Adobe Photoshop 的临时和自动恢复文件",
+    "description": "Adobe Photoshop 的暂存盘临时文件",
     "targets": [{"base": "%TEMP%\\Photoshop Temp"}],
-    "risk": "caution",
+    "risk": "risky",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Photoshop 运行时的暂存盘（scratch disk）文件，包含当前未保存图层、撤销历史、剪贴板。如果 PS 正在打开着——尤其是处理一张大图还没保存——删了就会让 PS 立刻崩溃且当前编辑全部丢失。日常不勾，仅在 PS 已关闭且确认无未保存工作时再勾。"
   },
   {
     "id": "qqlive_cache",
@@ -610,7 +658,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "腾讯视频边看边缓存的视频片段和封面图，重看同一集会重新缓冲。不是你点了「离线下载」保存到本地的剧集——那些在你设置的下载目录里，跟这里无关。也不影响 VIP、收藏、登录。"
   },
   {
     "id": "iqiyi_cache",
@@ -623,7 +672,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "爱奇艺客户端边看边缓存的视频片段、贴片广告素材，重看会重新缓冲。不是你「下载」按钮存到本地的剧集——离线下载有单独的下载目录。也不影响 VIP 会员、追剧表、登录。"
   },
   {
     "id": "youku_cache",
@@ -636,7 +686,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "优酷客户端在线播放时的视频流缓存，重看会重新缓冲。不是离线下载到本地的视频——那些在另外的下载目录里。也不影响 VIP、追剧记录、登录账号。"
   },
   {
     "id": "douyin_cache",
@@ -649,7 +700,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "抖音桌面端刷视频时的流媒体片段缓存，重新刷会再次拉流。不影响登录、关注、点赞历史、草稿、收藏视频——那些都在云端或独立的草稿目录里。"
   },
   {
     "id": "adobe_cc_updater_logs",
@@ -662,7 +714,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Adobe Application Manager（AAM）后台升级模块的纯文本日志，只在升级失败时才用得到。不影响你的订阅状态、已安装的 PS/PR/AE、激活信息——那些在另一处的 OOBE 数据库里。"
   },
   {
     "id": "adobe_acrobat_logs",
@@ -675,7 +728,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Acrobat 和 Reader 的运行/插件加载日志，仅在 PDF 打不开、签名失败排错时才有用。不会触及你的最近文件、自定义工具栏、签名证书、阅读偏好——那些在 Preferences 子目录里。"
   },
   {
     "id": "spotify_logs",
@@ -683,12 +737,13 @@
     "detect": ["%LOCALAPPDATA%\\Spotify"],
     "category": "app_logs",
     "name": "Spotify 日志",
-    "description": "Spotify 桌面客户端的运行日志",
+    "description": "Spotify 桌面客户端的崩溃日志",
     "targets": [{"base": "%LOCALAPPDATA%\\Spotify\\Browser\\Crashpad\\reports"}],
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Spotify 内嵌浏览器 Crashpad 生成的崩溃 dump，仅在向 Spotify 报告崩溃时上传才有意义。不影响登录、本地下载的歌曲、歌单、播放历史。"
   },
   {
     "id": "apple_music_cache",
@@ -704,7 +759,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Apple Music UWP 应用的网络缓存（专辑封面、艺人页）和临时状态，重启后会自动回填。不会动你的资料库、本地导入的音乐、订阅状态——UWP 把那些放在 LocalState 里，跟 TempState/INetCache 完全分离。"
   },
   {
     "id": "disney_plus_cache",
@@ -720,7 +776,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Disney+ UWP 应用的临时缓存（首页海报、播放器初始化数据），重启后会自动回填。不影响登录、订阅、观看历史、家长控制设置——UWP 把那些存在 LocalState 里。"
   },
   {
     "id": "prime_video_cache",
@@ -736,7 +793,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Prime Video UWP 应用的网络缓存（海报、推荐列表元数据）和临时数据，重启会自动回填。不影响登录、订阅、观看历史和你下载到本地观看的剧——离线下载的视频在 LocalState 里。"
   },
   {
     "id": "netflix_cache",
@@ -752,6 +810,7 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Netflix UWP 应用的网络缓存（海报、推荐元数据）和临时状态，重启会自动回填。不影响登录、订阅、观看历史和已下载的剧集——离线下载的视频在另一处 LocalState 里。"
   }
 ]

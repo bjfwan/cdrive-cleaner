@@ -6,6 +6,8 @@ import type { FileInfo, FilePageSort, LargeFilesPage } from '../types';
 import { formatBytes, formatDate, formatNumber } from '../utils/format';
 import VirtualList from './VirtualList.vue';
 import ExplanationTooltip from './ExplanationTooltip.vue';
+import FeatureIntro from './FeatureIntro.vue';
+import { stateCopy } from '../utils/state-copy';
 import { useToast } from '../composables/useToast';
 
 interface Props {
@@ -158,6 +160,14 @@ watch(
 
 <template>
   <div class="large-files-view">
+    <FeatureIntro
+      storage-key="large-files"
+      what="只列出超过指定阈值的大文件，按大小排序，方便挑挑搬走或删掉。"
+      when="想给某个盘腾出几个 GB 的空间、找占地最狠的几份文件、决策「哪些值得搬走」时。"
+      outcome="点右侧迁移按钮把单个文件搬到其他盘；要删除请到「磁盘」视图加入搬运车统一处理。"
+      reversibility="reversible"
+      reversibility-note="迁移可从「迁移历史」回滚；本视图不直接删除文件"
+    />
     <div class="summary-bar">
       <div>
         <h3>大文件聚焦</h3>
@@ -194,14 +204,14 @@ watch(
 
     <div v-if="loadingInitial && pagedFiles.length === 0" class="empty">
       <IconDocument class="empty-icon" :size="46" />
-      <h3>正在加载大文件</h3>
-      <p>首屏只加载前 {{ PAGE_SIZE }} 条，滚动后继续读取。</p>
+      <h3>{{ stateCopy.largeFiles.loading.title }}</h3>
+      <p>{{ stateCopy.largeFiles.loading.description }}</p>
     </div>
 
     <div v-else-if="pagedFiles.length === 0" class="empty">
       <IconDocument class="empty-icon" :size="46" />
-      <h3>{{ loadError ? '大文件列表加载失败' : '没有找到符合条件的大文件' }}</h3>
-      <p>{{ loadError || `当前范围里没有大于 ${largeFileThreshold}MB 的文件。` }}</p>
+      <h3>{{ loadError ? stateCopy.largeFiles.error.title : stateCopy.largeFiles.empty.title }}</h3>
+      <p>{{ loadError || `当前范围里没有大于 ${largeFileThreshold} MB 的文件。${stateCopy.largeFiles.empty.description}` }}</p>
     </div>
 
     <div v-else class="table-shell">
@@ -236,7 +246,7 @@ watch(
                 class="action-btn migrate-btn"
                 @click.stop="$emit('migrate-file', (file as FileInfo))"
                 :disabled="!hasDeepScanned"
-                :title="!hasDeepScanned ? '请先进行深度扫描' : '迁移到其他磁盘'"
+                :title="!hasDeepScanned ? '请先做一次深度扫描' : '搬到其他盘（原位置留链接，应用感知不到）'"
               >
                 <IconMigrate :size="16" />
               </button>

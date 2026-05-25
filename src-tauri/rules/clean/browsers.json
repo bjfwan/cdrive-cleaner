@@ -10,7 +10,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Chrome 把你访问过的网页图片、JS、CSS 都暂存在这里，纯属为了下次打开更快。删除后下次访问网站只是首屏加载慢几秒，会自动重新下载。完全不会动你的书签、密码、登录状态、浏览历史和扩展，那些数据保存在 Default 下的其他文件里，本规则不会触及。"
   },
   {
     "id": "chrome_code_cache",
@@ -23,7 +24,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Chrome 为了加速二次打开网页，把 JS 编译产物存在这里。删除后首次执行 JS 会稍慢一点，几次访问后自动重建。和登录、书签、密码、扩展无关，纯粹是个性能缓存。"
   },
   {
     "id": "chrome_gpu_cache",
@@ -36,7 +38,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Chrome 在 GPU 加速渲染时编译并缓存着色器，跟显卡驱动配合用。删除后首次打开网页 GPU 会重新编译，没有任何用户数据损失。书签、密码、扩展、设置都不受影响。"
   },
   {
     "id": "chrome_shader_cache",
@@ -49,20 +52,22 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Chrome 跨配置共享的 GPU 着色器编译缓存。删除后首次打开图形较多的页面 GPU 会重新编译几个着色器，纯性能缓存，不涉及任何账号、书签、扩展数据。"
   },
   {
     "id": "chrome_service_worker",
     "app_id": "chrome",
     "detect": ["%LOCALAPPDATA%\\Google\\Chrome\\User Data"],
     "category": "browser_cache",
-    "name": "Chrome Service Worker",
-    "description": "网站 Service Worker 离线缓存，删除后网站 PWA 需重新缓存",
-    "targets": [{"base": "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\Default\\Service Worker"}],
+    "name": "Chrome Service Worker 缓存",
+    "description": "网站 Service Worker 离线缓存 (CacheStorage)，删除后 PWA 需重新缓存",
+    "targets": [{"base": "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\Default\\Service Worker\\CacheStorage"}],
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "网站的 Service Worker 把离线访问需要的资源缓存在这里。我们只清 CacheStorage 这一个子目录——不会触碰 Service Worker\\Database，所以 PWA 注册关系还在，重新打开时只会重新缓存静态资源。登录态、书签、扩展都不动。"
   },
   {
     "id": "chrome_blob_storage",
@@ -75,7 +80,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "网页用 JS 创建的临时大块二进制对象（上传文件前的暂存、视频流分片等），仅在标签页打开期间使用。Chrome 关闭后这里就是垃圾。和书签、密码、登录、扩展完全无关。"
   },
   {
     "id": "chrome_crashpad",
@@ -88,7 +94,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Chrome 崩溃时生成的内存快照，主要给 Google 工程师远程排错用。如果你当时没勾选「上报崩溃信息」，这些文件留在本地也没人会看。删除不影响 Chrome 任何浏览功能。"
   },
   {
     "id": "chrome_browser_metrics",
@@ -104,7 +111,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Chrome 收集等待上报给 Google 的遥测和稳定性日志。即使你关掉了「使用情况统计」开关，文件也会堆在这里直到下次上报。和书签、密码、登录、扩展无关，删了 Chrome 会自动新建。"
   },
   {
     "id": "chrome_optimization_guide",
@@ -117,7 +125,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Chrome 从 Google 下载的页面加载优化机器学习模型。删了下次启动 Chrome 会自动从云端再下一份，最坏情况是几个小时内 Chrome 跑慢一点点，跟你的书签、密码、登录态、扩展毫无关系。"
   },
   {
     "id": "chrome_feature_engagement",
@@ -130,7 +139,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Chrome 记录你用过哪些功能，用来决定何时弹「试试新功能」气泡。删除唯一影响是 Chrome 会重新统计，可能会再次给你看几个已经熟悉的功能提示。账号、书签、密码、扩展全都不动。"
   },
   {
     "id": "chrome_site_characteristics",
@@ -143,7 +153,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Chrome 后台冻结策略用的网站行为统计 (这个站常驻、那个站后台静默等)。删除后 Chrome 会重新观察几天，最多就是后台标签页冻结策略保守一点。和登录、书签、扩展无关。"
   },
   {
     "id": "chrome_video_decode_stats",
@@ -156,7 +167,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Chrome 统计本机解码各种视频格式的卡顿/掉帧率，用来给网页 isTypeSupported() 返回更准的能力。删了 Chrome 会重新观察几次播放就恢复，不影响任何账号、书签、扩展。"
   },
   {
     "id": "chrome_jump_list_icons",
@@ -172,7 +184,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "你右键 Chrome 任务栏图标看到的「常去网站」缩略图。注意：这只是「跳转列表」展示用的图标，不是浏览器内部的书签和 Favicons (那些在 Bookmarks 和 Favicons 文件里，本规则不会触及)。删了下次右键时会自动重建。"
   },
   {
     "id": "chrome_logs",
@@ -188,7 +201,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Chrome 调试和数据库引擎 (LevelDB) 的运行日志，给 Chromium 开发者排错用。除非你正在向 Google 提交 Bug，否则没人看这些。我们用精确文件名匹配 (debug.log/LOG/LOG.old)，不会误伤其它文件。"
   },
   {
     "id": "chrome_setup_metrics",
@@ -201,7 +215,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Chrome 每次自动更新成功/失败的事件日志，给 Google Update 团队回报用。删除后下次更新会自然生成新日志，不会影响 Chrome 已安装版本和你的任何浏览器数据。"
   },
   {
     "id": "chrome_update_cache",
@@ -217,7 +232,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Google Update 升级 Chrome 时用的下载缓冲区和安装临时包，升级完成后就没用了。删了不影响已安装的 Chrome、下次更新会重新下载所需文件。和书签、密码、扩展无关。"
   },
   {
     "id": "edge_cache",
@@ -230,7 +246,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Edge 把你访问过的网页图片、JS、CSS 暂存在这里加速下次打开。删除后首次访问网站会稍慢几秒，自动重新下载。不会触碰你的密码、收藏夹、登录态、扩展、浏览历史——那些都在 Default 下别的文件里。"
   },
   {
     "id": "edge_code_cache",
@@ -243,7 +260,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Edge 为加速二次打开网页保存的 JS 编译产物。删除后下次执行 JS 会稍慢，几次访问后自动重建。和登录、密码、收藏夹、扩展全无关。"
   },
   {
     "id": "edge_gpu_cache",
@@ -256,7 +274,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Edge 在 GPU 加速渲染时缓存的着色器编译产物。删除后首次打开网页 GPU 会重新编译几个着色器，没有任何账号、密码、收藏夹数据丢失。"
   },
   {
     "id": "edge_shader_cache",
@@ -269,20 +288,22 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Edge 跨配置共享的 GPU 着色器编译缓存。删除后首次打开图形较多的页面 GPU 会重新编译，纯性能缓存，不涉及任何账号、收藏夹、扩展数据。"
   },
   {
     "id": "edge_service_worker",
     "app_id": "edge",
     "detect": ["%LOCALAPPDATA%\\Microsoft\\Edge\\User Data"],
     "category": "browser_cache",
-    "name": "Edge Service Worker",
-    "description": "Edge 网站 Service Worker 离线缓存",
-    "targets": [{"base": "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default\\Service Worker"}],
+    "name": "Edge Service Worker 缓存",
+    "description": "Edge 网站 Service Worker 离线缓存 (CacheStorage)",
+    "targets": [{"base": "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default\\Service Worker\\CacheStorage"}],
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "网站 Service Worker 缓存离线资源的地方。我们只清 CacheStorage 子目录——不动同级的 Database 目录，所以 PWA 应用注册关系还在，重新打开后只是重新缓存静态资源。账号、收藏夹、扩展不受影响。"
   },
   {
     "id": "edge_blob_storage",
@@ -295,7 +316,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "网页 JS 临时创建的大块二进制对象（上传暂存、视频分片等），只在标签页打开期间有意义。Edge 关闭后这里就是垃圾，与收藏夹、密码、登录态完全无关。"
   },
   {
     "id": "edge_crashpad",
@@ -308,7 +330,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Edge 崩溃时生成的内存快照文件，专门给微软工程师排错用。如果你当时没勾选崩溃上报，这些文件留在本地也没人看。删除不影响 Edge 任何浏览功能。"
   },
   {
     "id": "edge_browser_metrics",
@@ -324,7 +347,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Edge 攒着准备上报给微软的遥测和稳定性日志。即使你关闭了诊断数据开关，文件也会先堆在这里。删了 Edge 会自动新建，和收藏夹、密码、登录、扩展无关。"
   },
   {
     "id": "edge_optimization_guide",
@@ -337,7 +361,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Edge 从云端下载的页面加载优化 ML 模型。删了下次启动会自动再下，最差几小时内 Edge 加载略慢一点点。和收藏夹、密码、登录态完全无关。"
   },
   {
     "id": "edge_feature_engagement",
@@ -350,7 +375,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Edge 内部记录你用过哪些功能，决定要不要弹「试试新功能」气泡。删除后 Edge 会重新统计，可能再次看到几个已经熟悉的功能提示。账号、收藏夹、密码全不动。"
   },
   {
     "id": "edge_video_decode_stats",
@@ -363,7 +389,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Edge 统计本机解码各种视频格式时的卡顿率，用来告诉网页能播什么。删了 Edge 重新观察几次播放就恢复，不影响任何账号、收藏夹、扩展。"
   },
   {
     "id": "edge_logs",
@@ -379,7 +406,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Edge 调试和 LevelDB 数据库引擎的运行日志，给 Chromium/Edge 工程师排错用。我们用精确文件名匹配 (debug.log/LOG/LOG.old)，不会误删 Default 目录下的其他文件。"
   },
   {
     "id": "edge_setup_metrics",
@@ -392,15 +420,16 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Edge 每次自动更新成功/失败的事件日志，给微软更新团队回报用。删除后下次更新会自然生成新日志，不影响已安装的 Edge 和你的任何浏览器数据。"
   },
   {
     "id": "edge_telemetry",
     "app_id": "edge",
     "detect": ["%LOCALAPPDATA%\\Microsoft\\Edge\\User Data"],
     "category": "app_logs",
-    "name": "Edge 遥测数据",
-    "description": "Edge Site Characteristics/Network/DashTracker 等遥测数据",
+    "name": "Edge 遥测数据库",
+    "description": "Edge Site Characteristics/VideoDecodeStats 等遥测数据库",
     "targets": [
       {"base": "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default\\Site Characteristics Database"},
       {"base": "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default\\VideoDecodeStats"}
@@ -408,7 +437,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Edge 后台冻结策略和视频解码能力统计。删后 Edge 会重新观察几天，最多后台冻结策略保守一点，视频解码探测一两次。和收藏夹、密码、登录无关。"
   },
   {
     "id": "edge_update_cache",
@@ -424,7 +454,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Edge Update 升级 Edge 时用的下载缓冲区和安装临时包，升级完就没用了。删了不影响已安装的 Edge、下次更新会重新下载所需文件。和收藏夹、密码、扩展无关。"
   },
   {
     "id": "edge_update_log",
@@ -437,7 +468,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Edge 后台自动更新服务的运行日志（位于 ProgramData，因此需要管理员权限）。除非你正在排查 Edge 更新失败，否则这些文本日志没用。删除完全不影响 Edge 安装版本和浏览器数据。"
   },
   {
     "id": "edge_jump_list_icons",
@@ -453,7 +485,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "你右键 Edge 任务栏图标看到的「常去网站」缩略图。注意：这只是右键菜单的展示缓存，不是浏览器内部的收藏夹或 Favicons (那些在 Bookmarks 和 Favicons 文件里，本规则不会触及)。删了下次右键时自动重建。"
   },
   {
     "id": "firefox_cache",
@@ -466,7 +499,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Firefox 把访问过的网页图片、脚本、样式表暂存在 cache2 子目录。我们只清这个子目录，不会动 Profile 下别的文件——书签、密码、登录态、扩展、Cookie、浏览历史全都安全。删后首次访问网站会稍慢，会自动重下。"
   },
   {
     "id": "firefox_shader_cache",
@@ -479,7 +513,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Firefox 编译 WebGL/WebGPU 着色器留下的 GPU 缓存。删了下次打开 3D/视频页面 GPU 会重新编译几个着色器，纯性能缓存。书签、密码、扩展、登录态都不动。"
   },
   {
     "id": "firefox_startup_cache",
@@ -492,7 +527,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Firefox 把启动时要加载的 JavaScript/XBL/XUL 资源预编译进这个目录加速启动。删了下次 Firefox 启动慢一两秒，第二次又恢复。纯性能缓存，不动书签、密码、扩展、Cookie。"
   },
   {
     "id": "firefox_crash_reports",
@@ -505,7 +541,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Firefox 崩溃后生成的内存快照，准备上报给 Mozilla 工程师。如果你没勾「发送崩溃报告」，这些文件就一直堆在本地没人看。删了不影响任何 Firefox 浏览功能。"
   },
   {
     "id": "firefox_telemetry_pings",
@@ -518,7 +555,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Firefox 暂存等待上报给 Mozilla 的遥测包。即使你关闭了遥测开关，已经攒下的文件也会留在这里。删了 Firefox 会自动重建，和你的书签、密码、扩展、登录态没有关系。"
   },
   {
     "id": "firefox_thumbnails",
@@ -531,7 +569,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Firefox 新标签页「常去网站」展示用的网页截图缩略图。删除后再次打开常去的网站，Firefox 会自动重新截图。和书签、密码、登录态、扩展无关。"
   },
   {
     "id": "firefox_updates",
@@ -544,7 +583,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Firefox 自动更新下载新版本时用的临时目录，安装完就没用了。删了不影响已安装的 Firefox 版本，下次更新会重新下载所需文件。和书签、密码、扩展无关。"
   },
   {
     "id": "brave_cache",
@@ -557,7 +597,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Brave 缓存的网页图片、JS、CSS 副本。删除后首次访问网站会稍慢，自动重下。不会动 Brave 钱包、书签、密码、扩展、登录态、Cookie——那些都在 Default 下别的文件里。"
   },
   {
     "id": "brave_code_cache",
@@ -570,7 +611,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Brave 保存的 JS 编译产物加速二次执行。删后首次跑 JS 稍慢，几次访问后恢复。和 Brave 钱包、书签、密码、登录态、扩展全无关。"
   },
   {
     "id": "brave_gpu_cache",
@@ -583,20 +625,22 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Brave GPU 渲染时缓存的着色器。删了下次打开网页 GPU 会重新编译，纯性能缓存，不涉及钱包、书签、密码、扩展。"
   },
   {
     "id": "brave_service_worker",
     "app_id": "brave",
     "detect": ["%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data"],
     "category": "browser_cache",
-    "name": "Brave Service Worker",
-    "description": "Brave Service Worker 离线缓存",
-    "targets": [{"base": "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\Default\\Service Worker"}],
+    "name": "Brave Service Worker 缓存",
+    "description": "Brave Service Worker 离线缓存 (CacheStorage)",
+    "targets": [{"base": "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\Default\\Service Worker\\CacheStorage"}],
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "网站 Service Worker 缓存的离线资源。只清 CacheStorage 子目录，不动同级的 Database 目录——PWA 注册关系还在，下次打开自动重新缓存。Brave 钱包、书签、扩展不受影响。"
   },
   {
     "id": "brave_crashpad",
@@ -609,7 +653,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Brave 崩溃时生成的内存快照文件。如果你没勾选崩溃上报，这些只会一直堆在本地没人看。删除不影响 Brave 任何浏览功能、钱包数据和书签。"
   },
   {
     "id": "brave_blob_storage",
@@ -622,7 +667,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "网页 JS 临时创建的大块二进制对象（文件上传暂存、视频流分片等），只在标签页打开期间有意义。Brave 关闭后这里就是垃圾，跟钱包、密码、登录无关。"
   },
   {
     "id": "vivaldi_cache",
@@ -635,7 +681,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Vivaldi 缓存的网页图片、JS、CSS 副本。删了下次访问会重新下载，首屏稍慢几秒。不会动你的书签、笔记、密码、邮件、登录态、扩展——那些都在 Default 下别的文件里。"
   },
   {
     "id": "vivaldi_code_cache",
@@ -648,7 +695,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Vivaldi 保存的 JS/WASM 编译产物加速二次执行。删后首次执行 JS 稍慢，几次访问后自动重建。和书签、笔记、密码、邮件、扩展全无关。"
   },
   {
     "id": "vivaldi_gpu_cache",
@@ -661,20 +709,22 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Vivaldi GPU 加速时缓存的着色器编译产物。删了下次打开网页 GPU 会重新编译，纯性能缓存。书签、笔记、密码、邮件不受影响。"
   },
   {
     "id": "vivaldi_service_worker",
     "app_id": "vivaldi",
     "detect": ["%LOCALAPPDATA%\\Vivaldi\\User Data"],
     "category": "browser_cache",
-    "name": "Vivaldi Service Worker",
-    "description": "Vivaldi Service Worker 离线缓存",
-    "targets": [{"base": "%LOCALAPPDATA%\\Vivaldi\\User Data\\Default\\Service Worker"}],
+    "name": "Vivaldi Service Worker 缓存",
+    "description": "Vivaldi Service Worker 离线缓存 (CacheStorage)",
+    "targets": [{"base": "%LOCALAPPDATA%\\Vivaldi\\User Data\\Default\\Service Worker\\CacheStorage"}],
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "网站 Service Worker 缓存离线资源的地方。只清 CacheStorage 子目录，不动 Database 子目录——PWA 注册关系保留，下次打开会自动重新缓存。书签、笔记、密码、邮件不受影响。"
   },
   {
     "id": "vivaldi_crashpad",
@@ -687,7 +737,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Vivaldi 崩溃时生成的内存快照，给开发组排错用。如果你没勾上报，这些文件就堆在本地没人看。删除不影响任何 Vivaldi 浏览功能、书签和邮件。"
   },
   {
     "id": "opera_cache",
@@ -700,7 +751,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Opera 缓存的网页图片、JS、CSS 副本。删后下次访问网站重新下载，首屏稍慢。不会动你的书签、密码、VPN 设置、登录态、扩展——那些都在 Opera Stable 下别的文件里。"
   },
   {
     "id": "opera_code_cache",
@@ -713,7 +765,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Opera 保存的 JS/WASM 编译产物。删了下次执行 JS 稍慢，几次访问后自动重建。和书签、密码、VPN 设置、扩展全无关。"
   },
   {
     "id": "opera_gpu_cache",
@@ -726,20 +779,22 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Opera GPU 加速渲染时缓存的着色器。删了下次打开网页 GPU 会重新编译，纯性能缓存，不涉及书签、密码、VPN、扩展。"
   },
   {
     "id": "opera_service_worker",
     "app_id": "opera",
     "detect": ["%APPDATA%\\Opera Software\\Opera Stable"],
     "category": "browser_cache",
-    "name": "Opera Service Worker",
-    "description": "Opera Service Worker 离线缓存",
-    "targets": [{"base": "%APPDATA%\\Opera Software\\Opera Stable\\Service Worker"}],
+    "name": "Opera Service Worker 缓存",
+    "description": "Opera Service Worker 离线缓存 (CacheStorage)",
+    "targets": [{"base": "%APPDATA%\\Opera Software\\Opera Stable\\Service Worker\\CacheStorage"}],
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "网站 Service Worker 缓存离线资源的地方。只清 CacheStorage 子目录，不动 Database 子目录——PWA 注册关系保留。书签、密码、VPN 设置、扩展不受影响。"
   },
   {
     "id": "opera_crashpad",
@@ -752,7 +807,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Opera 崩溃时生成的内存快照文件。如果你没勾上报，这些就一直堆在本地没人看。删除不影响 Opera 任何浏览功能和书签、VPN 设置。"
   },
   {
     "id": "opera_gx_cache",
@@ -765,7 +821,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Opera GX 缓存的网页图片、JS、CSS。删除后下次访问会重新下载，首屏稍慢几秒。不会动你的书签、密码、登录态、扩展、GX Corner 个性化设置。"
   },
   {
     "id": "opera_gx_code_cache",
@@ -778,7 +835,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Opera GX 保存的 JS 编译产物加速二次执行。删了下次执行 JS 稍慢，几次访问后自动重建。和书签、密码、登录、扩展、GX 主题无关。"
   },
   {
     "id": "ie_inet_cache",
@@ -791,7 +849,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 系统级 WinINet 网络缓存，IE、邮件预览、嵌入式 WebView 都用这里。删除后这些组件首次访问网络资源会重新下载，没有任何账号、密码、收藏夹数据丢失（IE 收藏夹保存在用户文件夹的 Favorites 目录里，本规则不会触及）。"
   },
   {
     "id": "ie_cache_storage",
@@ -804,7 +863,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "IE 的离线缓存目录，Win11 上 IE 早已退役、内容基本是死文件。删除不影响任何浏览功能；IE 收藏夹在另一个目录里，本规则不会触及。"
   },
   {
     "id": "qbrowser_cache",
@@ -821,7 +881,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "QQ 浏览器的网页内容、JS 编译产物和 GPU 着色器缓存，全是性能加速用。删后首次访问网站稍慢，自动重建。不会动 QQ 浏览器的书签、密码、QQ 登录态、扩展——那些都在 Default 下其他文件里。"
   },
   {
     "id": "360_browser_cache",
@@ -838,7 +899,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "360 极速浏览器 X 的网页、JS 和 GPU 缓存，纯性能加速。删除后首次访问网站稍慢，自动重新下载。不会动 360 浏览器的书签、密码、登录、扩展和安全设置——那些都在 Default 下别的文件里。"
   },
   {
     "id": "chrome_profile_cache",
@@ -858,7 +920,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "如果你在 Chrome 里建了多个用户配置（小区→添加），每个 Profile 1/2/3 都各有一份网页和 JS 缓存。我们精确指向每个 Profile 的 Cache_Data 和 Code Cache 子目录——不会触碰 Profile 下的书签、密码、登录态、扩展。"
   },
   {
     "id": "chrome_budget_database",
@@ -871,7 +934,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Chrome 后台预算 API 数据库（Background Fetch/Push 的额度统计）。删了 Chrome 会从零重新统计每个网站的后台用量，最坏几小时内某些网站后台同步暂时受限。和书签、密码、登录无关。"
   },
   {
     "id": "chrome_gcm_store",
@@ -881,10 +945,11 @@
     "name": "Chrome GCM Store",
     "description": "Chrome Google Cloud Messaging 推送数据存储",
     "targets": [{"base": "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\Default\\GCM Store"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "Chrome 保存的推送通知订阅 token (FCM/GCM)。删除后已订阅了「网页推送」的网站需要你重新打开它们才能重新订阅，期间收不到这些站点的推送消息。默认不勾，只在确实想清掉所有推送订阅时再选。"
   },
   {
     "id": "chrome_web_applications",
@@ -894,10 +959,11 @@
     "name": "Chrome Web Applications",
     "description": "Chrome PWA 应用的图标和清单缓存",
     "targets": [{"base": "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\Default\\Web Applications"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "如果你「安装」过网页应用 (PWA) 到桌面/开始菜单，图标和清单就保存在这里。删了这些 PWA 快捷方式的图标可能变白、双击可能打不开，需要重新安装一次 PWA。如果你没装过 PWA，删了无影响——默认不勾防误伤。"
   },
   {
     "id": "edge_budget_database",
@@ -910,7 +976,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Edge 后台预算 API 的数据库（Background Fetch/Push 额度统计）。删了 Edge 重新统计每个网站的后台用量，最坏几小时内某些网站后台同步暂时受限。和收藏夹、密码、登录无关。"
   },
   {
     "id": "edge_web_applications",
@@ -920,10 +987,11 @@
     "name": "Edge Web Applications",
     "description": "Edge PWA 应用的图标和清单缓存",
     "targets": [{"base": "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default\\Web Applications"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "如果你用 Edge 把网页「安装为应用」过，图标和清单就放在这里。删了已安装的 PWA 图标可能变白、可能打不开，需要重新安装一次 PWA。如果你从没装过 PWA 应用，删了无影响——默认不勾防误伤。"
   },
   {
     "id": "edge_gcm_store",
@@ -933,10 +1001,11 @@
     "name": "Edge GCM Store",
     "description": "Edge 推送通知数据存储",
     "targets": [{"base": "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default\\GCM Store"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "Edge 保存的网页推送通知订阅 token。删除后已订阅推送的网站需要你重新打开它们才能重新订阅，期间收不到推送消息。默认不勾，只在确实想清掉所有推送订阅时再选。"
   },
   {
     "id": "edge_platform_notifications",
@@ -949,7 +1018,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Edge 还没消失的活动 Toast 通知的临时状态。删了顶多是当前几条尚未点击的通知不再可点；不影响推送订阅本身，也不动收藏夹和密码。"
   },
   {
     "id": "edge_coupons",
@@ -962,7 +1032,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Edge 购物功能的优惠券推荐缓存（亚马逊、京东等促销码）。删了下次购物 Edge 会重新拉取，没有用户数据丢失，和收藏夹、密码、登录无关。"
   },
   {
     "id": "edge_crash_reports",
@@ -975,7 +1046,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "微软通用崩溃上报目录，Edge、Visual Studio、Office 等都可能往这里写。如果你没勾选向微软发送诊断信息，这些文件就堆在本地没人看。删除不影响任何已安装程序。"
   },
   {
     "id": "brave_browser_metrics",
@@ -988,7 +1060,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Brave 攒着等待上报的遥测数据文件，Brave 强调隐私默认很少上报，但目录还是会有暂存。删了 Brave 会自动重建，和钱包、书签、密码、扩展无关。"
   },
   {
     "id": "brave_optimization_guide",
@@ -1001,7 +1074,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Brave 继承 Chromium 的页面加载优化 ML 模型缓存。删了 Brave 启动时会重新下载，最坏几小时内加载略慢一点。和 Brave 钱包、书签、密码、扩展无关。"
   },
   {
     "id": "brave_feature_engagement",
@@ -1014,7 +1088,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Brave 内部记录你用过哪些功能，决定要不要弹「试试新功能」气泡。删除后 Brave 会重新统计，可能再次看到几个已经熟悉的功能提示。钱包、书签、密码、扩展全不动。"
   },
   {
     "id": "brave_video_decode",
@@ -1027,7 +1102,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Brave 统计本机解码各种视频格式时的卡顿率。删了 Brave 重新观察几次视频播放就恢复，不影响钱包、书签、密码、扩展。"
   },
   {
     "id": "vivaldi_blob_storage",
@@ -1040,7 +1116,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "网页 JS 创建的临时大块二进制对象（文件上传暂存、视频分片等），只在标签页打开期间有意义。Vivaldi 关闭后这里就是垃圾，跟书签、笔记、邮件、密码无关。"
   },
   {
     "id": "vivaldi_browser_metrics",
@@ -1053,7 +1130,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Vivaldi 攒着等待上报的遥测和稳定性日志。Vivaldi 团队收集匿名诊断信息用，删了 Vivaldi 会自动重建。和书签、笔记、邮件、密码无关。"
   },
   {
     "id": "opera_blob_storage",
@@ -1066,7 +1144,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "网页 JS 创建的临时大块二进制对象（文件上传暂存、视频分片等），只在标签页打开期间有意义。Opera 关闭后这里就是垃圾，跟书签、密码、VPN 设置、扩展无关。"
   },
   {
     "id": "firefox_offline_cache",
@@ -1079,7 +1158,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "已废弃的 HTML5 AppCache 离线应用缓存。Firefox 早已默认禁用 AppCache，绝大多数现代网站不再用，目录内容基本是死文件。删除安全无副作用，不影响书签、密码、扩展、登录。"
   },
   {
     "id": "firefox_storage_temp",
@@ -1092,7 +1172,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Firefox 存储子系统 (QuotaManager) 的临时区。只清 storage 下的 temporary 子目录——不会动同级的 default 和 permanent 目录，那里保存的是网站的 IndexedDB 和持久存储。书签、密码、扩展、登录态全保留。"
   },
   {
     "id": "arc_cache",
@@ -1108,7 +1189,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Arc 浏览器 (UWP 沙盒包) 的 Temp 和 TempState 目录，按 Windows 包模型约定都是临时区。删了 Arc 会自动重建，不影响登录、书签、Spaces、固定标签等数据（那些保存在 LocalState 里，本规则不会触及）。"
   },
   {
     "id": "yandex_cache",
@@ -1125,7 +1207,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Yandex 浏览器的网页、JS 和 GPU 缓存。删了下次访问网站会重新下载，首屏稍慢几秒。不会动 Yandex 浏览器的书签、密码、Turbo 设置、登录态——那些都在 Default 下别的文件里。"
   },
   {
     "id": "chromium_cache",
@@ -1142,7 +1225,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Chromium 原版（不是 Chrome）的网页、JS 和 GPU 缓存。删后下次访问网站重新下载，首屏稍慢。不会动书签、密码、登录态、扩展——那些在 Default 下别的文件里。"
   },
   {
     "id": "chrome_data_reduction",
@@ -1155,7 +1239,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Chrome 已废弃的「数据节省模式」(原 Lite 模式) 本地数据库，现在桌面版根本不用。目录里都是死数据，删了不影响 Chrome 任何浏览功能、书签、密码、扩展。"
   },
   {
     "id": "edge_data_reduction",
@@ -1168,7 +1253,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Edge 继承自 Chromium 的「数据节省模式」本地数据库，桌面版基本不用。目录里都是死数据，删了不影响 Edge 任何浏览功能、收藏夹、密码、扩展。"
   },
   {
     "id": "brave_logs",
@@ -1184,7 +1270,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Brave 的调试和 LevelDB 引擎运行日志，给开发者排错用。我们用精确文件名匹配 (debug.log/LOG/LOG.old)，不会误伤 Default 目录下的其他文件。和钱包、书签、密码、扩展无关。"
   },
   {
     "id": "brave_update_cache",
@@ -1200,7 +1287,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Brave Update 升级 Brave 时用的下载缓冲区和安装临时包。升级完就没用了，删了不影响已安装的 Brave、下次更新会重新下载所需文件。和钱包、书签、密码、扩展无关。"
   },
   {
     "id": "vivaldi_logs",
@@ -1213,7 +1301,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Vivaldi 的 LevelDB 数据库运行日志，给 Vivaldi 工程师排错用。用精确文件名匹配 (LOG/LOG.old)，不会误伤 Default 下的其他文件。和书签、笔记、邮件、密码、扩展无关。"
   },
   {
     "id": "opera_logs",
@@ -1226,7 +1315,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Opera 的 LevelDB 数据库运行日志。我们用精确文件名匹配 (LOG/LOG.old)，不会误伤 Opera Stable 目录下的其他文件。和书签、密码、VPN 设置、扩展无关。"
   },
   {
     "id": "firefox_minidumps",
@@ -1239,7 +1329,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Firefox 子进程（GPU、Flash、内容进程）崩溃时生成的小型内存快照。如果你没勾「发送崩溃报告」给 Mozilla，这些文件就堆在本地没人看。删除不影响 Firefox 任何浏览功能。"
   },
   {
     "id": "waterfox_cache",
@@ -1252,7 +1343,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Waterfox (基于 Firefox 的小众浏览器) 的网页缓存 cache2 子目录。删后下次访问网站会重新下载，首屏稍慢。Profile 下别的目录都不动——书签、密码、扩展、登录态保留。"
   },
   {
     "id": "edge_profile_cache",
@@ -1270,7 +1362,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "如果你在 Edge 里建了多个用户配置（如工作和个人），每个 Profile 1/2 都各有一份网页和 JS 缓存。我们精确指向每个 Profile 的 Cache_Data 和 Code Cache 子目录——不会触碰 Profile 下的收藏夹、密码、登录态、扩展。"
   },
   {
     "id": "chrome_media_cache",
@@ -1283,7 +1376,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Chrome 单独存放视频/音频媒体内容的缓存目录（和普通 Cache 分开是为了大文件管理）。删了下次播放在线视频会重新缓冲一段，纯性能影响，不动书签、密码、登录、扩展。"
   },
   {
     "id": "chrome_platform_notifications",
@@ -1296,20 +1390,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
-  },
-  {
-    "id": "edge_collections_cache",
-    "app_id": "edge",
-    "detect": ["%LOCALAPPDATA%\\Microsoft\\Edge\\User Data"],
-    "category": "browser_cache",
-    "name": "Edge 集锦图片缓存",
-    "description": "Edge 集锦功能的缩略图缓存",
-    "targets": [{"base": "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default\\Collections\\collectionsSQLite"}],
-    "risk": "caution",
-    "requires_admin": false,
-    "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "Chrome 还没消失的活动 Toast 通知的临时状态。删了顶多是当前几条尚未点击的通知不再可点；不影响推送订阅本身，也不动书签、密码。"
   },
   {
     "id": "firefox_safebrowsing",
@@ -1322,7 +1404,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Firefox 从 Google 同步的恶意网址和钓鱼站黑名单本地缓存。删了 Firefox 启动后会自动重新拉取最新黑名单，期间几分钟内安全浏览保护略弱（实际仍由远程查询兜底）。和书签、密码、扩展无关。"
   },
   {
     "id": "brave_shader_cache",
@@ -1335,7 +1418,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Brave 跨配置共享的 GPU 着色器编译缓存。删除后首次打开图形较多的页面 GPU 会重新编译，纯性能缓存，不涉及钱包、书签、密码、扩展。"
   },
   {
     "id": "opera_gx_gpu_cache",
@@ -1348,19 +1432,21 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Opera GX GPU 加速渲染时缓存的着色器。删了下次打开网页 GPU 会重新编译，纯性能缓存，不涉及书签、密码、登录、扩展、GX Corner 设置。"
   },
   {
     "id": "opera_gx_service_worker",
     "app_id": "opera_gx",
     "detect": ["%APPDATA%\\Opera Software\\Opera GX Stable"],
     "category": "browser_cache",
-    "name": "Opera GX Service Worker",
-    "description": "Opera GX Service Worker 离线缓存",
-    "targets": [{"base": "%APPDATA%\\Opera Software\\Opera GX Stable\\Service Worker"}],
+    "name": "Opera GX Service Worker 缓存",
+    "description": "Opera GX Service Worker 离线缓存 (CacheStorage)",
+    "targets": [{"base": "%APPDATA%\\Opera Software\\Opera GX Stable\\Service Worker\\CacheStorage"}],
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "网站 Service Worker 缓存离线资源的地方。只清 CacheStorage 子目录，不动 Database 子目录——PWA 注册关系保留。书签、密码、登录、扩展、GX 主题不受影响。"
   }
 ]

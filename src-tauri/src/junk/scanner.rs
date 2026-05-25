@@ -47,6 +47,7 @@ pub struct JunkItem {
     pub is_directory: bool,
     pub risk_level: JunkRiskLevel,
     pub default_selected: bool,
+    pub why_safe: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -378,6 +379,7 @@ fn scan_path_for_rule(path: &Path, rule: &JunkRule, items: &mut Vec<JunkItem>) {
                                     is_directory: false,
                                     risk_level: rule.risk_level,
                                     default_selected: rule.default_selected,
+                                    why_safe: rule.why_safe,
                                 });
                             }
                         }
@@ -428,6 +430,7 @@ fn scan_path_for_rule(path: &Path, rule: &JunkRule, items: &mut Vec<JunkItem>) {
                 is_directory: is_dir,
                 risk_level: rule.risk_level,
                 default_selected: rule.default_selected,
+                why_safe: rule.why_safe,
             });
         }
         return;
@@ -461,6 +464,7 @@ fn scan_path_for_rule(path: &Path, rule: &JunkRule, items: &mut Vec<JunkItem>) {
         is_directory: is_dir,
         risk_level: rule.risk_level,
         default_selected: rule.default_selected,
+        why_safe: rule.why_safe,
     });
 }
 

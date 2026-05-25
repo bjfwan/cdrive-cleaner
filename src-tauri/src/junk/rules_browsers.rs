@@ -21,6 +21,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("浏览器加载网页时存的图片、JS、CSS 副本，下次访问会按需重新下载。不会影响你的登录状态、书签、浏览历史、扩展、保存的密码——这些都在另外的文件里，本规则不会动。"),
         },
     );
 
@@ -41,6 +42,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("V8 引擎把 JavaScript / WebAssembly 编译过一遍后存下来的字节码副本，下次访问网站会自动重新编译。最坏情况是首次打开网页慢 0.5-2 秒。不会影响账号、书签、历史。"),
         },
     );
 
@@ -61,6 +63,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("GPU 着色器编译缓存。删除后浏览器首次加载复杂网页（如 3D、视频、Canvas 动画）可能多花一两百毫秒重新编译着色器，无其他影响。不会动账号、书签或扩展。"),
         },
     );
 
@@ -81,6 +84,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("网页 PWA 离线模式保存的图片和脚本副本，下次访问网站会按需重新下载。不会让你登出网站、不会卸载任何已安装的 PWA、不会影响 IndexedDB 里的草稿/邮件等本地数据。"),
         },
     );
 
@@ -101,6 +105,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Service Worker 脚本本身的副本，下次访问注册了 SW 的网站会自动重新下载。不会取消任何 PWA 注册（注册信息在另外的 Database 子目录），不会影响登录态。"),
         },
     );
 
@@ -121,6 +126,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("浏览器播放视频时缓存下来的媒体片段，下次播放同一视频会重新下载（视频流可能短暂卡顿一两秒）。不会影响登录、收藏、历史。"),
         },
     );
 
@@ -141,6 +147,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Chrome 早期版本的 AppCache 离线缓存机制，现代网站早就改用 Service Worker，这里通常是空目录或废弃数据。删除一般什么都感觉不到。"),
         },
     );
 
@@ -161,6 +168,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Chrome 多个用户配置共享的 GPU 着色器编译缓存。删除后首次渲染复杂页面会重建着色器，仅多几十到几百毫秒。不会影响登录、书签、历史或扩展。"),
         },
     );
 
@@ -181,6 +189,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Chrome 崩溃时生成的内存快照，主要给 Google 工程师排错。如果你当时没勾选上报，这些文件留在本地也没人会看。删除不影响 Chrome 任何浏览功能。"),
         },
     );
 
@@ -201,6 +210,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Edge 加载网页时缓存的图片、JS、CSS 副本，下次访问会按需重新下载。不会影响你的微软账号登录、收藏夹、浏览历史、保存的密码或已安装的扩展。"),
         },
     );
 
@@ -221,6 +231,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("V8 引擎编译过 JavaScript / WebAssembly 后存下的字节码副本，下次访问网站会自动重新编译。最坏情况是首次打开网页慢 0.5-2 秒。不会影响登录、收藏、历史。"),
         },
     );
 
@@ -241,6 +252,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("GPU 着色器编译缓存。删除后 Edge 首次加载复杂网页可能多花一两百毫秒重新编译，无其他影响。不会动账号、收藏夹、扩展。"),
         },
     );
 
@@ -261,6 +273,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("网页 PWA 离线模式保存的图片和脚本副本，下次访问网站会按需重新下载。不会让你登出网站、不会卸载任何已安装的 PWA、不会影响 IndexedDB 里的本地数据。"),
         },
     );
 
@@ -281,6 +294,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Edge 播放视频时缓存的媒体片段，下次播放同一视频要重新下载（短暂卡顿一两秒）。不会影响登录、收藏、历史。"),
         },
     );
 
@@ -301,6 +315,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Edge 多个用户配置共享的 GPU 着色器编译缓存。删除后首次渲染复杂页面会重建，仅多几十到几百毫秒。不会影响微软账号、收藏夹或扩展。"),
         },
     );
 
@@ -321,6 +336,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Edge 崩溃时生成的内存快照，主要给微软工程师排错。已经过去的崩溃如果你没上报，留在本地也没人会看。删除不影响 Edge 任何浏览功能。"),
         },
     );
 
@@ -333,7 +349,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             description: "Firefox 各配置的启动加速缓存，删除后下一次启动会重建",
             paths: collect_paths([env_path(
                 "LOCALAPPDATA",
-                "Mozilla\\Firefox\\Profiles*\\startupCache",
+                "Mozilla\\Firefox\\Profiles\\*\\startupCache",
             )]),
             patterns: vec![],
             risk_level: JunkRiskLevel::Safe,
@@ -341,6 +357,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Firefox 启动时为加速 XPCOM 组件和插件加载而缓存的二进制索引。删除后首次启动 Firefox 会慢 1-2 秒，仅一次。不会影响账号登录、扩展、书签或浏览历史。"),
         },
     );
 
@@ -353,7 +370,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             description: "Firefox 任务栏跳转列表缩略图缓存，可安全删除",
             paths: collect_paths([env_path(
                 "LOCALAPPDATA",
-                "Mozilla\\Firefox\\Profiles*\\jumpListCache",
+                "Mozilla\\Firefox\\Profiles\\*\\jumpListCache",
             )]),
             patterns: vec![],
             risk_level: JunkRiskLevel::Safe,
@@ -361,6 +378,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("任务栏右键 Firefox 时弹出的最近访问站点小图标缓存。删除后下次右键任务栏可能短暂没图标，Firefox 自动重建。不会影响书签、历史或扩展。"),
         },
     );
 
@@ -373,7 +391,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             description: "Firefox 各配置的旧版离线 AppCache，可安全删除",
             paths: collect_paths([env_path(
                 "LOCALAPPDATA",
-                "Mozilla\\Firefox\\Profiles*\\OfflineCache",
+                "Mozilla\\Firefox\\Profiles\\*\\OfflineCache",
             )]),
             patterns: vec![],
             risk_level: JunkRiskLevel::Safe,
@@ -381,6 +399,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Firefox 旧版 AppCache 离线应用缓存机制（W3C 已废弃），现代网站基本不再使用。删除一般什么感觉都没有。不会影响登录、书签或扩展。"),
         },
     );
 
@@ -393,7 +412,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             description: "Firefox 新标签页缩略图缓存，删除后会被自动重建",
             paths: collect_paths([env_path(
                 "LOCALAPPDATA",
-                "Mozilla\\Firefox\\Profiles*\\thumbnails",
+                "Mozilla\\Firefox\\Profiles\\*\\thumbnails",
             )]),
             patterns: vec![],
             risk_level: JunkRiskLevel::Safe,
@@ -401,6 +420,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Firefox 新标签页里常访问网站那些方块缩略图。删除后下次打开新标签页会先显示几秒空白占位符，Firefox 会重新截图生成。不会影响书签或历史本身。"),
         },
     );
 
@@ -421,6 +441,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("Firefox 崩溃时生成的小型转储文件和待提交元数据，主要给 Mozilla 工程师排错。如果你没在反馈崩溃问题，这些文件就再无用处。删除不影响 Firefox 任何浏览功能。"),
         },
     );
 
@@ -441,6 +462,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Brave 加载网页时缓存的图片、JS、CSS 副本，下次访问会按需重新下载。不会影响你的 Brave 钱包、奖励 BAT、登录态、书签、历史或扩展。"),
         },
     );
 
@@ -461,6 +483,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("V8 编译过的 JavaScript / WebAssembly 字节码副本，下次访问网站会自动重新编译。最坏首次打开网页慢 0.5-2 秒。不会触及 Brave 钱包或任何账号数据。"),
         },
     );
 
@@ -481,6 +504,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("GPU 着色器编译缓存。删除后 Brave 首次渲染复杂页面会多花一两百毫秒重建着色器，无其他影响。不会动钱包、书签或扩展。"),
         },
     );
 
@@ -501,6 +525,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Opera 加载网页时存的图片、JS、CSS 副本，下次访问会按需重新下载。不会影响你的 Opera 账号、内置 VPN 设置、收藏夹、扩展或浏览历史。"),
         },
     );
 
@@ -521,6 +546,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("V8 编译过的 JavaScript / WebAssembly 字节码副本，下次访问网站会自动重编译。最坏首次打开网页慢 0.5-2 秒。不会影响登录、收藏或扩展。"),
         },
     );
 
@@ -541,6 +567,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("GPU 着色器编译缓存。删除后 Opera 首次渲染复杂页面会多花一两百毫秒，无其他影响。不会动账号或扩展。"),
         },
     );
 
@@ -561,6 +588,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Vivaldi 加载网页时存的图片、JS、CSS 副本，下次访问会按需重新下载。不会影响你的同步账号、标签会话、笔记、书签或扩展。"),
         },
     );
 
@@ -581,6 +609,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("V8 编译过的 JavaScript / WebAssembly 字节码副本，下次访问网站会自动重编译。最坏首次打开网页慢 0.5-2 秒。不会影响 Vivaldi 的笔记或会话。"),
         },
     );
 
@@ -601,6 +630,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("GPU 着色器编译缓存。删除后 Vivaldi 首次渲染复杂页面会多花一两百毫秒，无其他影响。不会触及笔记或扩展。"),
         },
     );
 
@@ -621,6 +651,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("360 安全浏览器默认配置的网页缓存，下次访问网站会按需重新下载。不会影响 360 账号登录、收藏夹、浏览历史或已装扩展。"),
         },
     );
 
@@ -641,6 +672,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("QQ 浏览器默认配置的网页缓存，下次访问网站会重新下载。不会影响 QQ 账号、书签、浏览历史，也不会清掉登录态。"),
         },
     );
 
@@ -661,6 +693,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("IE 和系统旧版 WebView/MSHTML 控件的网页缓存。如今 Edge / Chrome 都不读这里，删除几乎无感。如果偶尔还有老旧网银插件依赖 IE，首次重新访问可能略慢。"),
         },
     );
 
@@ -681,6 +714,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: false,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("IE 和旧版 WebView 的浏览历史数据库。新版 Chrome / Edge 不读这里。若你不再用 IE，删除无感；但若你还在用某些公司内网工具读这个库，删后这些工具读不到上次访问记录。日常不勾。"),
         },
     );
 
@@ -701,6 +735,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: false,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("IE 和旧版 WebView 控件的 Cookie。如果你还在用 IE 或某些老旧网银控件，删了要重登。新版 Chrome / Edge 的登录态不在这里。日常不勾。"),
         },
     );
 
@@ -718,6 +753,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("经典版 Teams（Electron 内核）的网页层缓存。下次启动 Teams 头像和图片会按需重下。不会让你登出 Teams、不会丢任何会议历史或聊天记录。"),
         },
     );
 
@@ -735,6 +771,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Teams 内嵌 V8 引擎编译过的字节码副本，下次启动会自动重新编译。最坏 Teams 启动慢 1-2 秒一次。不会让你登出，也不会丢聊天。"),
         },
     );
 
@@ -752,6 +789,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Teams 内嵌 Chromium 的 GPU 着色器缓存。删除后下次启动会重建，仅几十毫秒到几百毫秒影响。不会动账号或聊天数据。"),
         },
     );
 
@@ -769,6 +807,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Teams 内嵌 Chromium 临时存放 JS Blob 对象的目录（如发送中的图片分块）。Teams 关闭后这里通常已无用。不会影响登录或聊天记录。"),
         },
     );
 
@@ -789,6 +828,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Teams 网页 Service Worker 缓存的资源副本（脚本、图标等）。下次启动 Teams 会按需重新下载，不会让你登出、不会丢任何聊天或会议。"),
         },
     );
 
@@ -809,6 +849,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: true,
             max_depth: None,
+            why_safe: Some("新版 Teams（应用商店版）UWP 沙箱中的临时缓存。下次启动 Teams 会按需重建，头像与缩略图可能要重新加载。不会让你登出，也不会丢聊天或组织数据。"),
         },
     );
 
@@ -826,6 +867,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Slack 桌面端（Electron 内核）的网页层缓存。下次启动会按需重新拉取头像、表情图等。不会让你登出工作区、不会丢任何历史消息或频道列表。"),
         },
     );
 
@@ -843,6 +885,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Slack 内嵌 V8 编译过的字节码副本，下次启动会自动重新编译。最坏 Slack 启动慢 1-2 秒一次。不会让你登出，也不会丢消息。"),
         },
     );
 
@@ -860,6 +903,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Slack 内嵌 Chromium 的 GPU 着色器缓存。删除后 Slack 首次渲染消息列表可能多几十毫秒，无其他影响。不会动账号或工作区。"),
         },
     );
 
@@ -880,6 +924,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Slack 网页 Service Worker 缓存的图片、表情、Bot 头像副本。下次启动会按需重下。不会让你登出、不会丢工作区或消息历史。"),
         },
     );
 
@@ -897,6 +942,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Discord 桌面端的网页层缓存（用户头像、表情、附件图片副本）。下次启动会按需重下。不会让你登出账号、不会丢服务器、不会丢消息记录。"),
         },
     );
 
@@ -914,6 +960,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Discord 内嵌 V8 编译过的字节码副本，下次启动会自动重新编译。最坏 Discord 启动慢 1-2 秒一次。不会让你登出或丢任何数据。"),
         },
     );
 
@@ -931,6 +978,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Discord 内嵌 Chromium 的 GPU 着色器缓存。删除后首次启动可能多几十毫秒。不会动账号、服务器列表或好友列表。"),
         },
     );
 
@@ -951,6 +999,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Skype 桌面端的网页层缓存。下次启动会按需重新拉取头像、表情等。不会让你登出 Skype，也不会丢任何聊天或通话记录。"),
         },
     );
 
@@ -971,6 +1020,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Skype 内嵌 Chromium 的 GPU 着色器缓存。删除后首次启动可能多几十毫秒，无其他影响。不会动账号或聊天记录。"),
         },
     );
 
@@ -991,6 +1041,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("Telegram 缓存的图片、贴纸、视频缩略图副本。下次查看聊天时会按需重新下载。不会让你登出账号（登录态在 tdata 根目录，本规则不动）、不会丢任何消息或会话密钥。"),
         },
     );
 
@@ -1011,6 +1062,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("微信公共配置目录下的程序缓存（小程序运行残留、UI 资源等），路径上不含具体用户的聊天数据库。不会让你重新扫码登录，不会触及聊天记录或收到的文件。"),
         },
     );
 
@@ -1031,6 +1083,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: true,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("QQ 客户端内嵌网页（搜一搜、新闻、广告位等）的临时缓存。不在聊天记录路径上，不会让你重登 QQ，也不会丢任何接收过的文件、图片或表情。"),
         },
     );
 
@@ -1048,6 +1101,7 @@ pub(super) fn extra_rules() -> Vec<JunkRule> {
             default_selected: false,
             clean_subdirs_only: false,
             max_depth: None,
+            why_safe: Some("钉钉客户端的滚动调试日志，只有在和钉钉客服或公司 IT 排查问题时才会用到。不会丢账号、聊天、会议或文件。日常不勾；如果当前正在排查钉钉问题，请保留这些日志。"),
         },
     );
 

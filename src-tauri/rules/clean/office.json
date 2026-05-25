@@ -7,10 +7,11 @@
     "name": "Office 文件缓存",
     "description": "Microsoft Office 的 OfficeFileCache 临时缓存文件",
     "targets": [{"base": "%LOCALAPPDATA%\\Microsoft\\Office\\16.0\\OfficeFileCache"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "Office 上传中心暂存的 OneDrive/SharePoint 文档副本。极少情况下，刚改完文档还没传上云时，本地修改就在这里——删了等于丢未上传修改，所以默认不勾。确认上传中心无待传文件后再勾。"
   },
   {
     "id": "office_web_service_cache",
@@ -23,7 +24,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Office 调用 Microsoft 联机服务（账户、Insights、Researcher 等）的响应缓存。不会动你的文档、模板、字体、加载项。删了下次连机服务时重新拉数据，不可感知。"
   },
   {
     "id": "office_telemetry",
@@ -36,7 +38,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Office 给微软上报使用情况的遥测日志暂存（已上报的副本）。不会动你的文档、模板、设置、加载项。即使你关了遥测开关，目录里历史文件也无作用，留着只占空间。"
   },
   {
     "id": "office_recent",
@@ -49,7 +52,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Word/Excel/PowerPoint 启动页“最近”列表所指向的快捷方式。不会动你的真实文档——但是删了启动 Office 时“最近”列表会清空，你得自己去文件夹找之前打开过的文档。所以默认不勾。"
   },
   {
     "id": "libreoffice_cache",
@@ -62,7 +66,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "LibreOffice 启动时生成的配置缓存（菜单、扩展元数据）。不会动你的文档、模板、设置、扩展本体。删了下次启动 LibreOffice 慢 1-2 秒重建，无感。"
   },
   {
     "id": "libreoffice_crash",
@@ -75,7 +80,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "LibreOffice 崩溃瞬间的内存快照，给开发者排错用。已经过去的崩溃用不上这些转储。不会动你的文档或设置。"
   },
   {
     "id": "libreoffice_backup",
@@ -88,7 +94,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "LibreOffice 每次保存时生成的“上一版本”备份，文档崩溃或误改时是你最后的救命稻草。如果当前没有未保存的文档、近期也没有需要回滚的修改，可以勾——默认不勾，避免误删。"
   },
   {
     "id": "foxit_cache",
@@ -101,7 +108,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Foxit PDF 阅读器给最近打开的 PDF 生成的页面渲染缓存。不会动 PDF 原文件、注释、书签、签名。删了下次打开同一 PDF 时第一页慢一瞬，无感。"
   },
   {
     "id": "foxit_logs",
@@ -114,7 +122,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Foxit Reader 的运行日志，主要给开发者排错。不会影响 PDF 阅读、注释、签名等任何功能。"
   },
   {
     "id": "wps_cache",
@@ -127,7 +136,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "WPS 启动和打开文档时生成的页面渲染、字体、皮肤缓存。不会动你的文档、模板、皮肤设置、登录态、WPS 云文档。删了下次启动慢一两秒，无感。"
   },
   {
     "id": "wps_logs",
@@ -140,7 +150,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "WPS 运行过程日志，主要给金山排错。不会动你的文档、表格、演示稿或 WPS 云文档同步状态。"
   },
   {
     "id": "notepadpp_logs",
@@ -153,7 +164,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Notepad++ 插件管理器装新插件时下载的临时压缩包，安装完成后就没用了。不会动已装好的插件（在 plugins 别处）、设置、自定义语法、会话标签页。"
   },
   {
     "id": "everything_logs",
@@ -166,7 +178,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Everything 文件搜索工具的调试日志。仅匹配 *.log，不会动 Everything.db（索引数据库，体积大但删了要全盘重建索引几分钟）或配置。"
   },
   {
     "id": "adobe_reader_cache",
@@ -179,7 +192,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Adobe Reader 渲染 PDF 时生成的页面缓存。不会动 PDF 原文件、注释、表单填写数据、签名、最近文件列表。删了下次打开 PDF 第一页慢一瞬，无感。"
   },
   {
     "id": "sumatrapdf_cache",
@@ -192,7 +206,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "SumatraPDF 给翻过的 PDF 页面存的渲染缓存。不会动 PDF 文件、最近打开列表、阅读位置（在 SumatraPDF-settings.txt 别处）。删了下次翻同一文档时第一次解析慢一瞬。"
   },
   {
     "id": "dropbox_cache",
@@ -205,20 +220,22 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Dropbox 同步过程的中转缓存（已上传/下载完成的文件副本），同步完成后即过期。不会动你 Dropbox 文件夹里的真实文件、共享链接、版本历史。删了不影响同步状态。"
   },
   {
     "id": "dropbox_logs",
     "app_id": "dropbox",
     "detect": ["%LOCALAPPDATA%\\Dropbox"],
     "category": "app_logs",
-    "name": "Dropbox 日志",
-    "description": "Dropbox 同步客户端的运行日志",
+    "name": "Dropbox 崩溃报告",
+    "description": "Dropbox 客户端的 crashpad 崩溃报告",
     "targets": [{"base": "%LOCALAPPDATA%\\Dropbox\\crashpad\\reports"}],
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Dropbox 客户端崩溃时的转储报告，已上报或排队中。不会动你的文件、同步队列、登录态。即使 Dropbox 客户端有问题，新崩溃也会产生新的报告——历史报告留着没意义。"
   },
   {
     "id": "winrar_temp",
@@ -231,7 +248,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "WinRAR 解压压缩包时在系统临时目录留下的中转文件（Rar$* 开头）。仅匹配这个前缀，不会动其他程序的临时文件或 WinRAR 配置、关联格式。WinRAR 关掉后这些就是垃圾。"
   },
   {
     "id": "office_upload_center",
@@ -241,10 +259,11 @@
     "name": "Office 上传中心缓存",
     "description": "Office 文档上传中心的缓存文件",
     "targets": [{"base": "%LOCALAPPDATA%\\Microsoft\\Office\\16.0\\OfficeFileCache\\OfficeUploadCenter"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "Office 上传中心待传给 OneDrive/SharePoint 的文档暂存。如果当前有未传上云的 Word/Excel/PPT 修改，删了就丢——所以默认不勾。先打开“上传中心”确认无 pending 文件再勾。"
   },
   {
     "id": "office_spw",
@@ -257,7 +276,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Office 拼写检查的自定义词典（你历史“添加到词典”的专有名词、术语、公司缩写）。删了下次 Word/Outlook 会再把这些词标红。如果你长期积累过术语表，建议不勾。"
   },
   {
     "id": "onenote_cache",
@@ -270,7 +290,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "OneNote 给云端笔记本生成的本地离线副本（让你没网时也能看）。云端笔记本本身在 OneDrive 不会丢，但删了这里之后下次打开 OneNote 要重新从云全部同步——10 GB 笔记本要等十几分钟，所以默认不勾。"
   },
   {
     "id": "outlook_logs",
@@ -280,10 +301,11 @@
     "name": "Outlook 日志",
     "description": "Outlook 的同步和连接日志文件",
     "targets": [{"base": "%LOCALAPPDATA%\\Microsoft\\Outlook\\Logs"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "Outlook 邮件同步和服务器连接的运行日志。绝不会动你的邮件数据（OST/PST 在别处）。但 Outlook 收不到邮件、卡在“正在连接”、Exchange 登录失败时这里是微软支持要的第一手证据——排障期间不要勾。"
   },
   {
     "id": "office365_logs",
@@ -296,7 +318,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Office 365 各组件（Word/Excel/PPT/Outlook/Teams 加载项）的诊断日志。不会动文档、模板、加载项、激活状态、Microsoft 账户。仅当你正在排查 Office 启动慢或加载项异常时才需要保留。"
   },
   {
     "id": "libreoffice_uno_packages",
@@ -309,7 +332,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "LibreOffice 扩展（.oxt）安装时解压出的临时副本。不会动扩展本体或扩展的配置数据。删了下次启动会重新解压，慢 1-2 秒，仅一次。"
   },
   {
     "id": "calibre_cache",
@@ -322,7 +346,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Calibre 电子书管理器为加速翻阅生成的封面缩略图和元数据副本缓存。不会动你的电子书原文件、书库数据库（metadata.db）、用户配置、阅读位置。删了下次打开 Calibre 时书库列表慢几秒重建缩略图。"
   },
   {
     "id": "notion_cache",
@@ -339,7 +364,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Notion 桌面端内嵌 Chromium 的图片、JS、GPU 着色器副本（限定 Cache_Data / GPUCache / Code Cache 三个子目录，不动 IndexedDB 等离线数据）。不会丢登录态、页面、数据库、最近编辑。删了下次启动重新拉素材，慢一两秒。"
   },
   {
     "id": "notion_logs",
@@ -352,7 +378,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Notion 桌面端的运行日志。不会动登录态、页面数据、离线 IndexedDB。仅当你正在排查 Notion 启动失败或同步异常时需要保留。"
   },
   {
     "id": "obsidian_cache",
@@ -369,7 +396,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Obsidian 桌面端内嵌 Chromium 的资源副本（限定三个 Cache 子目录）。绝不会动你本地 Vault 里的笔记原文（那些是普通 .md 文件存在你指定的文件夹）。也不会动主题、插件、快捷键、Daily Note 模板。删了下次启动慢一瞬。"
   },
   {
     "id": "obsidian_logs",
@@ -382,7 +410,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Obsidian 桌面端运行日志。不会动 Vault 里的笔记文件、插件、主题、设置、快捷键。仅排查启动崩溃或插件冲突时才需要保留。"
   },
   {
     "id": "typora_cache",
@@ -398,7 +427,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Typora 内嵌 Chromium 给 Markdown 渲染和 GPU 加速存的资源副本（限定 Cache_Data 和 GPUCache 两个子目录）。不会动你的 .md 文件、最近打开列表、主题、设置。删了下次启动慢一瞬。"
   },
   {
     "id": "evernote_logs",
@@ -411,7 +441,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Evernote/印象笔记客户端的运行日志。不会动笔记数据、同步状态、附件、标签、登录态。仅同步失败、客户端反复崩溃时需要保留作为支持证据。"
   },
   {
     "id": "snipaste_logs",
@@ -424,7 +455,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Snipaste 截图工具的日志文件，仅匹配 *.log，不会动 Snipaste 的配置、快捷键、贴图历史。"
   },
   {
     "id": "onedrive_cache",
@@ -437,20 +469,22 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "OneDrive 资源管理器集成生成的图标覆盖（云朵/对号/同步中）和缩略图缓存。绝不会动 OneDrive 同步的实际文件、共享文件夹、个人保管库内容。删了下次资源管理器刷新会重新生成。"
   },
   {
     "id": "google_drive_cache",
     "app_id": "google_drive",
     "detect": ["%LOCALAPPDATA%\\Google\\DriveFS"],
     "category": "app_cache",
-    "name": "Google Drive 缓存",
-    "description": "Google Drive 桌面客户端的缓存文件",
+    "name": "Google Drive 日志",
+    "description": "Google Drive 桌面客户端的日志",
     "targets": [{"base": "%LOCALAPPDATA%\\Google\\DriveFS\\Logs"}],
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Google Drive 桌面客户端的运行日志。绝不会动 Google Drive 同步的文件（在 G: 虚拟盘或本地镜像目录）或登录态。仅排查“卡在登录”“文件不同步”时才需要保留。"
   },
   {
     "id": "powertoys_logs",
@@ -463,7 +497,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "PowerToys 各模块（FancyZones、PowerRename、键盘管理器等）的运行日志，仅匹配 *.log。不会动你的 FancyZones 布局、键位重映射、PowerRename 历史、模块开关。"
   },
   {
     "id": "sharex_logs",
@@ -476,7 +511,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "ShareX 截图工具的运行日志。不会动你的截图文件、上传配置、自定义工作流、热键、快捷动作。"
   },
   {
     "id": "bandizip_temp",
@@ -489,7 +525,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Bandizip 解压压缩包时在系统临时目录的中转文件。Bandizip 关掉后这些文件就是垃圾。不会动你的压缩包、解压目标文件、关联设置。"
   },
   {
     "id": "peazip_temp",
@@ -502,7 +539,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "PeaZip 解压时的中转临时文件。PeaZip 关掉后即过期。不会动你的压缩包、解压目标、PeaZip 设置和书签。"
   },
   {
     "id": "zotero_cache",
@@ -515,7 +553,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Zotero 文献管理的临时缓存（网页爬取中转、PDF 解析临时文件）。绝不会动你的 zotero.sqlite 文献库、PDF 附件、笔记、标签——那些在 %APPDATA%\\Zotero 别处。"
   },
   {
     "id": "clash_verge_logs",
@@ -528,7 +567,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Clash Verge Rev 代理工具的连接和路由日志。不会动你的订阅链接、规则配置、节点列表、TUN 设置。"
   },
   {
     "id": "grammarly_cache",
@@ -544,7 +584,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Grammarly 桌面版的内嵌浏览器缓存和运行日志（限定 Cache_Data 和 Logs 子目录）。不会动你的登录态、个人词典、写作历史、订阅状态。"
   },
   {
     "id": "logseq_cache",
@@ -560,7 +601,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Logseq 内嵌 Chromium 的资源副本（仅 Cache_Data 和 GPUCache 子目录）。绝不会动你本地图谱里的笔记（普通 .md 在你指定的 graph 文件夹）、插件、主题、Daily Journal 模板。删了下次启动慢一瞬。"
   },
   {
     "id": "logseq_logs",
@@ -573,7 +615,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Logseq 运行日志。不会动笔记、图谱、插件、主题。仅在排查同步插件失败或频繁崩溃时需要保留。"
   },
   {
     "id": "anydesk_logs",
@@ -586,7 +629,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "AnyDesk 远程控制的诊断 trace 文件，仅匹配 *.trace。不会动你的 AnyDesk ID、密码设置、连接白名单、最近连接记录、固定密码。"
   },
   {
     "id": "teamviewer_logs",
@@ -599,7 +643,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "TeamViewer 远程控制连接日志，仅匹配 *.log。不会动你的 TeamViewer ID、密码、伙伴列表、固定密码、商业授权状态。"
   },
   {
     "id": "todesk_logs",
@@ -612,7 +657,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "ToDesk 远控的连接日志。不会动你的 ToDesk 设备码、临时密码、安全密码、设备列表、传输历史。"
   },
   {
     "id": "sunlogin_logs",
@@ -625,7 +671,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "向日葵远控的运行日志。不会动你的向日葵识别码、本机密码、设备列表、安全策略、登录态。"
   },
   {
     "id": "picgo_logs",
@@ -638,7 +685,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "PicGo 图床工具的运行日志，仅匹配 *.log。不会动你的图床配置（七牛/腾讯云/GitHub 等密钥）、上传历史、自定义命名规则、相册插件。"
   },
   {
     "id": "clash_for_windows_logs",
@@ -651,7 +699,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Clash for Windows 客户端运行日志。不会动你的订阅链接、节点配置、分流规则、TUN 模式设置。"
   },
   {
     "id": "vbox_logs",
@@ -664,7 +713,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "VirtualBox 主程序的运行日志（不是虚拟机磁盘 .vdi/.vmdk）。绝不会动你的虚拟机本身、虚拟磁盘、快照、配置（在 VirtualBox VMs 别处）。"
   },
   {
     "id": "vmware_logs",
@@ -677,7 +727,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "VMware Workstation 主程序的运行日志（不是虚拟机磁盘 .vmdk）。绝不会动你的虚拟机本体、虚拟磁盘、快照、Networking 配置、共享文件夹设置。"
   },
   {
     "id": "windows_calculator_cache",
@@ -690,7 +741,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 自带计算器（UWP 应用）的临时文件。不会动计算器的历史记录、汇率缓存（用户用户来回切换 USD/CNY 时会自动重拉）、单位换算偏好。"
   },
   {
     "id": "trello_cache",
@@ -706,7 +758,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Trello 桌面端内嵌 Chromium 的资源副本（限定 Cache_Data 和 GPUCache 子目录）。不会动你的看板、列表、卡片、附件、登录态、团队成员、自定义字段。"
   },
   {
     "id": "todoist_cache",
@@ -722,7 +775,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Todoist 桌面端的内嵌浏览器图像/JS 缓存（仅 Cache_Data 和 GPUCache）。不会动你的任务、项目、标签、过滤器、提醒、登录态、付费会员状态。"
   },
   {
     "id": "bitwarden_desktop_cache",
@@ -735,7 +789,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Bitwarden 桌面端内嵌 Chromium 的 V8 字节码缓存。绝不会动你的加密金库、密码、登录态、双因素配置、自动填充设置——那些都在主数据库里，不在 Code Cache。"
   },
   {
     "id": "miro_cache",
@@ -751,7 +806,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Miro 在线白板桌面端内嵌 Chromium 的渲染缓存（限定 Cache_Data 和 GPUCache 子目录）。白板数据本身在云端，不会动你的白板内容、模板、登录态、团队成员、付费会员状态。"
   },
   {
     "id": "xmind_cache",
@@ -764,6 +820,7 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "XMind 思维导图工具的渲染缓存。不会动你的导图文件（.xmind）、模板、主题、最近文件列表。删了下次打开同一文件渲染时慢一瞬。"
   }
 ]

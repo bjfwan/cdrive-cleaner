@@ -15,7 +15,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Chrome 的网页缓存（HTML / JS / CSS / 图片副本），下次访问网页时会自动重新下载。不会影响你的登录状态、书签、历史记录或保存的密码。"
   },
   {
     "id": "json_edge_cache",
@@ -33,7 +34,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Edge 的网页缓存（HTML / JS / CSS / 图片副本），下次访问网页时会自动重新下载。不会影响你的登录状态、收藏夹、历史记录或保存的密码。"
   },
   {
     "id": "json_discord_cache",
@@ -51,7 +53,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Discord 桌面端 Electron 渲染层缓存（图片、CSS、Code Cache 等）。删除不会影响你的 Discord 登录、好友列表、聊天记录或服务器订阅。"
   },
   {
     "id": "json_npm_cache",
@@ -68,7 +71,8 @@
     "risk": "risky",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "npm 下载过的包压缩包副本。默认不勾：删了不会影响已安装的依赖（在 node_modules），但下次 npm install 没命中本地缓存就要重新从 registry 下载，速度慢一些。"
   },
   {
     "id": "json_pip_cache",
@@ -85,7 +89,8 @@
     "risk": "risky",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "pip 下载过的 wheel 安装包副本。默认不勾：删了不会影响已安装的 Python 包，但下次 pip install 没命中本地缓存就要重新从 PyPI 下载。"
   },
   {
     "id": "json_windows_temp",
@@ -100,9 +105,10 @@
       }
     ],
     "risk": "caution",
-    "requires_admin": false,
+    "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 系统服务和安装程序留下的中转文件，正常运行的进程不会回头读这里。删除不影响你的任何已装软件、Windows Update 进度、用户文档或系统配置。"
   },
   {
     "id": "json_vscode_cache",
@@ -120,7 +126,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "VS Code 的网络缓存和扩展资源镜像（Cache / CachedData / CachedExtensions / GPUCache），下次需要时自动重建。不会影响你的设置、已装扩展、最近打开项目或工作区状态。"
   },
   {
     "id": "json_windows_update_download",
@@ -137,7 +144,8 @@
     "risk": "caution",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "已经装完的 Windows 更新留下的安装包副本，更新已经合并进系统，这里的二进制纯属备份。删除不会丢任何已装更新、不会影响后续更新检查。"
   },
   {
     "id": "json_crash_dumps",
@@ -154,7 +162,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "应用崩溃瞬间生成的内存快照 .dmp，主要给开发者抓崩溃栈。这个崩溃如果已经过去就用不上，留着只占几百 MB 到数 GB 空间。"
   },
   {
     "id": "json_nvidia_shader_cache",
@@ -172,6 +181,7 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "NVIDIA DirectX / OpenGL / Compute 着色器编译缓存。删除后游戏 / 渲染程序首次运行时会重新编译着色器（首场景慢 1-3 秒），不会影响驱动、游戏存档或显卡设置。"
   }
 ]

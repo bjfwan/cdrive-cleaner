@@ -176,7 +176,7 @@ onUnmounted(() => {
 }
 
 .toast-success .toast-icon {
-  background: rgba(15, 159, 110, 0.12);
+  background: var(--risk-safe-soft);
 }
 
 .toast-info {
@@ -184,7 +184,7 @@ onUnmounted(() => {
 }
 
 .toast-info .toast-icon {
-  background: rgba(37, 99, 235, 0.12);
+  background: var(--color-accent-wash);
 }
 
 .toast-warning {
@@ -192,7 +192,7 @@ onUnmounted(() => {
 }
 
 .toast-warning .toast-icon {
-  background: rgba(217, 119, 6, 0.12);
+  background: var(--risk-caution-soft);
 }
 
 .toast-error {
@@ -200,7 +200,7 @@ onUnmounted(() => {
 }
 
 .toast-error .toast-icon {
-  background: rgba(220, 38, 38, 0.12);
+  background: var(--risk-risky-soft);
 }
 
 .toast-progress {

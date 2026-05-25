@@ -445,12 +445,12 @@ function dismissResults() {
   border-color: rgba(59, 130, 246, 0.18);
 }
 .segment-delete {
-  background: rgba(245, 158, 11, 0.06);
-  border-color: rgba(245, 158, 11, 0.2);
+  background: var(--risk-caution-soft);
+  border-color: var(--risk-caution-ring);
 }
 .segment-delete.permanent {
-  background: rgba(239, 68, 68, 0.06);
-  border-color: rgba(239, 68, 68, 0.22);
+  background: var(--risk-risky-soft);
+  border-color: var(--risk-risky-ring);
 }
 .segment-icon { font-size: 1.05rem; line-height: 1; }
 .segment-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
@@ -463,12 +463,12 @@ function dismissResults() {
   gap: 0.18rem;
   padding: 0.7rem 0.85rem;
   border-radius: 12px;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: var(--risk-caution-soft);
+  border: 1px solid var(--risk-caution-ring);
 }
 .delete-hint.danger {
-  background: rgba(239, 68, 68, 0.08);
-  border-color: rgba(239, 68, 68, 0.24);
+  background: var(--risk-risky-soft);
+  border-color: var(--risk-risky-ring);
 }
 .delete-hint strong { font-size: 0.86rem; font-weight: 700; color: var(--color-text-primary); }
 .delete-hint span { font-size: 0.76rem; color: var(--color-text-tertiary); }

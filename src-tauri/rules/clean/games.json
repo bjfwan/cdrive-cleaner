@@ -10,7 +10,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "Steam 客户端浏览商店、社区、个人资料时缓存的网页和图片副本，下次打开会自动重新拉取。不会影响你的游戏本体、存档、好友列表、库存和登录状态，只是首次打开商店页可能慢半秒。"
   },
   {
     "id": "steam_logs",
@@ -23,7 +24,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Steam 客户端记录的连接、下载、登录等诊断文本，仅供排查报错使用。删了不影响游戏、库、好友、设置，下次客户端运行会生成新的日志文件。"
   },
   {
     "id": "steam_dumps",
@@ -36,7 +38,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Steam 或游戏崩溃时生成的内存快照文件，只给开发者分析用，对你毫无价值。删了不影响游戏、存档或客户端状态，下次崩溃会重新产生新的 dump。"
   },
   {
     "id": "steam_appcache",
@@ -49,7 +52,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Steam 缓存的库封面图、商店页副本和图标资源，启动客户端时会重新拉取。不会影响你的游戏列表、存档或账号状态，只是首次加载库时图片要重新下载。"
   },
   {
     "id": "steam_depotcache",
@@ -62,7 +66,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Steam 下载游戏时缓存的 depot 清单 (.manifest)，作用是加快校验。删了不影响已安装游戏，只是下次更新游戏时 Steam 会重新拉取清单文件。"
   },
   {
     "id": "steam_shader_cache",
@@ -75,7 +80,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Steam 为游戏预下载的显卡着色器缓存包，删了游戏首次加载场景时会现编译一次 (画面可能短暂卡顿)，之后会自动重建。不影响存档和游戏本体。"
   },
   {
     "id": "steam_download_cache",
@@ -85,10 +91,11 @@
     "name": "Steam 下载临时文件",
     "description": "Steam 下载中断或暂停的临时文件",
     "targets": [{"base": "%PROGRAMFILES(X86)%\\Steam\\steamapps\\downloading"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "Steam 正在下载但未完成的游戏分片。如果你当前没有下载任务，留着也是占空间；如果有游戏正在下/暂停中，删了要从头重下。点之前先确认 Steam 下载列表里没有进行中的任务。"
   },
   {
     "id": "steam_music_database",
@@ -101,7 +108,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Steam 自带的游戏 OST 音乐播放器扫描音轨后建立的索引数据库，几乎没人用。删了游戏原声碟需要重新扫描一次，不影响任何游戏、存档或库。"
   },
   {
     "id": "epic_webcache",
@@ -114,7 +122,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "Epic Games 启动器内嵌浏览器存的商店页、封面图、新闻缓存，下次打开会重新下载。不会影响你的游戏、云存档、登录状态和游戏库。"
   },
   {
     "id": "epic_logs",
@@ -127,7 +136,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Epic 启动器记录的诊断日志文本，仅在向客服反馈问题时有用。删了不影响游戏、登录、云存档和库，下次启动器运行会生成新日志。"
   },
   {
     "id": "epic_crashes",
@@ -140,7 +150,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Epic 启动器崩溃时生成的内存转储，仅供 Epic 开发者排查用。删了不影响游戏、库和云存档，下次崩溃会重新生成。"
   },
   {
     "id": "ea_app_cache",
@@ -156,7 +167,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "EA App 客户端内嵌网页缓存和 Qt 引擎缓存，下次打开商店时会重新拉。不影响你的游戏、Origin 云存档、登录状态和游戏库。"
   },
   {
     "id": "ea_app_logs",
@@ -169,7 +181,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "EA App 记录的下载、登录、错误等诊断日志。删了不影响游戏、存档和登录状态，仅在排查故障时有用，下次启动会重新写。"
   },
   {
     "id": "battlenet_cache",
@@ -182,7 +195,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "暴雪战网客户端浏览商店、新闻时的网页缓存。不影响你的暴雪账号、游戏库 (魔兽、暗黑、星际、守望) 和角色数据，下次打开商店页会重新加载。"
   },
   {
     "id": "battlenet_logs",
@@ -195,7 +209,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "战网启动器的运行和安装日志文本，仅给暴雪客服排查问题用。删了不影响账号、游戏本体和角色数据，下次启动会生成新日志。"
   },
   {
     "id": "battlenet_telemetry",
@@ -208,7 +223,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "战网上传给暴雪的匿名使用统计数据队列，对你没任何用。删了不影响登录、游戏和账号，下次客户端运行会按需重新收集。"
   },
   {
     "id": "gog_logs",
@@ -221,7 +237,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "GOG Galaxy 启动器的运行日志文本。删了不影响你的 GOG 账号、已购游戏库和云存档，下次客户端运行会生成新日志。"
   },
   {
     "id": "gog_webcache",
@@ -234,7 +251,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "GOG Galaxy 客户端浏览商店和论坛时的网页缓存，下次打开会自动重新拉取。不影响你的账号、库、安装的游戏和云存档。"
   },
   {
     "id": "riot_client_crashes",
@@ -247,7 +265,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Riot 启动器 (英雄联盟、瓦罗兰特通用) 崩溃时生成的转储文件，仅供拳头官方排查。删了不影响游戏、账号、皮肤和段位。"
   },
   {
     "id": "riot_client_logs",
@@ -260,7 +279,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Riot 启动器记录的连接、补丁、登录诊断日志。删了不影响你的拳头账号、英雄联盟/Valorant 游戏本体和云端数据，下次启动会重写。"
   },
   {
     "id": "ubisoft_logs",
@@ -273,7 +293,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "育碧启动器 (Uplay) 的运行日志。删了不影响你的育碧账号、游戏库、云存档和成就，仅在客服排查时有用，下次运行会生成新日志。"
   },
   {
     "id": "ubisoft_cache",
@@ -286,7 +307,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "育碧启动器内嵌网页和封面图缓存。下次打开商店和库页面会自动重新下载。不影响你的账号登录、游戏本体和云存档。"
   },
   {
     "id": "xbox_app_cache",
@@ -303,7 +325,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Xbox 应用 (UWP) 的网络缓存和临时状态，不含游戏存档 (存档在 LocalCache 不在这里)。下次打开应用会重新加载封面和好友列表，账号和 Game Pass 库不受影响。"
   },
   {
     "id": "nvidia_geforce_cef_cache",
@@ -316,7 +339,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "GeForce Experience 内嵌的 Chromium 浏览器缓存，存的是新闻、游戏封面图。下次打开 GFE 会重新拉取。不影响你的驱动、游戏优化配置和录制设置。"
   },
   {
     "id": "nvidia_geforce_logs",
@@ -329,7 +353,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "GeForce Experience 运行时记录的诊断日志。删了不影响驱动、游戏优化配置、ShadowPlay 录制功能，下次 GFE 运行会重新写。"
   },
   {
     "id": "nvidia_dx_cache",
@@ -342,7 +367,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "N 卡驱动为 DirectX 游戏编译过的着色器缓存，游戏画面卡顿或更新驱动后经常需要清。删了下次进游戏会重新编译 (前 1-2 分钟可能略卡)，不影响存档和设置。"
   },
   {
     "id": "nvidia_gl_cache",
@@ -355,7 +381,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "N 卡驱动为 OpenGL 游戏 (我的世界、绝大多数模拟器) 编译过的着色器缓存。删了下次启动游戏会重新编译，不影响存档、画质设置和驱动配置。"
   },
   {
     "id": "nvidia_compute_cache",
@@ -368,7 +395,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "N 卡 CUDA 计算 (深度学习、视频转码、Blender 渲染) 用的内核缓存，下次跑 CUDA 程序会自动重建。不影响游戏、驱动和已渲染的成果文件。"
   },
   {
     "id": "d3d_shader_cache",
@@ -381,7 +409,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Windows 系统级 DirectX 12 着色器缓存，所有 D3D 游戏共用。删了下次启动游戏会重新编译着色器 (前几分钟可能略卡)，不影响存档和游戏本体。"
   },
   {
     "id": "amd_dx_cache",
@@ -394,7 +423,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "A 卡驱动为 DirectX 游戏编译的着色器缓存，损坏后会导致游戏闪退所以经常需要清。删了下次进游戏会重新编译，不影响存档和设置。"
   },
   {
     "id": "amd_gl_cache",
@@ -407,7 +437,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "A 卡驱动为 OpenGL 游戏 (我的世界、模拟器) 编译的着色器缓存。删了下次启动游戏会自动重建，不影响存档、画质设置和驱动配置。"
   },
   {
     "id": "amd_vk_cache",
@@ -420,7 +451,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "A 卡为 Vulkan 游戏 (DOOM、荒野大镖客 2、坦克世界等) 编译的管线缓存。删了下次进游戏会现编译，画面短暂卡顿后正常，不影响存档。"
   },
   {
     "id": "amazon_games_logs",
@@ -433,7 +465,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "亚马逊游戏 (Prime Gaming) 启动器的运行日志。删了不影响你的亚马逊账号、领取的免费游戏和存档，下次启动器运行会生成新日志。"
   },
   {
     "id": "amazon_games_dumps",
@@ -446,7 +479,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "亚马逊游戏客户端崩溃时生成的内存转储，仅供官方排查用。删了不影响游戏库、登录状态和已安装游戏。"
   },
   {
     "id": "amazon_games_electron_cache",
@@ -462,7 +496,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "Prime Gaming 启动器的 Electron 内嵌浏览器缓存和 GPU 缓存。下次启动会重新加载商店页和封面图，不影响账号、游戏库和云存档。"
   },
   {
     "id": "nvidia_gfe_downloader",
@@ -472,10 +507,11 @@
     "name": "GeForce Experience 下载缓存",
     "description": "NVIDIA GeForce Experience 下载的驱动安装包缓存",
     "targets": [{"base": "%PROGRAMDATA%\\NVIDIA Corporation\\Downloader"}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": true,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "default_selected": false,
+    "clean_subdirs_only": true,
+    "why_safe": "GFE 下载到本地的 N 卡驱动安装包，已安装后就没用了，但如果你想回滚驱动或重装就要重新下 (几百 MB)。删了不影响当前驱动和游戏。若担心回滚或网慢，先取消勾选。"
   },
   {
     "id": "steam_workshop_temp",
@@ -488,7 +524,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Steam 创意工坊订阅模组时的下载临时分片，下载完成后理应自动清理。删的只是 temp 目录里的残留，不会动你已订阅安装好的模组本体 (那些在 workshop\\content 下)。"
   },
   {
     "id": "steam_compat_cache",
@@ -504,7 +541,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Steam 内嵌 Chromium 浏览器的 JavaScript 编译缓存和 GPU 缓存。下次打开商店页会重新编译，仅前几秒可能慢一点，不影响游戏库、好友和账号。"
   },
   {
     "id": "epic_gpu_cache",
@@ -517,7 +555,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "Epic 启动器界面渲染用的 GPU 着色器缓存，与游戏本身的着色器无关。删了下次启动器开启会重新生成几十 MB，不影响游戏、库和登录。"
   },
   {
     "id": "epic_vault_cache",
@@ -530,7 +569,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Epic 虚幻商城已下载到本地的素材资产 (UE 项目、贴图、模型) 缓存，可能几十 GB。删了如果你还在虚幻引擎用这些资产要重新下载，下载量大且慢。仅在确认不用这些素材时再勾。"
   },
   {
     "id": "battlenet_setup_logs",
@@ -543,7 +583,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "战网安装暴雪游戏时记录的安装过程日志。删了不影响已安装的暴雪游戏 (魔兽、暗黑、守望) 和你的账号，下次装游戏时会生成新的日志。"
   },
   {
     "id": "gog_temp",
@@ -556,7 +597,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "GOG Galaxy 安装游戏时的解包临时文件，正常情况下安装完会自动清，残留是异常退出留下的。不影响你已安装的游戏、GOG 账号和云存档。"
   },
   {
     "id": "riot_valorant_logs",
@@ -569,7 +611,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "瓦罗兰特 (无畏契约) 游戏的运行诊断日志。删了不影响段位、皮肤、按键设置和账号，仅在向拳头反馈崩溃时有用，下次进游戏会重写。"
   },
   {
     "id": "riot_lol_logs",
@@ -582,7 +625,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "英雄联盟客户端和游戏的运行日志。删了不影响你的段位、英雄、皮肤、符文配置和键位，仅在向拳头反馈卡顿时才有诊断价值。"
   },
   {
     "id": "unreal_engine_derived_data",
@@ -595,7 +639,8 @@
     "risk": "caution",
     "requires_admin": false,
     "default_selected": false,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "虚幻引擎 (UE4/UE5) 项目的派生数据缓存 (烘焙的贴图、Shader、网格)，能省下大量后续编译时间。删了你打开 UE 项目时要重新烘焙资产，几十分钟起步。如果你正在做 UE 开发，先取消勾选。"
   },
   {
     "id": "unreal_engine_logs",
@@ -608,7 +653,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "虚幻引擎编辑器和打包工具的运行日志文本 (*.log)。不影响项目文件、蓝图、关卡和工程配置，仅是排查报错的诊断信息，下次开 UE 会重新写。"
   },
   {
     "id": "unity_cache",
@@ -621,7 +668,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Unity 编辑器的 Package Cache 和 Shader Cache，存的是已下载的包和编译过的着色器副本。删了下次打开 Unity 项目会重新拉取包并编译，不影响项目本体、脚本和资产。"
   },
   {
     "id": "unity_logs",
@@ -634,7 +682,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "why_safe": "Unity 编辑器最近两次的运行日志 (Editor.log 与上次的备份)。删了不影响 Unity 项目、脚本、资产和编辑器设置，下次开编辑器会重新写一个新的。"
   },
   {
     "id": "xbox_gaming_services_cache",
@@ -650,7 +699,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Xbox Game Pass 服务组件的临时缓存 (不是游戏存档，存档在 LocalCache 不在这里)。删了不影响已安装的 Game Pass 游戏、订阅状态和云存档。"
   },
   {
     "id": "playnite_cache",
@@ -663,7 +713,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Playnite 第三方游戏整合启动器缓存的封面图、视频和元数据。下次扫描游戏库会重新下载，不影响你的游戏库配置、分类和自定义元数据。"
   },
   {
     "id": "steam_crashpad",
@@ -676,7 +727,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "Steam 内嵌 Chromium 引擎崩溃时上报给 V 社的报告，对你毫无用处。删了不影响游戏、库、好友和登录状态，下次 Steam 浏览器崩溃时会重新生成。"
   },
   {
     "id": "origin_cache",
@@ -689,7 +741,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "EA Origin 老版客户端 (现已被 EA App 替代) 的网页和图片缓存。下次启动会重新拉取，不影响你的 EA 账号、游戏库和云存档。"
   },
   {
     "id": "origin_logs",
@@ -702,7 +755,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "EA Origin 老客户端的运行日志，主要给客服排查问题用。删了不影响 EA 账号、游戏库 (战地、模拟人生、FIFA)、云存档和好友列表。"
   },
   {
     "id": "overwolf_logs",
@@ -715,7 +769,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Overwolf 游戏内插件平台 (LOL 助手、CS2 插件等基于它) 的运行日志。删了不影响你装的插件、账号和插件数据，下次启动会重新写。"
   },
   {
     "id": "overwolf_cache",
@@ -728,7 +783,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Overwolf 平台内嵌浏览器缓存。下次打开会重新加载页面，不影响你装的 Overwolf 插件 (符文助手、复盘工具)、账号和插件保存的数据。"
   },
   {
     "id": "curseforge_cache",
@@ -744,7 +800,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "CurseForge 客户端 (我的世界、魔兽世界模组管理器) 的 Electron 网页和 GPU 缓存。删了不影响你已下载的整合包、模组、模组配置和实例。下次打开 CurseForge 重新加载界面。"
   },
   {
     "id": "retroarch_logs",
@@ -757,7 +814,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "RetroArch 全能模拟器的运行日志。删了不影响你的 ROM、存档、即时存档、模拟器核心和按键映射，仅在排查模拟器报错时有用。"
   },
   {
     "id": "minecraft_logs",
@@ -770,7 +828,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "我的世界 Java 版每次运行的日志文本。删了不影响你的存档 (saves)、模组 (mods)、材质包、光影、皮肤和游戏设置，仅在排查模组崩溃时有用。"
   },
   {
     "id": "minecraft_crash_reports",
@@ -783,7 +842,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "我的世界崩溃时生成的报告文本，仅供给模组作者排查冲突。删了不影响存档、模组、材质包和游戏配置，下次崩溃会重新生成。"
   },
   {
     "id": "genshin_logs",
@@ -796,7 +856,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 2,
+    "why_safe": "原神客户端的 Unity 引擎运行日志 (output_log*.txt)。删了不影响你的米游社账号、角色、抽卡记录和游戏存档 (这些都在云端)，下次进游戏会重新写。"
   },
   {
     "id": "apex_logs",
@@ -809,7 +871,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 2,
+    "why_safe": "Apex 英雄的崩溃转储 (*.dmp) 和日志 (*.log)，模式限定文件后缀，不会动同目录下的视频设置、键位配置等存档文件。下次崩溃会重新生成。"
   },
   {
     "id": "rockstar_launcher_logs",
@@ -822,7 +886,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 2,
+    "why_safe": "Rockstar 启动器 (GTA、荒野大镖客启动器) 的运行日志文件，模式限定 *.log。不影响 Rockstar 账号、游戏库、社交俱乐部和云存档。"
   },
   {
     "id": "fortnite_logs",
@@ -835,7 +901,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "堡垒之夜游戏的运行日志。删了不影响段位、皮肤、键位、画质设置和 Epic 账号关联 (这些数据在云端或单独的 Config 目录)。"
   },
   {
     "id": "fortnite_crashes",
@@ -848,7 +915,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "堡垒之夜崩溃时生成的转储文件，仅给 Epic 工程师排查崩溃用。删了不影响游戏、段位、外观和账号。"
   },
   {
     "id": "warzone_logs",
@@ -861,7 +929,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 3,
+    "why_safe": "使命召唤/战区的运行日志文件，模式限定 *.log。不影响动视账号、战网/Steam 关联、皮肤、武器配置和战绩 (这些在云端)。"
   },
   {
     "id": "csgo_logs",
@@ -871,13 +941,15 @@
     "name": "CS2 日志",
     "description": "Counter-Strike 2 游戏的运行日志",
     "targets": [{"base": "%PROGRAMFILES(X86)%\\Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\csgo", "patterns": ["*.log"]}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": false
+    "default_selected": false,
+    "clean_subdirs_only": false,
+    "max_depth": 2,
+    "why_safe": "CS2 游戏目录里的日志文件。路径在 Steam 游戏本体目录内，模式限定 *.log 不会删游戏文件，但如果你装了基于 *.log 配置的脚本、demo 工具，可能误删。不确定就不勾。"
   },
   {
-    "id": "lutris_cache",
+    "id": "itch_cache",
     "app_id": "itch",
     "detect": ["%APPDATA%\\itch"],
     "category": "app_cache",
@@ -890,7 +962,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": true,
+    "why_safe": "itch.io 独立游戏商店客户端的 Electron 网页和 GPU 缓存。下次打开商店会重新加载界面，不影响你已购游戏、下载的独立游戏本体和登录状态。"
   },
   {
     "id": "itch_logs",
@@ -903,7 +976,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "itch.io 客户端的运行日志。删了不影响你的 itch 账号、已购游戏库、已下载的独立游戏和云存档关联。"
   },
   {
     "id": "wargaming_logs",
@@ -916,7 +990,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Wargaming 启动器 (坦克世界、战舰世界、战机世界) 的运行日志。删了不影响 WG 账号、车库/船坞内容、金币和高级账号状态。"
   },
   {
     "id": "nvidia_gfe_screenshots_thumbs",
@@ -929,7 +1004,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "ShadowPlay 录制画廊里截图、视频片段的缩略图缓存 (不是录制的视频本体)。删了视频和图片仍在你设置的录像保存目录里，画廊下次打开会重新生成缩略图。"
   },
   {
     "id": "xbox_gamebar_cache",
@@ -945,7 +1021,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Win+G 唤出的 Xbox 游戏栏的临时缓存。删了不影响游戏栏的录像功能、Xbox 账号绑定和已录制的视频 (录像存在视频库不在这里)。"
   },
   {
     "id": "roblox_logs",
@@ -958,7 +1035,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Roblox 客户端的运行日志,可能积累几百 MB。删了不影响 Roblox 账号、Robux 余额、已玩的游戏列表和角色装扮 (这些全在云端)。"
   },
   {
     "id": "roblox_http_cache",
@@ -971,7 +1049,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Roblox 客户端的 HTTP 请求缓存和临时下载文件 (在系统 Temp 下)。下次玩游戏会重新拉取资源，不影响账号、Robux 和游戏存档 (云端)。"
   },
   {
     "id": "ea_anticheat_logs",
@@ -984,7 +1063,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "EA 反作弊 (战地 2042、FIFA 反作弊) 的运行日志文本。删了不影响反作弊服务、EA 游戏的反作弊状态，下次进游戏会重新写日志。"
   },
   {
     "id": "intel_arc_shader_cache",
@@ -997,7 +1077,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Intel Arc 显卡或核显驱动的着色器编译缓存。删了下次进游戏会重新编译 (首场景可能卡一下)，不影响驱动、游戏本体和画质设置。"
   },
   {
     "id": "dota2_logs",
@@ -1007,10 +1088,12 @@
     "name": "Dota 2 日志",
     "description": "Dota 2 游戏的运行日志",
     "targets": [{"base": "%PROGRAMFILES(X86)%\\Steam\\steamapps\\common\\dota 2 beta\\game\\dota", "patterns": ["*.log", "*.txt"]}],
-    "risk": "safe",
+    "risk": "caution",
     "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": false
+    "default_selected": false,
+    "clean_subdirs_only": false,
+    "max_depth": 2,
+    "why_safe": "Dota 2 游戏目录内的日志和文本文件。路径位于 Steam 游戏本体内，*.txt 模式范围偏宽 (可能误删玩家手写的自定义聊天宏、HUD 配置 txt)。不确定就不勾。"
   },
   {
     "id": "overwatch_logs",
@@ -1023,7 +1106,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "守望先锋 2 的运行日志。删了不影响战网账号、英雄、皮肤、键位和段位 (这些数据在云端和单独的 Config 目录)。"
   },
   {
     "id": "easyanticheat_logs",
@@ -1036,7 +1120,9 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 2,
+    "why_safe": "EAC 反作弊系统 (绝地求生、Apex、永劫无间用) 的运行日志文本。模式限定 *.log 不会动驱动文件。下次启动游戏会重新生成。"
   },
   {
     "id": "battleye_logs",
@@ -1049,7 +1135,9 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 2,
+    "why_safe": "BattlEye 反作弊 (彩虹六号、PUBG、DayZ 用) 的运行日志。模式限定 *.log 不会动驱动或可执行文件，下次进游戏 BattlEye 启动时会重新写。"
   },
   {
     "id": "gta5_logs",
@@ -1062,20 +1150,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
-  },
-  {
-    "id": "steam_compatdata",
-    "app_id": "steam",
-    "detect": ["%PROGRAMFILES(X86)%\\Steam"],
-    "category": "app_cache",
-    "name": "Steam 兼容性数据缓存",
-    "description": "Steam 兼容性工具的运行时缓存",
-    "targets": [{"base": "%PROGRAMFILES(X86)%\\Steam\\steamapps\\shadercache"}],
-    "risk": "safe",
-    "requires_admin": false,
-    "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": false,
+    "max_depth": 2,
+    "why_safe": "GTA V 的运行日志文件 (*.log)。注意：GTA V 存档在 Documents 不在这里，所以不会动你的故事模式存档和线上角色 (线上存云端)。下次进游戏重新写。"
   },
   {
     "id": "epic_eos_logs",
@@ -1088,7 +1165,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Epic 在线服务 (EOS) SDK 的运行日志，被堡垒之夜、火箭联盟、Rocket League 等游戏使用。删了不影响 Epic 账号、好友列表、跨平台进度和已安装游戏。"
   },
   {
     "id": "steam_overlay_cache",
@@ -1101,7 +1179,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "Steam 游戏内 Shift+Tab 覆盖层 (好友、浏览器、商店) 的临时数据存储。下次打开覆盖层会重新加载内容，不影响游戏、好友列表和聊天记录。"
   },
   {
     "id": "warthunder_logs",
@@ -1114,7 +1193,9 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 2,
+    "why_safe": "战争雷霆 (War Thunder) 的运行日志 (*.log)。删了不影响 Gaijin 账号、机库/车库、研发进度和金鹰 (这些在云端)。"
   },
   {
     "id": "path_of_exile_logs",
@@ -1127,7 +1208,8 @@
     "risk": "safe",
     "requires_admin": false,
     "default_selected": true,
-    "clean_subdirs_only": true
+    "clean_subdirs_only": true,
+    "why_safe": "流放之路的运行日志，目标是 logs 子目录 (不是同级的 settings 配置)。删了不影响你的角色、藏品栏、联赛进度和键位设置 (角色和库存在 GGG 服务器)。"
   },
   {
     "id": "nvidia_optimus_logs",
@@ -1140,6 +1222,8 @@
     "risk": "safe",
     "requires_admin": true,
     "default_selected": true,
-    "clean_subdirs_only": false
+    "clean_subdirs_only": false,
+    "max_depth": 2,
+    "why_safe": "N 卡驱动 DRS (游戏配置文件数据库) 服务的运行日志。模式限定 *.log 不会动 .bin 数据库文件，不影响游戏的驱动级优化配置和 NVIDIA 控制面板里的设置。"
   }
 ]

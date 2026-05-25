@@ -6,6 +6,8 @@ import { formatBytes } from '../utils/format';
 import { useToast } from '../composables/useToast';
 import { IconSpinner, IconRefresh, IconDisk, IconSpeed, IconHistory, IconRollback, IconMigrate, IconDelete, IconShield } from './icons';
 import ConfirmDialog from './ConfirmDialog.vue';
+import FeatureIntro from './FeatureIntro.vue';
+import { stateCopy } from '../utils/state-copy';
 
 interface Props {
   opportunities: ReclaimOpportunity[];
@@ -127,13 +129,21 @@ async function doExecute(opportunity: ReclaimOpportunity) {
     </header>
 
     <div class="reclaim-body">
+      <FeatureIntro
+        storage-key="system-reclaim"
+        what="盘点系统级别可以回收的空间：影子副本、休眠文件、Windows.old、Update 残留这些占大头但平时看不到的。"
+        when="磁盘还差几个 GB 才够装某个软件，或者刚做完大版本升级想清理旧系统。"
+        outcome="多数项目释放后无法还原（删除影子副本、休眠文件等系统状态都是一次性的）。"
+        reversibility="irreversible"
+        reversibility-note="不可逆操作会在执行前再弹一次红色确认框"
+      />
       <div v-if="loading" class="reclaim-loading">
         <div class="reclaim-spinner"></div>
-        <span>检测可回收空间…</span>
+        <span>{{ stateCopy.systemReclaim.loading.title }}</span>
       </div>
 
       <div v-else-if="opportunities.length === 0" class="reclaim-empty">
-        <span>暂未检测到可回收空间</span>
+        <span>{{ stateCopy.systemReclaim.empty.title }}</span>
       </div>
 
       <div v-else class="reclaim-list">
@@ -185,7 +195,7 @@ async function doExecute(opportunity: ReclaimOpportunity) {
               @click="executeReclaim(op)"
             >
               <span v-if="op.requires_admin && !isElevated">需管理员</span>
-              <span v-else>执行</span>
+              <span v-else>回收 {{ formatBytes(op.reclaimable_size) }}</span>
             </button>
           </div>
         </div>
@@ -194,11 +204,12 @@ async function doExecute(opportunity: ReclaimOpportunity) {
 
     <ConfirmDialog
       :show="!!confirmTarget"
-      :title="confirmTarget?.risk_level === 'irreversible' ? '此操作不可逆' : '确认执行？'"
-      :message="`即将执行「${confirmTarget?.label ?? ''}」，将回收约 ${formatBytes(confirmTarget?.reclaimable_size ?? 0)}。${confirmTarget?.risk_level === 'irreversible' ? '此操作无法撤回，请确认。' : '请确认操作。'}`"
-      :confirm-text="confirmTarget?.risk_level === 'irreversible' ? '我确认执行' : '确认'"
-      cancel-text="取消"
+      :title="confirmTarget?.risk_level === 'irreversible' ? `不可还原：回收 ${formatBytes(confirmTarget?.reclaimable_size ?? 0)}？` : `回收 ${formatBytes(confirmTarget?.reclaimable_size ?? 0)}？`"
+      :message="`将执行「${confirmTarget?.label ?? ''}」释放约 ${formatBytes(confirmTarget?.reclaimable_size ?? 0)}。${confirmTarget?.risk_level === 'irreversible' ? '系统状态会被改写，无法再还原回当前的快照/休眠/恢复点等。' : '执行后可在「迁移历史」里看到记录。'}`"
+      :confirm-text="confirmTarget?.risk_level === 'irreversible' ? '我确认无法还原' : '立即回收'"
+      cancel-text="再想想"
       :type="confirmType"
+      :high-risk="confirmTarget?.risk_level === 'irreversible'"
       @confirm="confirmAndExecute"
       @cancel="confirmTarget = null"
     />
@@ -314,13 +325,13 @@ async function doExecute(opportunity: ReclaimOpportunity) {
 }
 
 .reclaim-card.success {
-  border-color: rgba(15, 159, 110, 0.2);
-  background: rgba(15, 159, 110, 0.04);
+  border-color: var(--risk-safe-ring);
+  background: var(--risk-safe-soft);
 }
 
 .reclaim-card.failed {
-  border-color: rgba(220, 38, 38, 0.15);
-  background: rgba(220, 38, 38, 0.03);
+  border-color: var(--risk-risky-ring);
+  background: var(--risk-risky-soft);
 }
 
 .reclaim-card-left {
@@ -374,28 +385,28 @@ async function doExecute(opportunity: ReclaimOpportunity) {
   border-radius: 999px;
   font-size: 0.64rem;
   font-weight: 700;
-  background: rgba(107, 114, 128, 0.1);
-  color: #4b5563;
+  background: var(--risk-blocked-soft);
+  color: var(--risk-blocked-text);
 }
 
 .reclaim-tag.admin {
-  background: rgba(37, 99, 235, 0.1);
-  color: #1d4ed8;
+  background: var(--color-accent-wash);
+  color: var(--color-info);
 }
 
 .reclaim-tag.reboot {
-  background: rgba(217, 119, 6, 0.1);
-  color: #b45309;
+  background: var(--risk-caution-soft);
+  color: var(--risk-caution-text);
 }
 
 .reclaim-tag.danger {
-  background: rgba(220, 38, 38, 0.1);
-  color: #b91c1c;
+  background: var(--risk-risky-soft);
+  color: var(--risk-risky-text);
 }
 
 .reclaim-tag.caution {
-  background: rgba(217, 119, 6, 0.1);
-  color: #b45309;
+  background: var(--risk-caution-soft);
+  color: var(--risk-caution-text);
 }
 
 .reclaim-card-right {

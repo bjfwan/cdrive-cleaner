@@ -8,6 +8,8 @@ import { useToast } from '../composables/useToast';
 import { fetchGameLibraries, getCachedGameLibraries } from '../composables/useGameDetection';
 import VirtualList from './VirtualList.vue';
 import { IconScanEmpty } from './icons';
+import FeatureIntro from './FeatureIntro.vue';
+import { stateCopy } from '../utils/state-copy';
 
 interface Props {
   availableDisks: DiskInfo[];
@@ -203,6 +205,14 @@ defineExpose({ reload: load });
 
 <template>
   <div class="games-view">
+    <FeatureIntro
+      storage-key="games"
+      what="把 Steam / Epic / Game Pass 安装的游戏整库搬到其他盘，启动器照旧能找到。"
+      when="C 盘没几个 GB 了，但还想再装一个游戏；或者新加了一块大硬盘想把游戏挪过去。"
+      outcome="Steam / Epic 直接通过 junction 链接迁移，启动照旧；Game Pass 部分游戏需要在系统设置里搬。"
+      reversibility="reversible"
+      reversibility-note="迁移历史可以一键还原"
+    />
     <header class="games-head">
       <div class="games-title">
         <span class="kicker">游戏库</span>
@@ -232,13 +242,13 @@ defineExpose({ reload: load });
 
     <section v-if="loading" class="placeholder">
       <div class="spinner"></div>
-      <p>正在扫描三家平台…</p>
+      <p>{{ stateCopy.games.loading.title }}</p>
     </section>
 
     <section v-else-if="!activeLibrary?.installed" class="placeholder">
       <div class="placeholder-icon"><IconScanEmpty :size="28" /></div>
       <h3>未检测到 {{ platformLabel(activePlatform) }}</h3>
-      <p>如果确实安装了，请确保启动器至少完成过一次登录，然后点上面的“重新检测”。</p>
+      <p>{{ stateCopy.games.empty.description }}</p>
     </section>
 
     <section v-else class="library-body">

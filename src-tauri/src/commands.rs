@@ -1749,6 +1749,26 @@ pub async fn clean_junk_files(
 }
 
 #[tauri::command]
+pub async fn junk_dry_run(
+    items: Vec<crate::junk::preflight::DryRunInput>,
+) -> Result<crate::junk::preflight::DryRunReport, String> {
+    tokio::task::spawn_blocking(move || crate::junk::preflight::run_dry_run(items))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn junk_report_feedback(
+    feedback: crate::junk::feedback::JunkFeedback,
+) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || crate::junk::feedback::append_feedback(feedback))
+        .await
+        .map_err(|e| e.to_string())?
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn get_reclaim_opportunities() -> Result<Vec<crate::system_reclaim::ReclaimOpportunity>, String> {
     crate::system_reclaim::get_reclaim_opportunities()
         .await

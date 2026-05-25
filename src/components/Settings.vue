@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import ConfirmDialog from './ConfirmDialog.vue';
-import { IconClose, IconRefresh, IconLink, IconInfo, IconWarning } from './icons';
+import { IconClose, IconRefresh, IconLink, IconInfo, IconWarning, IconShield } from './icons';
 import appIcon from '../assets/app-icon.png';
 import type { DiskInfo, CacheEntry, CacheInfo, AppSettings } from '../types';
 import { formatBytes, formatDate } from '../utils/format';
-import { getSettings, saveSettings as persistSettings } from '../utils/settings';
+import { getSettings, saveSettings as persistSettings, syncTrackASettingsToBackend } from '../utils/settings';
 import { useToast } from '../composables/useToast';
 import DiskSelect from './DiskSelect.vue';
+import { aiStore, BUILTIN_MODELS, CURRENT_CONSENT_VERSION, type AiSnapshot } from '../store/ai';
 
 const showToast = useToast();
 
@@ -63,6 +64,8 @@ const emit = defineEmits<{
   'restart-onboarding': [];
   'show-about': [];
   'check-update': [];
+  'show-privacy': [];
+  'show-ai-suggestions': [];
 }>();
 
 const settings = ref<AppSettings>({
@@ -82,13 +85,59 @@ const isElevated = ref(false);
 const isCheckingElevation = ref(true);
 const cacheInfo = ref<CacheInfo | null>(null);
 const loadingCache = ref(false);
-const activeTab = ref<'general' | 'cache'>('general');
+type SettingsTab = 'basic' | 'scan' | 'clean' | 'privacy' | 'ai' | 'cache' | 'about';
+const activeTab = ref<SettingsTab>('basic');
+
+const settingsGroups: Array<{ key: SettingsTab; label: string; lead: string }> = [
+  { key: 'basic', label: '基本', lead: '主题、关闭行为、自动更新这些"用一次设一次"的偏好。' },
+  { key: 'scan', label: '扫描', lead: '后台扫描的触发条件，跳过路径会在 v0.2 加入。' },
+  { key: 'clean', label: '清理', lead: '默认目标盘、删除模式、迁移时是否留链接。' },
+  { key: 'privacy', label: '隐私与权限', lead: '管理员模式、本地日志、谁能看到你的数据。' },
+  { key: 'ai', label: 'AI 服务', lead: '默认全部关闭。要勾选才会发数据，发什么都能预览。' },
+  { key: 'cache', label: '缓存', lead: '扫描结果数据库。删除后下次扫描会重建。' },
+  { key: 'about', label: '关于', lead: '版本、引导、诊断包。' },
+];
 const exportingDiagnostics = ref(false);
+
+const ai = aiStore.state;
+const showConsentModal = ref(false);
+const consentAgreed = ref(false);
+const showPreviewModal = ref(false);
+const previewSnapshot = ref<AiSnapshot | null>(null);
+const previewLoading = ref(false);
+const aiBuiltinModels = BUILTIN_MODELS;
+
+const aiCategoryItems = [
+  { key: 'disks', label: '磁盘容量与剩余空间', detail: '每个盘符的容量与可用空间（MB）' },
+  { key: 'largeFiles', label: '大文件列表（已脱敏）', detail: '仅大小、扩展名以及脱敏 token' },
+  { key: 'categories', label: '文件类别统计', detail: '按类别聚合的总大小与数量' },
+  { key: 'duplicates', label: '重复文件', detail: '重复组的总大小与数量' },
+] as const;
+
+const allCategoriesOn = computed(() =>
+  ai.settings.categories.disks
+  && ai.settings.categories.largeFiles
+  && ai.settings.categories.categories
+  && ai.settings.categories.duplicates,
+);
+
+const byokValid = computed(() =>
+  ai.settings.byok.baseUrl.trim().length > 0
+  && ai.settings.byok.apiKey.trim().length > 0
+  && ai.settings.byok.model.trim().length > 0,
+);
+
+const aiHasConsent = computed(() => ai.settings.consentVersion >= CURRENT_CONSENT_VERSION);
+
+const previewSnapshotJson = computed(() =>
+  previewSnapshot.value ? JSON.stringify(previewSnapshot.value, null, 2) : '',
+);
 
 onMounted(() => {
   loadSettings();
   checkElevation();
   loadCacheInfo();
+  void aiStore.pullFromBackend();
 });
 
 watch(
@@ -101,6 +150,7 @@ watch(
     loadSettings();
     checkElevation();
     loadCacheInfo();
+    void aiStore.pullFromBackend();
   },
 );
 
@@ -130,6 +180,8 @@ function saveSettings() {
   // accidentally reset it (normalizeSettings used to default missing theme to 'light').
   persistSettings({ ...settings.value, theme: themeMode.value });
   settings.value = getSettings();
+  // Track A：把后台扫描/托盘字段同步到 Rust 端的 settings.json
+  void syncTrackASettingsToBackend(settings.value);
   emit('save', settings.value);
   emit('close');
 }
@@ -238,6 +290,118 @@ function onDeleteModeToggle(event: Event) {
   settings.value.defaultDeleteMode = target.checked ? 'permanent' : 'recycle';
 }
 
+async function onAiEnableToggle(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const wantsEnable = target.checked;
+
+  if (wantsEnable && !aiHasConsent.value) {
+    // Block the flip until the user accepts the privacy policy.
+    target.checked = false;
+    consentAgreed.value = false;
+    showConsentModal.value = true;
+    return;
+  }
+
+  await aiStore.patchSettings({ enabled: wantsEnable });
+}
+
+function setAiMode(mode: 'builtin' | 'byok') {
+  void aiStore.patchSettings({ mode });
+}
+
+function setBuiltinModel(model: string) {
+  void aiStore.patchSettings({ builtinModel: model });
+}
+
+function onBuiltinModelChange(event: Event) {
+  const target = event.target as HTMLSelectElement;
+  setBuiltinModel(target.value);
+}
+
+function onByokBaseUrlInput(event: Event) {
+  const target = event.target as HTMLInputElement;
+  void aiStore.patchByok({ baseUrl: target.value });
+}
+
+function onByokApiKeyInput(event: Event) {
+  const target = event.target as HTMLInputElement;
+  void aiStore.patchByok({ apiKey: target.value });
+}
+
+function onByokModelInput(event: Event) {
+  const target = event.target as HTMLInputElement;
+  void aiStore.patchByok({ model: target.value });
+}
+
+function toggleAiCategory(key: keyof typeof ai.settings.categories) {
+  void aiStore.patchCategories({ [key]: !ai.settings.categories[key] } as Partial<typeof ai.settings.categories>);
+}
+
+function setAllAiCategories(value: boolean) {
+  void aiStore.patchCategories({
+    disks: value,
+    largeFiles: value,
+    categories: value,
+    duplicates: value,
+  });
+}
+
+async function openPreviewModal() {
+  if (!ai.settings.enabled) {
+    showToast('请先启用 AI 分析', '在「启用 AI 分析」开关打开后才能预览', 'warning');
+    return;
+  }
+  previewLoading.value = true;
+  previewSnapshot.value = null;
+  showPreviewModal.value = true;
+  try {
+    previewSnapshot.value = await aiStore.previewSnapshot();
+  } catch (err) {
+    showToast('预览失败', String(err), 'error');
+    showPreviewModal.value = false;
+  } finally {
+    previewLoading.value = false;
+  }
+}
+
+function closePreviewModal() {
+  showPreviewModal.value = false;
+  previewSnapshot.value = null;
+}
+
+async function copyPreviewSnapshot() {
+  try {
+    await navigator.clipboard.writeText(previewSnapshotJson.value);
+    showToast('已复制', '快照 JSON 已复制到剪贴板', 'success');
+  } catch {
+    showToast('复制失败', '请手动选中后复制', 'error');
+  }
+}
+
+async function acceptConsent() {
+  if (!consentAgreed.value) {
+    showToast('请先勾选同意', '只有勾选「我已阅读并同意」才能启用 AI', 'warning');
+    return;
+  }
+  await aiStore.setConsented();
+  await aiStore.patchSettings({ enabled: true });
+  showConsentModal.value = false;
+}
+
+function rejectConsent() {
+  consentAgreed.value = false;
+  showConsentModal.value = false;
+}
+
+function openPrivacyFromSettings() {
+  emit('show-privacy');
+}
+
+function openAiSuggestionsFromSettings() {
+  emit('show-ai-suggestions');
+  emit('close');
+}
+
 async function exportDiagnostics() {
   if (exportingDiagnostics.value) return;
   exportingDiagnostics.value = true;
@@ -263,24 +427,31 @@ async function exportDiagnostics() {
         </button>
       </div>
 
-      <div class="tabs-container">
-        <button 
-          :class="['tab-btn', { active: activeTab === 'general' }]"
-          @click="activeTab = 'general'"
+      <div class="settings-split">
+      <nav class="settings-sidenav" role="tablist" aria-label="设置分组">
+        <button
+          v-for="group in settingsGroups"
+          :key="group.key"
+          type="button"
+          class="settings-sidenav-item"
+          :class="{ active: activeTab === group.key }"
+          role="tab"
+          :aria-selected="activeTab === group.key"
+          @click="activeTab = group.key"
         >
-          常规设置
+          <strong>{{ group.label }}</strong>
+          <small>{{ group.lead }}</small>
         </button>
-        <button 
-          :class="['tab-btn', { active: activeTab === 'cache' }]"
-          @click="activeTab = 'cache'"
-        >
-          缓存管理
-        </button>
-      </div>
+      </nav>
 
       <div class="panel-body">
-        <div v-show="activeTab === 'general'" class="tab-content">
-        <div class="setting-section">
+        <div class="tab-content settings-active-tab">
+        <header v-if="settingsGroups.find((g) => g.key === activeTab)" class="settings-section-lead">
+          <h3>{{ settingsGroups.find((g) => g.key === activeTab)?.label }}</h3>
+          <p>{{ settingsGroups.find((g) => g.key === activeTab)?.lead }}</p>
+        </header>
+
+        <div v-show="activeTab === 'basic'" class="setting-section">
           <div class="section-header">
             <h3>外观</h3>
             <p>设置应用的颜色主题</p>
@@ -308,10 +479,10 @@ async function exportDiagnostics() {
           </div>
         </div>
 
-        <div class="setting-section">
+        <div v-show="activeTab === 'clean'" class="setting-section">
           <div class="section-header">
             <h3>迁移设置</h3>
-            <p>配置文件迁移的默认行为</p>
+            <p>把文件搬到其他盘时的默认动作，链接保持下来软件就不用重装。</p>
           </div>
 
           <div class="setting-item">
@@ -397,10 +568,10 @@ async function exportDiagnostics() {
           </div>
         </div>
 
-        <div class="setting-section">
+        <div v-show="activeTab === 'clean'" class="setting-section">
           <div class="section-header">
             <h3>清理设置</h3>
-            <p>设置删除推荐项目时的默认行为</p>
+            <p>删除推荐项目时是走回收站还是直接抹掉。</p>
           </div>
 
           <div class="setting-item delete-mode-setting">
@@ -452,10 +623,10 @@ async function exportDiagnostics() {
           </div>
         </div>
 
-        <div class="setting-section admin-section">
+        <div v-show="activeTab === 'privacy'" class="setting-section admin-section">
           <div class="section-header">
             <h3>权限</h3>
-            <p>管理员权限允许访问系统保护的文件和文件夹</p>
+            <p>管理员权限可以访问系统保护的位置（影子副本、WinSxS、Windows.old 等）；不开也能用，只是少几个功能。</p>
           </div>
 
           <div v-if="!isCheckingElevation" class="setting-item admin-setting">
@@ -511,10 +682,10 @@ async function exportDiagnostics() {
           </div>
         </div>
 
-        <div class="setting-section">
+        <div v-show="activeTab === 'basic'" class="setting-section">
           <div class="section-header">
             <h3>更新</h3>
-            <p>检查软件新版本</p>
+            <p>是否自动联 GitHub 检查新版本。</p>
           </div>
 
           <div class="setting-item">
@@ -542,7 +713,79 @@ async function exportDiagnostics() {
           </div>
         </div>
 
-        <div class="setting-section">
+        <!-- === Track A: 关闭行为 + 后台扫描 === -->
+        <div v-show="activeTab === 'basic'" class="setting-section">
+          <div class="section-header">
+            <h3>关闭主窗口时</h3>
+            <p>选择点击窗口右上角关闭按钮时的行为</p>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label">
+              <label>关闭按钮的行为</label>
+              <span class="setting-description">
+                选「最小化到托盘」后，应用会保留在系统托盘中，便于后台扫描继续工作。
+              </span>
+            </div>
+            <div class="theme-options">
+              <button
+                :class="['theme-btn', { active: settings.closeBehavior !== 'tray' }]"
+                @click="settings.closeBehavior = 'exit'"
+              >退出应用</button>
+              <button
+                :class="['theme-btn', { active: settings.closeBehavior === 'tray' }]"
+                @click="settings.closeBehavior = 'tray'"
+              >最小化到托盘</button>
+            </div>
+          </div>
+        </div>
+
+        <div v-show="activeTab === 'scan'" class="setting-section">
+          <div class="section-header">
+            <h3>后台扫描</h3>
+            <p>在用户空闲且接通电源时自动跑增量/全量扫描</p>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label">
+              <label for="scheduler-enabled">启用后台扫描</label>
+              <span class="setting-description">
+                每 4 小时尝试一次增量扫描、每 7 天尝试一次全量扫描；电池模式下不触发。
+              </span>
+            </div>
+            <label class="toggle-switch">
+              <input
+                id="scheduler-enabled"
+                type="checkbox"
+                v-model="settings.schedulerEnabled"
+                @click.stop
+              />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item" v-if="settings.schedulerEnabled">
+            <div class="setting-label">
+              <label for="scheduler-idle">用户 idle 阈值</label>
+              <span class="setting-description">键鼠静止超过此分钟数后才允许后台扫描启动</span>
+            </div>
+            <div class="threshold-input-group">
+              <input
+                id="scheduler-idle"
+                type="number"
+                v-model.number="settings.schedulerIdleMinutes"
+                min="1"
+                max="240"
+                class="setting-input"
+                @click.stop
+              />
+              <span class="input-suffix">分钟</span>
+            </div>
+          </div>
+        </div>
+        <!-- === /Track A === -->
+
+        <div v-show="activeTab === 'about'" class="setting-section">
           <div class="section-header">
             <h3>其他</h3>
             <p>引导与关于信息</p>
@@ -641,9 +884,9 @@ async function exportDiagnostics() {
               <p>暂无缓存数据</p>
             </div>
 
-            <button 
+            <button
               v-if="cacheInfo.caches.length > 0"
-              @click.stop="showClearCacheConfirm = true" 
+              @click.stop="showClearCacheConfirm = true"
               class="clear-all-cache-btn"
             >
               <IconRefresh :size="16" />
@@ -653,6 +896,243 @@ async function exportDiagnostics() {
         </div>
         </div>
 
+        <div v-show="activeTab === 'ai'" class="tab-content">
+          <div class="setting-section">
+            <div class="section-header">
+              <h3>AI 服务</h3>
+              <p>所有 AI 数据上送默认关闭，需要你逐项勾选才能加入快照。</p>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-label">
+                <div class="label-with-icon">
+                  <IconShield :size="20" />
+                  <label for="ai-enable">启用 AI 分析</label>
+                </div>
+                <span class="setting-description">关闭时不会向任何 AI 服务发送数据</span>
+              </div>
+              <label class="toggle-switch">
+                <input
+                  id="ai-enable"
+                  type="checkbox"
+                  :checked="ai.settings.enabled"
+                  @change="onAiEnableToggle"
+                  @click.stop
+                />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div v-if="!aiHasConsent" class="info-card info-card-warning">
+              <div class="info-icon warning">
+                <IconWarning :size="20" />
+              </div>
+              <div class="info-content">
+                <div class="info-title">首次启用需要同意隐私政策</div>
+                <ul class="info-list">
+                  <li>点击「启用 AI 分析」开关后，会弹出同意框</li>
+                  <li>勾选「我已阅读并同意」后才能继续</li>
+                  <li>
+                    可先查看 <button class="inline-link" @click="openPrivacyFromSettings">完整隐私政策</button>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-section">
+            <div class="section-header">
+              <h3>调用模式</h3>
+              <p>Builtin 走我们代理（每日 50 次免费）；BYOK 直连你自己的兼容服务</p>
+            </div>
+
+            <div class="ai-mode-row">
+              <button
+                type="button"
+                class="ai-mode-card"
+                :class="{ active: ai.settings.mode === 'builtin' }"
+                :disabled="!ai.settings.enabled"
+                @click="setAiMode('builtin')"
+              >
+                <strong>Builtin</strong>
+                <span>免费 · 每天 50 次 · 模型由我们代理</span>
+              </button>
+              <button
+                type="button"
+                class="ai-mode-card"
+                :class="{ active: ai.settings.mode === 'byok' }"
+                :disabled="!ai.settings.enabled"
+                @click="setAiMode('byok')"
+              >
+                <strong>BYOK</strong>
+                <span>自带 OpenAI 兼容服务的 API Key</span>
+              </button>
+            </div>
+
+            <div v-if="ai.settings.mode === 'builtin'" class="setting-item">
+              <div class="setting-label">
+                <label for="ai-builtin-model">模型</label>
+                <span class="setting-description">默认 deepseek-v4-pro（比 glm-5.1 便宜约 3 倍）</span>
+              </div>
+              <select
+                id="ai-builtin-model"
+                class="setting-input ai-select"
+                :value="ai.settings.builtinModel"
+                :disabled="!ai.settings.enabled"
+                @change="onBuiltinModelChange"
+                @click.stop
+              >
+                <option v-for="model in aiBuiltinModels" :key="model" :value="model">{{ model }}</option>
+              </select>
+            </div>
+
+            <template v-if="ai.settings.mode === 'byok'">
+              <div class="setting-item">
+                <div class="setting-label">
+                  <label for="ai-byok-base">Base URL</label>
+                  <span class="setting-description">OpenAI 兼容服务的 chat completions endpoint 根地址</span>
+                </div>
+                <input
+                  id="ai-byok-base"
+                  type="text"
+                  class="setting-input ai-text-input"
+                  placeholder="https://api.openai.com/v1"
+                  :value="ai.settings.byok.baseUrl"
+                  :disabled="!ai.settings.enabled"
+                  @input="onByokBaseUrlInput"
+                  @click.stop
+                />
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-label">
+                  <label for="ai-byok-key">API Key</label>
+                  <span class="setting-description">仅保存在本机，不会上传或被我们代理拿到</span>
+                </div>
+                <input
+                  id="ai-byok-key"
+                  type="password"
+                  class="setting-input ai-text-input"
+                  placeholder="sk-..."
+                  autocomplete="off"
+                  :value="ai.settings.byok.apiKey"
+                  :disabled="!ai.settings.enabled"
+                  @input="onByokApiKeyInput"
+                  @click.stop
+                />
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-label">
+                  <label for="ai-byok-model">Model</label>
+                  <span class="setting-description">服务商对外暴露的模型名</span>
+                </div>
+                <input
+                  id="ai-byok-model"
+                  type="text"
+                  class="setting-input ai-text-input"
+                  placeholder="gpt-4o-mini"
+                  :value="ai.settings.byok.model"
+                  :disabled="!ai.settings.enabled"
+                  @input="onByokModelInput"
+                  @click.stop
+                />
+              </div>
+
+              <div v-if="ai.settings.enabled && !byokValid" class="info-card info-card-warning">
+                <div class="info-icon warning">
+                  <IconWarning :size="20" />
+                </div>
+                <div class="info-content">
+                  <div class="info-title">BYOK 配置不完整</div>
+                  <ul class="info-list">
+                    <li>Base URL、API Key、Model 三个字段都必须填写</li>
+                    <li>未填齐时 AI 分析无法发起请求</li>
+                  </ul>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <div class="setting-section">
+            <div class="section-header">
+              <h3>数据类别</h3>
+              <p>勾选后，对应类别的脱敏数据才会出现在发送给 AI 的快照中。</p>
+            </div>
+
+            <div class="ai-category-toolbar">
+              <button
+                class="btn btn-secondary btn-sm"
+                :disabled="!ai.settings.enabled || allCategoriesOn"
+                @click="setAllAiCategories(true)"
+              >全选</button>
+              <button
+                class="btn btn-secondary btn-sm"
+                :disabled="!ai.settings.enabled"
+                @click="setAllAiCategories(false)"
+              >全不选</button>
+            </div>
+
+            <div
+              v-for="item in aiCategoryItems"
+              :key="item.key"
+              class="setting-item"
+            >
+              <div class="setting-label">
+                <label :for="`ai-cat-${item.key}`">{{ item.label }}</label>
+                <span class="setting-description">{{ item.detail }}</span>
+              </div>
+              <label class="toggle-switch">
+                <input
+                  :id="`ai-cat-${item.key}`"
+                  type="checkbox"
+                  :checked="ai.settings.categories[item.key]"
+                  :disabled="!ai.settings.enabled"
+                  @change="toggleAiCategory(item.key)"
+                  @click.stop
+                />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-section">
+            <div class="section-header">
+              <h3>发送前预览</h3>
+              <p>查看下一次请求会发出的完整 JSON 快照，没勾选的类别绝不会出现。</p>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-label">
+                <label>预览快照</label>
+                <span class="setting-description">点击后弹出格式化 JSON 视图</span>
+              </div>
+              <button
+                class="btn btn-secondary btn-sm"
+                :disabled="!ai.settings.enabled"
+                @click="openPreviewModal"
+              >发送前预览</button>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-label">
+                <label>AI 建议面板</label>
+                <span class="setting-description">查看已经返回的 AI 建议（采纳前不会执行任何动作）</span>
+              </div>
+              <button class="btn btn-secondary btn-sm" @click="openAiSuggestionsFromSettings">打开建议面板</button>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-label">
+                <label>隐私政策</label>
+                <span class="setting-description">完整版本：数据范围、保留策略、撤回权利</span>
+              </div>
+              <button class="btn btn-secondary btn-sm" @click="openPrivacyFromSettings">查看隐私政策</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
       </div>
 
       <div class="panel-footer">
@@ -736,6 +1216,65 @@ async function exportDiagnostics() {
         </div>
 
         <p class="about-footer">© 2024–2026 CDrive Cleaner · GPL-3.0 License</p>
+      </div>
+    </div>
+
+    <div v-if="showConsentModal" class="ai-modal-overlay" @click.self="rejectConsent">
+      <div class="ai-modal" @click.stop>
+        <header class="ai-modal-head">
+          <div class="ai-modal-title">
+            <IconShield :size="20" />
+            <h3>启用 AI 分析前的同意</h3>
+          </div>
+          <button class="close-btn" @click="rejectConsent">
+            <IconClose :size="18" />
+          </button>
+        </header>
+        <div class="ai-modal-body">
+          <p>启用 AI 分析后，<strong>且只有当你在「数据类别」面板里勾选某一项时</strong>，对应类别的脱敏数据才会被打包到请求中。</p>
+          <ul>
+            <li>Builtin 模式：请求经我们的 Cloudflare Worker 代理到上游模型服务商。</li>
+            <li>BYOK 模式：请求直连你填写的服务，不经我们的代理。</li>
+            <li>所有路径都会先在本地脱敏，绝不发送真实用户名或绝对路径。</li>
+            <li>所有 AI 建议都需要你手动点「采纳」才会触发动作。</li>
+          </ul>
+          <p>
+            完整说明请参见
+            <button class="inline-link" @click="openPrivacyFromSettings">隐私政策</button>。
+          </p>
+
+          <label class="ai-consent-check">
+            <input type="checkbox" v-model="consentAgreed" />
+            <span>我已阅读并同意上述说明。</span>
+          </label>
+        </div>
+        <footer class="ai-modal-footer">
+          <button class="btn btn-secondary" @click="rejectConsent">取消</button>
+          <button class="btn btn-primary" :disabled="!consentAgreed" @click="acceptConsent">同意并启用</button>
+        </footer>
+      </div>
+    </div>
+
+    <div v-if="showPreviewModal" class="ai-modal-overlay" @click.self="closePreviewModal">
+      <div class="ai-modal ai-modal--wide" @click.stop>
+        <header class="ai-modal-head">
+          <div class="ai-modal-title">
+            <IconInfo :size="20" />
+            <h3>发送前预览</h3>
+          </div>
+          <button class="close-btn" @click="closePreviewModal">
+            <IconClose :size="18" />
+          </button>
+        </header>
+        <div class="ai-modal-body">
+          <p class="ai-preview-hint">下面是即将随下一次请求发出的完整 JSON。没勾选的数据类别一定不会出现在这里。</p>
+          <div v-if="previewLoading" class="ai-preview-loading">加载中…</div>
+          <pre v-else class="ai-preview-json">{{ previewSnapshotJson || '{}' }}</pre>
+        </div>
+        <footer class="ai-modal-footer">
+          <button class="btn btn-secondary" @click="copyPreviewSnapshot" :disabled="previewLoading || !previewSnapshot">复制 JSON</button>
+          <button class="btn btn-primary" @click="closePreviewModal">已确认</button>
+        </footer>
       </div>
     </div>
   </div>
@@ -1918,6 +2457,351 @@ async function exportDiagnostics() {
 
 [data-theme="dark"] .toggle-slider::before {
   background: linear-gradient(to bottom, #e5e7eb 0%, #cbd5e1 100%);
+}
+
+.ai-mode-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.ai-mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(15, 23, 42, 0.1);
+  background: rgba(15, 23, 42, 0.02);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  color: inherit;
+}
+
+.ai-mode-card strong {
+  font-size: 14px;
+  color: var(--text-primary, #111827);
+}
+
+.ai-mode-card span {
+  font-size: 12.5px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.ai-mode-card:hover:not(:disabled) {
+  border-color: rgba(47, 109, 246, 0.5);
+}
+
+.ai-mode-card.active {
+  border-color: #2f6df6;
+  background: rgba(47, 109, 246, 0.08);
+}
+
+.ai-mode-card:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ai-select,
+.ai-text-input {
+  min-width: 220px;
+  font-size: 13px;
+}
+
+.ai-category-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.inline-link {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: #2f6df6;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+
+.inline-link:hover {
+  color: #1d4ed8;
+}
+
+.ai-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 18, 28, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.ai-modal {
+  width: min(520px, 100%);
+  max-height: 88vh;
+  background: var(--surface, #ffffff);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ai-modal--wide {
+  width: min(720px, 100%);
+}
+
+.ai-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+}
+
+.ai-modal-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-modal-title h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-primary, #111827);
+}
+
+.ai-modal-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text-secondary, #4b5563);
+}
+
+.ai-modal-body ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ai-modal-body p {
+  margin: 0;
+}
+
+.ai-consent-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(47, 109, 246, 0.06);
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: var(--text-primary, #111827);
+  user-select: none;
+}
+
+.ai-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border, rgba(0, 0, 0, 0.06));
+}
+
+.ai-preview-hint {
+  font-size: 13px;
+}
+
+.ai-preview-loading {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-secondary, #6b7280);
+}
+
+.ai-preview-json {
+  background: rgba(15, 23, 42, 0.04);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  max-height: 52vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-primary, #111827);
+  margin: 0;
+}
+
+[data-theme="dark"] .ai-mode-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .ai-mode-card strong {
+  color: #f5f5f7;
+}
+
+[data-theme="dark"] .ai-mode-card span {
+  color: #aab2c0;
+}
+
+[data-theme="dark"] .ai-mode-card.active {
+  border-color: #2f6df6;
+  background: rgba(47, 109, 246, 0.18);
+}
+
+[data-theme="dark"] .ai-modal {
+  background: #1c1f29;
+}
+
+[data-theme="dark"] .ai-modal-head,
+[data-theme="dark"] .ai-modal-footer {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .ai-modal-title h3,
+[data-theme="dark"] .ai-consent-check,
+[data-theme="dark"] .ai-preview-json {
+  color: #f5f5f7;
+}
+
+[data-theme="dark"] .ai-modal-body {
+  color: #cdd3df;
+}
+
+[data-theme="dark"] .ai-preview-json {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .ai-consent-check {
+  background: rgba(47, 109, 246, 0.18);
+}
+</style>
+
+<style scoped>
+.settings-split {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.settings-sidenav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 12px;
+  background: var(--color-surface-soft, rgba(0, 0, 0, 0.02));
+  border-right: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.08));
+  overflow-y: auto;
+}
+
+.settings-sidenav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-primary, #111827);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.settings-sidenav-item:hover {
+  background: var(--color-surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.settings-sidenav-item.active {
+  background: var(--color-highlight-soft, rgba(47, 109, 246, 0.1));
+  border-color: var(--color-highlight, #2f6df6);
+}
+
+.settings-sidenav-item strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-sidenav-item small {
+  font-size: 11px;
+  color: var(--color-text-tertiary, #6b7280);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.settings-sidenav-item.active small {
+  color: var(--color-text-secondary, #4b5563);
+}
+
+.settings-section-lead {
+  padding: 4px 4px 12px;
+  border-bottom: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.06));
+  margin-bottom: 16px;
+}
+
+.settings-section-lead h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-primary, #111827);
+}
+
+.settings-section-lead p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-tertiary, #6b7280);
+  line-height: 1.5;
+}
+
+[data-theme="dark"] .settings-sidenav {
+  background: rgba(255, 255, 255, 0.03);
+  border-right-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .settings-sidenav-item {
+  color: #f5f5f7;
+}
+
+[data-theme="dark"] .settings-sidenav-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .settings-sidenav-item.active {
+  background: rgba(96, 165, 250, 0.16);
+  border-color: #60a5fa;
+}
+
+[data-theme="dark"] .settings-sidenav-item small {
+  color: #aab2c0;
+}
+
+[data-theme="dark"] .settings-section-lead {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .settings-section-lead h3 {
+  color: #f5f5f7;
+}
+
+[data-theme="dark"] .settings-section-lead p {
+  color: #aab2c0;
 }
 </style>
 
