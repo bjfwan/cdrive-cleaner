@@ -79,6 +79,7 @@ const appSettings = ref<AppSettings>(getSettings());
 const showUpdateDialog = ref(false);
 const updateInfo = ref<UpdateInfo | null>(null);
 const updateChecking = ref(false);
+const updateCheckError = ref('');
 
 const cart = useCart();
 
@@ -973,17 +974,21 @@ async function autoCheckForUpdates() {
 
 async function manualCheckForUpdates() {
   updateChecking.value = true;
+  updateCheckError.value = '';
   showUpdateDialog.value = true;
   try {
     const info = await checkForUpdates();
     markChecked();
     updateInfo.value = info;
   } catch (err) {
-    showUpdateDialog.value = false;
-    showToastNotification('检查更新失败', String(err), 'error');
+    updateCheckError.value = String(err);
   } finally {
     updateChecking.value = false;
   }
+}
+
+function retryUpdateCheck() {
+  void manualCheckForUpdates();
 }
 
 async function resumePendingScanIntent() {
@@ -1303,7 +1308,9 @@ async function resumePendingScanIntent() {
       :show="showUpdateDialog"
       :update-info="updateInfo"
       :checking="updateChecking"
-      @close="showUpdateDialog = false"
+      :check-error="updateCheckError"
+      @close="showUpdateDialog = false; updateCheckError = ''"
+      @retry="retryUpdateCheck"
     />
 
     <ConfirmDialog

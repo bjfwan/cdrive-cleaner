@@ -2011,8 +2011,16 @@ pub async fn check_for_updates() -> Result<UpdateInfo, String> {
         let resp = ureq::get(url)
             .set("User-Agent", &format!("CSD/{current_version}"))
             .set("Accept", "application/vnd.github+json")
+            .timeout(Duration::from_secs(15))
             .call()
-            .map_err(|e| format!("网络请求失败: {e}"))?;
+            .map_err(|e| {
+                let err_str = e.to_string();
+                if err_str.contains("timeout") || err_str.contains("Deadline") {
+                    format!("连接 GitHub 超时，请检查网络或使用加速镜像")
+                } else {
+                    format!("网络请求失败: {err_str}")
+                }
+            })?;
 
         let body: serde_json::Value = resp
             .into_json::<serde_json::Value>()
@@ -2035,7 +2043,7 @@ pub async fn check_for_updates() -> Result<UpdateInfo, String> {
             .unwrap_or("https://github.com/bjfwan/cdrive-cleaner/releases")
             .to_string();
 
-        // Find the NSIS installer asset (xxx-setup.exe)
+        // Find the NSIS installer asset (xxx-setup.exe), fallback to MSI
         let installer_url = body["assets"]
             .as_array()
             .and_then(|assets| {
@@ -2048,7 +2056,28 @@ pub async fn check_for_updates() -> Result<UpdateInfo, String> {
                     }
                 })
             })
+            .or_else(|| {
+                body["assets"].as_array().and_then(|assets| {
+                    assets.iter().find_map(|a| {
+                        let name = a["name"].as_str().unwrap_or("");
+                        if name.ends_with(".msi") {
+                            a["browser_download_url"].as_str().map(|u| u.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                })
+            })
             .unwrap_or_default();
+
+        // Log for debugging
+        if installer_url.is_empty() {
+            let asset_names: Vec<&str> = body["assets"]
+                .as_array()
+                .map(|arr| arr.iter().filter_map(|a| a["name"].as_str()).collect())
+                .unwrap_or_default();
+            eprintln!("[update] No installer found. Available assets: {:?}", asset_names);
+        }
 
         let has_update = version_is_newer(&tag, &current_version);
 

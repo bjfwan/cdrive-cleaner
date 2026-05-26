@@ -167,6 +167,8 @@ export interface MigrationStats {
 
 export type CloseBehavior = 'exit' | 'tray';
 
+export type DownloadMirror = 'none' | 'ghproxy' | 'custom';
+
 export interface AppSettings {
   defaultTargetDisk: string;
   largeFileThreshold: number;
@@ -174,6 +176,8 @@ export interface AppSettings {
   defaultDeleteMode: DeleteMode;
   theme?: 'light' | 'dark' | 'auto';
   autoCheckUpdate?: boolean;
+  downloadMirror?: DownloadMirror;
+  downloadMirrorUrl?: string;
   // Track A (v0.1.9 后台扫描 + 托盘)
   closeBehavior?: CloseBehavior;
   schedulerEnabled?: boolean;

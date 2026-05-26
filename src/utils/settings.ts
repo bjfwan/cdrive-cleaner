@@ -1,4 +1,4 @@
-import type { AppSettings, CloseBehavior, DeleteMode } from '../types';
+import type { AppSettings, CloseBehavior, DeleteMode, DownloadMirror } from '../types';
 
 const SETTINGS_KEY = 'cdrive-cleaner-settings';
 
@@ -8,6 +8,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   createSymlink: true,
   defaultDeleteMode: 'recycle',
   autoCheckUpdate: true,
+  downloadMirror: 'none',
+  downloadMirrorUrl: '',
   closeBehavior: 'exit',
   schedulerEnabled: true,
   schedulerIdleMinutes: 5,
@@ -19,6 +21,11 @@ function normalizeDeleteMode(value: unknown): DeleteMode {
 
 function normalizeCloseBehavior(value: unknown): CloseBehavior {
   return value === 'tray' ? 'tray' : 'exit';
+}
+
+function normalizeDownloadMirror(value: unknown): DownloadMirror {
+  if (value === 'ghproxy' || value === 'custom' || value === 'none') return value;
+  return 'none';
 }
 
 function normalizeSettings(value: Partial<AppSettings>): AppSettings {
@@ -39,6 +46,8 @@ function normalizeSettings(value: Partial<AppSettings>): AppSettings {
     createSymlink: typeof value.createSymlink === 'boolean' ? value.createSymlink : DEFAULT_SETTINGS.createSymlink,
     defaultDeleteMode: normalizeDeleteMode(value.defaultDeleteMode),
     autoCheckUpdate: typeof value.autoCheckUpdate === 'boolean' ? value.autoCheckUpdate : DEFAULT_SETTINGS.autoCheckUpdate,
+    downloadMirror: normalizeDownloadMirror(value.downloadMirror),
+    downloadMirrorUrl: typeof value.downloadMirrorUrl === 'string' ? value.downloadMirrorUrl : '',
     closeBehavior: normalizeCloseBehavior(value.closeBehavior),
     schedulerEnabled: typeof value.schedulerEnabled === 'boolean' ? value.schedulerEnabled : DEFAULT_SETTINGS.schedulerEnabled,
     schedulerIdleMinutes: idleMinutes,

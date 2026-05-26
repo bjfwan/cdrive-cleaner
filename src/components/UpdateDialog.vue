@@ -3,21 +3,24 @@ import { ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { IconClose, IconInfo, IconRefresh } from './icons';
-import { downloadUpdate, installUpdate } from '../utils/updater';
+import { downloadUpdate, installUpdate, resolveMirrorUrl } from '../utils/updater';
 import type { UpdateInfo } from '../types';
 
 interface Props {
   show: boolean;
   updateInfo: UpdateInfo | null;
   checking?: boolean;
+  checkError?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   checking: false,
+  checkError: '',
 });
 
 const emit = defineEmits<{
   close: [];
+  retry: [];
 }>();
 
 type Stage = 'idle' | 'downloading' | 'downloaded' | 'installing' | 'error';
@@ -38,14 +41,18 @@ watch(() => props.show, (val) => {
     installerPath.value = '';
     errorMsg.value = '';
   }
+  if (val) {
+    stage.value = 'idle';
+  }
 });
 
 async function startDownload() {
   if (!props.updateInfo?.installer_url) {
-    // Fallback: open browser if no installer URL
     openInBrowser();
     return;
   }
+
+  const downloadUrl = resolveMirrorUrl(props.updateInfo.installer_url);
 
   stage.value = 'downloading';
   downloadPercent.value = 0;
@@ -60,7 +67,7 @@ async function startDownload() {
   );
 
   try {
-    const path = await downloadUpdate(props.updateInfo.installer_url);
+    const path = await downloadUpdate(downloadUrl);
     installerPath.value = path;
     stage.value = 'downloaded';
   } catch (err) {
@@ -118,6 +125,19 @@ function formatSize(bytes: number): string {
         <div class="checking-spinner"></div>
         <h3>正在检查更新</h3>
         <p>正在连接 GitHub 获取最新版本信息…</p>
+      </div>
+
+      <!-- Check failed -->
+      <div v-else-if="checkError && !checking" class="update-content">
+        <h3 class="update-title error-title">检查失败</h3>
+        <p class="update-current">{{ checkError }}</p>
+        <div class="update-actions">
+          <button class="btn btn-secondary" @click="emit('close')">关闭</button>
+          <button class="btn btn-primary" @click="emit('retry')">
+            <IconRefresh :size="16" />
+            重试
+          </button>
+        </div>
       </div>
 
       <!-- Has update -->
@@ -197,9 +217,13 @@ function formatSize(bytes: number): string {
           <h3 class="update-title error-title">更新失败</h3>
           <p class="update-current">{{ errorMsg }}</p>
           <div class="update-actions">
-            <button class="btn btn-secondary" @click="emit('close')">关闭</button>
-            <button class="btn btn-primary" @click="openInBrowser">浏览器下载</button>
+            <button class="btn btn-secondary" @click="openInBrowser">浏览器下载</button>
+            <button class="btn btn-primary" @click="startDownload">
+              <IconRefresh :size="16" />
+              重试下载
+            </button>
           </div>
+          <p class="update-hint">国内网络较慢？可在 设置 → 更新 → 下载加速镜像 中选择国内镜像</p>
         </template>
       </div>
 
@@ -487,6 +511,15 @@ function formatSize(bytes: number): string {
 
 .error-title {
   color: var(--color-error, #ef4444);
+}
+
+.update-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+  text-align: center;
+  margin: 0;
+  padding-top: 0.25rem;
+  opacity: 0.7;
 }
 
 /* Latest version state */
