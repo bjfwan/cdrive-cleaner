@@ -6,14 +6,35 @@ use super::types::{AiMode, AiSettings, AiSnapshot, AiSuggestion};
 const BUILTIN_BASE_URL: &str = "https://csd-api.likeyou.qzz.io";
 const DEFAULT_MODEL: &str = "deepseek-v4-pro";
 const SYSTEM_PROMPT: &str =
-    "You are a coding assistant analyzing a user's disk usage. Reply with JSON only.";
-const USER_PROMPT_PREAMBLE: &str = "Below is a sanitized snapshot of a Windows user's disk. \
-For each item or category that looks worth cleaning up or moving, propose ONE suggestion. \
-Respond with JSON of the form: {\"suggestions\":[{\"id\":\"s1\",\"target_token\":\"...\",\
+    "你是一个分析用户磁盘使用情况的助手。请仅用中文回复，输出格式为 JSON。\
+请根据每个项目的 kind（类别）来判断安全性：\
+- system_files: 系统文件，绝对不能删除。可以建议\"调整大小\"或\"禁用对应功能\"。\
+- model_files: AI 模型文件，可以迁移到外置或辅助存储，但绝对不能删除。\
+- temp_files: 临时文件，可以安全清理。\
+- dev_tools: 开发构建产物，可以安全清理。\
+- app_cache: 应用缓存，可安全清理。\
+- game_files: 游戏文件，可迁移到辅助存储。\
+- disk_images: 磁盘镜像/虚拟机，可迁移，不建议删除。\
+- installer_files: 下载的安装包，可安全删除。\
+- downloads: 下载目录内容，需用户判断是否还需要。\
+- media_files: 媒体文件，可迁移或归档。\
+- log_files: 日志文件，可以安全清理。\
+- large_files / large_dirs: 通用大文件/目录，需要根据标签判断。\
+输出 JSON 时，每个建议的 action 必须是以下之一：\
+- migrate: 可以迁移到其他磁盘\
+- delete: 可以安全删除\
+- review: 需要用户手动判断能不能删";
+
+const USER_PROMPT_PREAMBLE: &str = "以下是用户 Windows 磁盘的脱敏快照。\
+每个项目包含 label（名称和大小）、kind（类别）、size_mb（大小）。\
+请只对那些能明显判断安全性的项目提建议（如 temp_files、dev_tools、app_cache 可建议 delete；\
+model_files、game_files、disk_images 可建议 migrate；system_files 可建议 review）。\
+不确定的就跳过，不要猜测。\
+以 JSON 格式回复：{\"suggestions\":[{\"id\":\"s1\",\"target_token\":\"...\",\
 \"target_label\":\"...\",\"action\":\"migrate|delete|review\",\"reason\":\"...\",\
-\"estimated_savings_mb\": 0}]} . Use the EXACT target_token strings from the snapshot. \
-Do not invent paths. Do not include any path, username, or personally identifying info \
-in the reason field.";
+\"estimated_savings_mb\": 0}]} 。\
+请使用快照中精确的 target_token 字符串。不要编造路径。\
+所有回复内容必须使用中文。每个建议的 reason 要说明为什么安全或不安全。";
 
 pub fn analyze(snapshot: &AiSnapshot, settings: &AiSettings) -> Result<Vec<AiSuggestion>> {
     let model = if settings.provider.model.trim().is_empty() {
@@ -52,7 +73,7 @@ fn call_builtin(body: &Value) -> Result<String> {
     let resp = ureq::post(&url)
         .set("content-type", "application/json")
         .set("x-csd-builtin", "1")
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_secs(120))
         .send_string(&body.to_string());
 
     match resp {
@@ -86,7 +107,7 @@ fn call_byok(body: &Value, settings: &AiSettings) -> Result<String> {
     let resp = ureq::post(&url)
         .set("content-type", "application/json")
         .set("authorization", &format!("Bearer {}", api_key))
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_secs(120))
         .send_string(&body.to_string());
 
     match resp {

@@ -271,7 +271,8 @@ export default {
       responseHeaders.set(name, value)
     }
 
-    return new Response(upstreamResp.body, {
+    const responseBody = await upstreamResp.arrayBuffer()
+    return new Response(responseBody, {
       status: upstreamResp.status,
       statusText: upstreamResp.statusText,
       headers: responseHeaders,

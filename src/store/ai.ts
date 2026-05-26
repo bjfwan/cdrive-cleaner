@@ -10,10 +10,19 @@ export type BuiltinModel = (typeof BUILTIN_MODELS)[number];
 export type AiMode = 'builtin' | 'byok';
 
 export interface AiCategoriesState {
-  disks: boolean;
+  tempFiles: boolean;
+  devTools: boolean;
+  appCache: boolean;
   largeFiles: boolean;
-  categories: boolean;
-  duplicates: boolean;
+  largeDirs: boolean;
+  systemFiles: boolean;
+  modelFiles: boolean;
+  gameFiles: boolean;
+  mediaFiles: boolean;
+  diskImages: boolean;
+  installerFiles: boolean;
+  downloads: boolean;
+  logFiles: boolean;
 }
 
 export interface AiByokConfig {
@@ -63,10 +72,19 @@ export const DEFAULT_AI_SETTINGS: AiSettings = {
   byok: { baseUrl: '', apiKey: '', model: '' },
   builtinModel: 'deepseek-v4-pro',
   categories: {
-    disks: false,
-    largeFiles: false,
-    categories: false,
-    duplicates: false,
+    tempFiles: true,
+    devTools: true,
+    appCache: true,
+    largeFiles: true,
+    largeDirs: true,
+    systemFiles: true,
+    modelFiles: true,
+    gameFiles: true,
+    mediaFiles: true,
+    diskImages: true,
+    installerFiles: true,
+    downloads: true,
+    logFiles: true,
   },
   consentVersion: 0,
 };
@@ -87,10 +105,19 @@ function normalizeSettings(value: Partial<AiSettings> | null | undefined): AiSet
       ? safe.builtinModel
       : DEFAULT_AI_SETTINGS.builtinModel,
     categories: {
-      disks: typeof cats.disks === 'boolean' ? cats.disks : false,
-      largeFiles: typeof cats.largeFiles === 'boolean' ? cats.largeFiles : false,
-      categories: typeof cats.categories === 'boolean' ? cats.categories : false,
-      duplicates: typeof cats.duplicates === 'boolean' ? cats.duplicates : false,
+      tempFiles: typeof cats.tempFiles === 'boolean' ? cats.tempFiles : DEFAULT_AI_SETTINGS.categories.tempFiles,
+      devTools: typeof cats.devTools === 'boolean' ? cats.devTools : DEFAULT_AI_SETTINGS.categories.devTools,
+      appCache: typeof cats.appCache === 'boolean' ? cats.appCache : DEFAULT_AI_SETTINGS.categories.appCache,
+      largeFiles: typeof cats.largeFiles === 'boolean' ? cats.largeFiles : DEFAULT_AI_SETTINGS.categories.largeFiles,
+      largeDirs: typeof cats.largeDirs === 'boolean' ? cats.largeDirs : DEFAULT_AI_SETTINGS.categories.largeDirs,
+      systemFiles: typeof cats.systemFiles === 'boolean' ? cats.systemFiles : DEFAULT_AI_SETTINGS.categories.systemFiles,
+      modelFiles: typeof cats.modelFiles === 'boolean' ? cats.modelFiles : DEFAULT_AI_SETTINGS.categories.modelFiles,
+      gameFiles: typeof cats.gameFiles === 'boolean' ? cats.gameFiles : DEFAULT_AI_SETTINGS.categories.gameFiles,
+      mediaFiles: typeof cats.mediaFiles === 'boolean' ? cats.mediaFiles : DEFAULT_AI_SETTINGS.categories.mediaFiles,
+      diskImages: typeof cats.diskImages === 'boolean' ? cats.diskImages : DEFAULT_AI_SETTINGS.categories.diskImages,
+      installerFiles: typeof cats.installerFiles === 'boolean' ? cats.installerFiles : DEFAULT_AI_SETTINGS.categories.installerFiles,
+      downloads: typeof cats.downloads === 'boolean' ? cats.downloads : DEFAULT_AI_SETTINGS.categories.downloads,
+      logFiles: typeof cats.logFiles === 'boolean' ? cats.logFiles : DEFAULT_AI_SETTINGS.categories.logFiles,
     },
     consentVersion: typeof safe.consentVersion === 'number' ? safe.consentVersion : 0,
   };
@@ -150,11 +177,13 @@ const state = reactive({
   settings: loadLocalSettings(),
   suggestions: loadLocalSuggestions() as AiSuggestion[],
   loadingSuggestions: false,
+  analyzing: false,
   lastError: '' as string,
   listenerInstalled: false,
 });
 
 let unlistenSuggestionsReady: UnlistenFn | null = null;
+let unlistenAnalyzeError: UnlistenFn | null = null;
 
 export const aiStore = {
   state: readonly(state),
@@ -223,10 +252,34 @@ export const aiStore = {
   async installSuggestionListener(): Promise<void> {
     if (state.listenerInstalled) return;
     try {
-      unlistenSuggestionsReady = await listen<AiSuggestion[]>('ai-suggestions-ready', (event) => {
-        const payload = Array.isArray(event.payload) ? event.payload : [];
-        this.setSuggestions(payload);
-      });
+      unlistenSuggestionsReady = await listen<AiSuggestion[] | { suggestions: AiSuggestion[] }>(
+        'ai-suggestions-ready',
+        (event) => {
+          console.log('[ai] ai-suggestions-ready event received, payload type:', typeof event.payload, 'isArray:', Array.isArray(event.payload));
+          if (Array.isArray(event.payload)) {
+            console.log('[ai] suggestions array, count:', event.payload.length);
+            this.setSuggestions(event.payload);
+          } else if (event.payload && typeof event.payload === 'object' && 'suggestions' in event.payload) {
+            const obj = event.payload as { suggestions: AiSuggestion[] };
+            console.log('[ai] suggestions in object, count:', obj.suggestions?.length);
+            this.setSuggestions(obj.suggestions);
+          } else {
+            console.warn('[ai] unexpected payload format:', event.payload);
+            this.setSuggestions([]);
+          }
+          state.analyzing = false;
+        }
+      );
+
+      unlistenAnalyzeError = await listen<{ message: string }>(
+        'ai-analyze-error',
+        (event) => {
+          console.error('[ai] ai-analyze-error event:', event.payload?.message);
+          state.lastError = event.payload?.message || 'AI 分析失败';
+          state.analyzing = false;
+        }
+      );
+
       state.listenerInstalled = true;
     } catch {
       // Listen API unavailable (e.g. browser preview). Ignore silently.
@@ -237,6 +290,10 @@ export const aiStore = {
     if (unlistenSuggestionsReady) {
       unlistenSuggestionsReady();
       unlistenSuggestionsReady = null;
+    }
+    if (unlistenAnalyzeError) {
+      unlistenAnalyzeError();
+      unlistenAnalyzeError = null;
     }
     state.listenerInstalled = false;
   },
@@ -251,15 +308,27 @@ export const aiStore = {
     }
   },
 
-  async requestAnalyze(): Promise<void> {
+  async requestAnalyze(scanId: string): Promise<void> {
+    console.log('[ai] requestAnalyze called, scanId:', scanId);
     state.loadingSuggestions = true;
+    state.analyzing = true;
+    state.lastError = '';
     try {
-      await invoke('cmd_ai_analyze');
+      const t0 = performance.now();
+      await invoke('cmd_ai_analyze', { scanId });
+      console.log('[ai] cmd_ai_analyze returned in', (performance.now() - t0).toFixed(0), 'ms');
     } catch (err) {
+      const elapsed = performance.now();
+      console.error('[ai] cmd_ai_analyze FAILED:', String(err));
       state.lastError = String(err);
+      state.analyzing = false;
     } finally {
       state.loadingSuggestions = false;
     }
+  },
+
+  clearAnalyzing(): void {
+    state.analyzing = false;
   },
 
   async resolveSuggestionPath(id: string): Promise<string | null> {
@@ -277,20 +346,6 @@ export const aiStore = {
   },
 };
 
-function localPreviewSnapshot(settings: AiSettings): AiSnapshot {
-  // Fallback preview when the Rust command isn't wired yet. We honor the
-  // category toggles so an all-off snapshot reads as nearly empty — the same
-  // contract the real command must hold.
-  const snapshot: AiSnapshot = {};
-  if (settings.categories.disks) snapshot.disks = [];
-  if (settings.categories.largeFiles) snapshot.large_items = [];
-  if (settings.categories.categories) snapshot.categories = [];
-  if (settings.categories.duplicates) snapshot.duplicates = [];
-  snapshot.mode = settings.mode;
-  if (settings.mode === 'builtin') {
-    snapshot.builtin_model = settings.builtinModel;
-  } else {
-    snapshot.byok_model = settings.byok.model;
-  }
-  return snapshot;
+function localPreviewSnapshot(_settings: AiSettings): AiSnapshot {
+  return {};
 }

@@ -108,17 +108,35 @@ const previewLoading = ref(false);
 const aiBuiltinModels = BUILTIN_MODELS;
 
 const aiCategoryItems = [
-  { key: 'disks', label: '磁盘容量与剩余空间', detail: '每个盘符的容量与可用空间（MB）' },
-  { key: 'largeFiles', label: '大文件列表（已脱敏）', detail: '仅大小、扩展名以及脱敏 token' },
-  { key: 'categories', label: '文件类别统计', detail: '按类别聚合的总大小与数量' },
-  { key: 'duplicates', label: '重复文件', detail: '重复组的总大小与数量' },
+  { key: 'tempFiles', label: '临时文件', detail: '系统临时目录、回收站等可安全清理的内容' },
+  { key: 'devTools', label: '开发构建产物', detail: 'node_modules、Gradle、Cargo 等构建缓存' },
+  { key: 'appCache', label: '应用缓存', detail: 'AppData 中的缓存与包数据' },
+  { key: 'largeFiles', label: '大文件', detail: '大于 256 MB 的单个文件（已脱敏）' },
+  { key: 'largeDirs', label: '大目录', detail: '大于 100 MB 的目录（已脱敏）' },
+  { key: 'systemFiles', label: '系统文件', detail: 'hiberfil.sys、pagefile.sys 等系统文件' },
+  { key: 'modelFiles', label: 'AI 模型文件', detail: '.safetensors、.pt、.onnx 等模型权重' },
+  { key: 'gameFiles', label: '游戏文件', detail: 'Steam、Epic 等游戏的安装目录' },
+  { key: 'mediaFiles', label: '媒体文件', detail: '视频、音频、图片等大型媒体' },
+  { key: 'diskImages', label: '磁盘镜像', detail: 'VHD、ISO、虚拟机镜像等' },
+  { key: 'installerFiles', label: '安装包', detail: '下载目录中的 .exe、.msi 安装包' },
+  { key: 'downloads', label: '下载目录', detail: 'Downloads 目录中的内容' },
+  { key: 'logFiles', label: '日志文件', detail: '.log、.etl 等日志' },
 ] as const;
 
 const allCategoriesOn = computed(() =>
-  ai.settings.categories.disks
+  ai.settings.categories.tempFiles
+  && ai.settings.categories.devTools
+  && ai.settings.categories.appCache
   && ai.settings.categories.largeFiles
-  && ai.settings.categories.categories
-  && ai.settings.categories.duplicates,
+  && ai.settings.categories.largeDirs
+  && ai.settings.categories.systemFiles
+  && ai.settings.categories.modelFiles
+  && ai.settings.categories.gameFiles
+  && ai.settings.categories.mediaFiles
+  && ai.settings.categories.diskImages
+  && ai.settings.categories.installerFiles
+  && ai.settings.categories.downloads
+  && ai.settings.categories.logFiles,
 );
 
 const byokValid = computed(() =>
@@ -339,10 +357,19 @@ function toggleAiCategory(key: keyof typeof ai.settings.categories) {
 
 function setAllAiCategories(value: boolean) {
   void aiStore.patchCategories({
-    disks: value,
+    tempFiles: value,
+    devTools: value,
+    appCache: value,
     largeFiles: value,
-    categories: value,
-    duplicates: value,
+    largeDirs: value,
+    systemFiles: value,
+    modelFiles: value,
+    gameFiles: value,
+    mediaFiles: value,
+    diskImages: value,
+    installerFiles: value,
+    downloads: value,
+    logFiles: value,
   });
 }
 
@@ -2252,7 +2279,8 @@ async function exportDiagnostics() {
 .theme-options {
   display: flex;
   gap: 0.5rem;
-  width: 100%;
+  flex-shrink: 0;
+  min-width: 180px;
 }
 
 .theme-btn {

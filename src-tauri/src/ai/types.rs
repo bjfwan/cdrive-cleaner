@@ -96,13 +96,31 @@ impl Default for AiSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiCategoryToggles {
     #[serde(default = "default_true")]
-    pub app_cache: bool,
+    pub temp_files: bool,
     #[serde(default = "default_true")]
     pub dev_tools: bool,
     #[serde(default = "default_true")]
-    pub temp_files: bool,
+    pub app_cache: bool,
     #[serde(default = "default_true")]
     pub large_files: bool,
+    #[serde(default = "default_true")]
+    pub large_dirs: bool,
+    #[serde(default = "default_true")]
+    pub system_files: bool,
+    #[serde(default = "default_true")]
+    pub model_files: bool,
+    #[serde(default = "default_true")]
+    pub game_files: bool,
+    #[serde(default = "default_true")]
+    pub media_files: bool,
+    #[serde(default = "default_true")]
+    pub disk_images: bool,
+    #[serde(default = "default_true")]
+    pub installer_files: bool,
+    #[serde(default = "default_true")]
+    pub downloads: bool,
+    #[serde(default = "default_true")]
+    pub log_files: bool,
 }
 
 fn default_true() -> bool {
@@ -112,25 +130,48 @@ fn default_true() -> bool {
 impl Default for AiCategoryToggles {
     fn default() -> Self {
         Self {
-            app_cache: true,
-            dev_tools: true,
             temp_files: true,
+            dev_tools: true,
+            app_cache: true,
             large_files: true,
+            large_dirs: true,
+            system_files: true,
+            model_files: true,
+            game_files: true,
+            media_files: true,
+            disk_images: true,
+            installer_files: true,
+            downloads: true,
+            log_files: true,
         }
     }
 }
 
 impl AiCategoryToggles {
     pub fn any_enabled(&self) -> bool {
-        self.app_cache || self.dev_tools || self.temp_files || self.large_files
+        self.temp_files || self.dev_tools || self.app_cache
+            || self.large_files || self.large_dirs
+            || self.system_files || self.model_files
+            || self.game_files || self.media_files
+            || self.disk_images || self.installer_files
+            || self.downloads || self.log_files
     }
 
     pub fn allows(&self, kind: &str) -> bool {
         match kind {
-            "app_cache" => self.app_cache,
-            "dev_tools" => self.dev_tools,
             "temp_files" => self.temp_files,
+            "dev_tools" => self.dev_tools,
+            "app_cache" => self.app_cache,
             "large_files" => self.large_files,
+            "large_dirs" => self.large_dirs,
+            "system_files" => self.system_files,
+            "model_files" => self.model_files,
+            "game_files" => self.game_files,
+            "media_files" => self.media_files,
+            "disk_images" => self.disk_images,
+            "installer_files" => self.installer_files,
+            "downloads" => self.downloads,
+            "log_files" => self.log_files,
             _ => false,
         }
     }

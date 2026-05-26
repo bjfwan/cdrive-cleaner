@@ -102,14 +102,34 @@ fn collect_dirs(nodes: &[DirectoryNode], out: &mut Vec<(String, String, u64, Str
 fn classify(path: &str, is_file: bool) -> String {
     let lower = path.to_ascii_lowercase();
     let backslashed = lower.replace('/', "\\");
+
+    // System files — never delete, may be resized/moved
+    if is_file {
+        let name = std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if name == "hiberfil.sys" || name == "pagefile.sys" || name == "swapfile.sys" {
+            return "system_files".into();
+        }
+        if name == "ntuser.dat" || name.ends_with(".regtrans-ms") || name.ends_with(".blf") {
+            return "system_files".into();
+        }
+    }
+
+    // Temp / recycle
     if backslashed.contains("\\appdata\\local\\temp")
         || backslashed.contains("\\temp\\")
         || backslashed.ends_with("\\temp")
         || backslashed.contains("\\$recycle.bin")
         || backslashed.contains("\\windows\\softwaredistribution")
+        || backslashed.contains("\\windows\\temp")
     {
         return "temp_files".into();
     }
+
+    // Dev / build artifacts
     if backslashed.contains("\\node_modules")
         || backslashed.contains("\\.gradle")
         || backslashed.contains("\\.m2")
@@ -118,20 +138,148 @@ fn classify(path: &str, is_file: bool) -> String {
         || backslashed.contains("\\.cargo")
         || backslashed.contains("\\go\\pkg")
         || backslashed.contains("\\.pnpm-store")
+        || backslashed.contains("\\.tox")
+        || backslashed.contains("\\__pycache__")
+        || backslashed.contains("\\.venv")
+        || backslashed.contains("\\venv")
+        || backslashed.contains("\\dist")
+        || backslashed.contains("\\build")
     {
         return "dev_tools".into();
     }
+
+    // Cache directories
     if backslashed.contains("\\cache")
         || backslashed.contains("\\caches")
         || backslashed.contains("\\appdata\\local\\packages")
         || backslashed.contains("\\appdata\\roaming")
+        || backslashed.contains("\\.cache")
     {
         return "app_cache".into();
     }
+
+    // Model / ML files — large, movable
+    if is_file {
+        let name = std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if name.ends_with(".bin") && name.contains("model")
+            || name.ends_with(".safetensors")
+            || name.ends_with(".pt")
+            || name.ends_with(".pth")
+            || name.ends_with(".onnx")
+            || name.ends_with(".gguf")
+            || name.ends_with(".ckpt")
+            || name.contains("pytorch_model")
+            || name.contains("tf_model")
+        {
+            return "model_files".into();
+        }
+    }
+    if backslashed.contains("\\models")
+        || backslashed.contains("\\checkpoints")
+        || backslashed.contains("\\huggingface")
+        || backslashed.contains("\\ollama")
+        || backslashed.contains("\\.cache\\huggingface")
+        || backslashed.contains("\\.cache\\lm-studio")
+    {
+        return "model_files".into();
+    }
+
+    // Game installations
+    if backslashed.contains("\\steamapps\\common")
+        || backslashed.contains("\\steamapps\\downloading")
+        || backslashed.contains("\\steamapps\\workshop")
+        || backslashed.contains("\\origin games")
+        || backslashed.contains("\\epic games")
+        || backslashed.contains("\\gog games")
+        || backslashed.contains("\\ubisoft")
+        || backslashed.contains("\\blizzard")
+    {
+        return "game_files".into();
+    }
+
+    // VMs and disk images
+    if is_file {
+        let name = std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if name.ends_with(".vhd") || name.ends_with(".vhdx")
+            || name.ends_with(".vmdk") || name.ends_with(".ova")
+            || name.ends_with(".iso") || name.ends_with(".img")
+            || name.ends_with(".dmg")
+        {
+            return "disk_images".into();
+        }
+    }
+
+    // Installers / archives
+    if is_file {
+        let name = std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if name.ends_with(".msi") || name.ends_with(".exe")
+            && !name.contains("setup")
+            && backslashed.contains("\\downloads")
+        {
+            return "installer_files".into();
+        }
+    }
+    if backslashed.contains("\\downloads") {
+        return "downloads".into();
+    }
+
+    // Large media
+    if is_file {
+        let name = std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if name.ends_with(".mp4") || name.ends_with(".mkv") || name.ends_with(".avi")
+            || name.ends_with(".mov") || name.ends_with(".wmv") || name.ends_with(".flv")
+            || name.ends_with(".mp3") || name.ends_with(".flac") || name.ends_with(".wav")
+            || name.ends_with(".psd") || name.ends_with(".ai") || name.ends_with(".aep")
+            || name.ends_with(".prproj") || name.ends_with(".fcpxml")
+        {
+            return "media_files".into();
+        }
+    }
+    if backslashed.contains("\\videos")
+        || backslashed.contains("\\video")
+        || backslashed.contains("\\movies")
+        || backslashed.contains("\\music")
+        || backslashed.contains("\\pictures")
+        || backslashed.contains("\\photos")
+    {
+        return "media_files".into();
+    }
+
+    // Logs
+    if is_file {
+        let name = std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if name.ends_with(".log") || name.ends_with(".etl") {
+            return "log_files".into();
+        }
+    }
+    if backslashed.contains("\\logs") || backslashed.contains("\\log") {
+        return "log_files".into();
+    }
+
     if is_file {
         return "large_files".into();
     }
-    "large_files".into()
+    "large_dirs".into()
 }
 
 fn sanitize_label(name: &str, path: &str, size_bytes: u64) -> String {

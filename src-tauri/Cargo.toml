@@ -1,6 +1,6 @@
 [package]
 name = "cdrive-cleaner"
-version = "0.1.10"
+version = "0.1.11"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -62,7 +62,7 @@ dashmap = "6"
 bincode = "1"
 aho-corasick = "1"
 zip = "0.6"
-ureq = { version = "2", features = ["json"] }
+ureq = { version = "2", features = ["json", "native-tls"] }
 
 # Track B: AI client + sanitizer
 # Reuses existing crates only (ureq for HTTP, serde_json for JSON,

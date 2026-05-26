@@ -1219,6 +1219,7 @@ async function resumePendingScanIntent() {
 
           <AiSuggestions
             v-if="activeTab === 'ai'"
+            :current-drive="selectedDisk"
             @open-migrate="openMigrateSingle"
             @go-settings="openSettings"
             @go-privacy="showPrivacy = true"

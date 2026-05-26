@@ -12,6 +12,10 @@ const emit = defineEmits<{
   'go-privacy': [];
 }>();
 
+const props = defineProps<{
+  currentDrive: string;
+}>();
+
 const showToast = useToast();
 const applyingId = ref<string | null>(null);
 
@@ -19,12 +23,12 @@ const state = aiStore.state;
 
 const enabled = computed(() => state.settings.enabled);
 const suggestions = computed<AiSuggestion[]>(() => [...state.suggestions]);
-const anyCategoryOn = computed(() =>
-  state.settings.categories.disks
-  || state.settings.categories.largeFiles
-  || state.settings.categories.categories
-  || state.settings.categories.duplicates,
-);
+const anyCategoryOn = computed(() => {
+  const c = state.settings.categories;
+  return c.tempFiles || c.devTools || c.appCache || c.largeFiles || c.largeDirs
+    || c.systemFiles || c.modelFiles || c.gameFiles || c.mediaFiles
+    || c.diskImages || c.installerFiles || c.downloads || c.logFiles;
+});
 
 const totalSavingsMb = computed(() => suggestions.value.reduce((sum, s) => sum + (s.estimated_savings_mb || 0), 0));
 const formattedSavings = computed(() => {
@@ -53,8 +57,7 @@ async function refresh() {
     showToast('未勾选任何数据类别', '请到设置中至少勾选一个发送类别', 'warning');
     return;
   }
-  await aiStore.requestAnalyze();
-  showToast('已请求 AI 分析', '建议将在分析完成后自动出现', 'info');
+  await aiStore.requestAnalyze(props.currentDrive);
 }
 
 async function onAccept(suggestion: AiSuggestion) {
@@ -122,47 +125,6 @@ function onDismiss(suggestion: AiSuggestion) {
         <rect width="600" height="240" fill="url(#ai-grid)" />
       </svg>
 
-      <svg class="ai-hero-orbit" viewBox="0 0 200 200" aria-hidden="true">
-        <defs>
-          <linearGradient id="orbit-stroke" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.7" />
-            <stop offset="100%" stop-color="#ffffff" stop-opacity="0.1" />
-          </linearGradient>
-          <radialGradient id="core-grad" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95" />
-            <stop offset="55%" stop-color="#c084fc" stop-opacity="0.9" />
-            <stop offset="100%" stop-color="#7c3aed" stop-opacity="0.4" />
-          </radialGradient>
-        </defs>
-        <g transform="translate(100 100)">
-          <circle r="78" fill="none" stroke="url(#orbit-stroke)" stroke-width="1" stroke-dasharray="2 4" opacity="0.6">
-            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="38s" repeatCount="indefinite" />
-          </circle>
-          <circle r="58" fill="none" stroke="url(#orbit-stroke)" stroke-width="1" stroke-dasharray="1 3" opacity="0.5">
-            <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="22s" repeatCount="indefinite" />
-          </circle>
-          <circle r="38" fill="none" stroke="url(#orbit-stroke)" stroke-width="1" opacity="0.3" />
-          <circle r="28" fill="url(#core-grad)" opacity="0.95">
-            <animate attributeName="r" values="26;30;26" dur="3.6s" repeatCount="indefinite" />
-          </circle>
-          <g>
-            <circle cx="78" cy="0" r="3" fill="#ffffff" opacity="0.9">
-              <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="14s" repeatCount="indefinite" />
-            </circle>
-          </g>
-          <g>
-            <circle cx="-58" cy="0" r="2.5" fill="#22d3ee" opacity="0.85">
-              <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="9s" repeatCount="indefinite" />
-            </circle>
-          </g>
-          <g>
-            <circle cx="0" cy="38" r="2" fill="#f0abfc" opacity="0.85">
-              <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="6.5s" repeatCount="indefinite" />
-            </circle>
-          </g>
-        </g>
-      </svg>
-
       <div class="ai-hero-copy">
         <div class="ai-hero-eyebrow">
           <span class="ai-hero-dot"></span>
@@ -192,12 +154,12 @@ function onDismiss(suggestion: AiSuggestion) {
         <div class="ai-hero-actions">
           <button
             class="ai-cta ai-cta--primary"
-            :disabled="state.loadingSuggestions"
+            :disabled="state.analyzing || state.loadingSuggestions"
             @click="refresh"
           >
-            <span v-if="!state.loadingSuggestions" class="ai-cta-icon"><IconSparkles :size="16" /></span>
+            <span v-if="!state.analyzing && !state.loadingSuggestions" class="ai-cta-icon"><IconSparkles :size="16" /></span>
             <span v-else class="ai-cta-spinner" aria-hidden="true"></span>
-            <span>{{ state.loadingSuggestions ? 'AI 正在分析…' : '让 AI 看一眼盘里情况' }}</span>
+            <span>{{ state.analyzing ? 'AI 正在分析…' : state.loadingSuggestions ? '准备中…' : '让 AI 看一眼盘里情况' }}</span>
           </button>
           <button class="ai-cta ai-cta--ghost" @click="emit('go-settings')">
             <span>AI 设置</span>
@@ -234,6 +196,39 @@ function onDismiss(suggestion: AiSuggestion) {
       </button>
     </div>
 
+    <div v-else-if="state.lastError && suggestions.length === 0" class="ai-analyzing">
+      <div class="ai-error-icon">!</div>
+      <h3>分析失败</h3>
+      <p>{{ state.lastError }}</p>
+      <button class="ai-cta ai-cta--primary" style="margin-top: 0.5rem" @click="aiStore.clearAnalyzing(); refresh()">重试</button>
+    </div>
+
+    <div v-else-if="suggestions.length === 0" class="ai-empty">
+      <svg class="ai-analyzing-art" viewBox="0 0 320 200" aria-hidden="true">
+        <defs>
+          <linearGradient id="aa-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#a855f7" />
+            <stop offset="100%" stop-color="#14b8a6" />
+          </linearGradient>
+        </defs>
+        <g transform="translate(160 100)">
+          <circle r="60" fill="none" stroke="url(#aa-grad)" stroke-width="2" opacity="0.6">
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="1.5s" repeatCount="indefinite" />
+          </circle>
+          <circle r="40" fill="none" stroke="url(#aa-grad)" stroke-width="1.5" opacity="0.4">
+            <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="2s" repeatCount="indefinite" />
+          </circle>
+          <circle r="16" fill="url(#aa-grad)" opacity="0.7">
+            <animate attributeName="r" values="12;18;12" dur="1.2s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.5;1;0.5" dur="1.2s" repeatCount="indefinite" />
+          </circle>
+        </g>
+      </svg>
+      <h3>AI 正在分析盘里数据…</h3>
+      <p>将扫描结果脱敏后发送给 {{ modelLabel }}，预计需要 5–30 秒</p>
+      <p v-if="state.settings.mode === 'byok'" class="ai-model-note">当前使用自定义模型：{{ state.settings.byok.model }}</p>
+    </div>
+
     <div v-else-if="suggestions.length === 0" class="ai-empty">
       <svg class="ai-empty-art" viewBox="0 0 320 200" aria-hidden="true">
         <defs>
@@ -259,11 +254,16 @@ function onDismiss(suggestion: AiSuggestion) {
     </div>
 
     <div v-else class="ai-list">
+      <div v-if="state.lastError" class="ai-error-banner">
+        <span class="ai-error-icon">!</span>
+        <span class="ai-error-msg">{{ state.lastError }}</span>
+        <button class="ai-cta ai-cta--primary ai-cta--xs" @click="aiStore.clearAnalyzing(); refresh()">重试</button>
+      </div>
       <header class="ai-list-head">
         <h3>{{ suggestions.length }} 条建议待看</h3>
-        <button class="ai-cta ai-cta--ghost ai-cta--sm" :disabled="state.loadingSuggestions" @click="refresh">
-          <IconRefresh :size="14" :spinning="state.loadingSuggestions" />
-          <span>{{ state.loadingSuggestions ? '分析中…' : '再来一次' }}</span>
+        <button class="ai-cta ai-cta--ghost ai-cta--sm" :disabled="state.analyzing" @click="refresh">
+          <IconRefresh :size="14" :spinning="state.analyzing" />
+          <span>{{ state.analyzing ? '分析中…' : '再来一次' }}</span>
         </button>
       </header>
       <AiSuggestionCard
@@ -306,41 +306,28 @@ function onDismiss(suggestion: AiSuggestion) {
   pointer-events: none;
 }
 
-.ai-hero-orbit {
-  position: absolute;
-  right: -36px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 280px;
-  height: 280px;
-  z-index: 1;
-  pointer-events: none;
-  filter: drop-shadow(0 12px 36px rgba(168, 85, 247, 0.4));
-}
-
 .ai-hero-copy {
   position: relative;
   z-index: 2;
-  padding: 28px 32px;
-  max-width: 60ch;
+  padding: 20px 28px;
   color: #ffffff;
 }
 
 .ai-hero-eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 12px;
+  gap: 6px;
+  padding: 4px 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: #ffffff;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .ai-hero-dot {
@@ -358,8 +345,8 @@ function onDismiss(suggestion: AiSuggestion) {
 }
 
 .ai-hero-title {
-  margin: 0 0 8px;
-  font-size: 26px;
+  margin: 0 0 6px;
+  font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.01em;
   color: #ffffff;
@@ -367,12 +354,11 @@ function onDismiss(suggestion: AiSuggestion) {
 }
 
 .ai-hero-desc {
-  margin: 0 0 18px;
-  font-size: 13.5px;
-  line-height: 1.65;
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.6;
   color: rgba(255, 255, 255, 0.88);
   text-shadow: 0 2px 12px rgba(15, 23, 42, 0.35);
-  max-width: 56ch;
 }
 
 .ai-hero-desc strong {
@@ -383,8 +369,8 @@ function onDismiss(suggestion: AiSuggestion) {
 .ai-hero-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, max-content));
-  gap: 24px;
-  margin-bottom: 20px;
+  gap: 20px;
+  margin-bottom: 16px;
 }
 
 .ai-hero-stat {
@@ -395,7 +381,7 @@ function onDismiss(suggestion: AiSuggestion) {
 }
 
 .ai-hero-stat-value {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 800;
   color: #ffffff;
   line-height: 1.15;
@@ -405,7 +391,7 @@ function onDismiss(suggestion: AiSuggestion) {
 }
 
 .ai-hero-stat-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -593,6 +579,106 @@ function onDismiss(suggestion: AiSuggestion) {
   border-top-color: #ffffff;
 }
 
+/* ── Analyzing animation ── */
+
+.ai-analyzing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 3rem 2rem;
+  text-align: center;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(168, 85, 247, 0.12), transparent 60%),
+    rgba(168, 85, 247, 0.04);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  border-radius: var(--radius-lg);
+}
+
+.ai-analyzing-art {
+  width: 180px;
+  height: 120px;
+  margin-bottom: 0.5rem;
+}
+
+.ai-analyzing h3 {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.ai-analyzing p {
+  font-size: 0.875rem;
+  color: var(--color-text-tertiary);
+  margin: 0;
+  max-width: 320px;
+}
+
+.ai-model-note {
+  font-size: 0.75rem !important;
+  color: var(--color-text-tertiary) !important;
+  opacity: 0.6;
+}
+
+/* ── Error banner ── */
+
+.ai-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+}
+
+.ai-error-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ef4444;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.ai-error-msg {
+  flex: 1;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+
+.ai-cta--xs {
+  min-width: auto !important;
+  padding: 0.375rem 0.875rem !important;
+  font-size: 0.8125rem !important;
+  border-radius: 8px !important;
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .ai-analyzing {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(168, 85, 247, 0.16), transparent 60%),
+    rgba(168, 85, 247, 0.06);
+  border-color: rgba(168, 85, 247, 0.28);
+}
+
+[data-theme="dark"] .ai-analyzing h3 {
+  color: #f5f5f7;
+}
+
+[data-theme="dark"] .ai-error-banner {
+  background: rgba(239, 68, 68, 0.12);
+}
+
 [data-theme="dark"] .ai-hero {
   background: linear-gradient(135deg, rgba(168, 85, 247, 0.14) 0%, rgba(20, 184, 166, 0.1) 100%), rgba(15, 23, 42, 0.5);
   border-color: rgba(168, 85, 247, 0.32);
@@ -615,9 +701,8 @@ function onDismiss(suggestion: AiSuggestion) {
 }
 
 @media (max-width: 720px) {
-  .ai-hero-orbit { display: none; }
-  .ai-hero-copy { padding: 22px 22px 24px; }
-  .ai-hero-title { font-size: 22px; }
-  .ai-hero-stats { gap: 18px; }
+  .ai-hero-copy { padding: 18px 20px; }
+  .ai-hero-title { font-size: 20px; }
+  .ai-hero-stats { gap: 14px; }
 }
 </style>

@@ -21,10 +21,19 @@ const modeLabel = computed(() =>
 const enabledCategories = computed(() => {
   const cats = state.settings.categories;
   const labels: string[] = [];
-  if (cats.disks) labels.push('磁盘容量与剩余空间');
-  if (cats.largeFiles) labels.push('大文件列表（已脱敏）');
-  if (cats.categories) labels.push('文件类别统计');
-  if (cats.duplicates) labels.push('重复文件');
+  if (cats.tempFiles) labels.push('临时文件');
+  if (cats.devTools) labels.push('开发构建产物');
+  if (cats.appCache) labels.push('应用缓存');
+  if (cats.largeFiles) labels.push('大文件（已脱敏）');
+  if (cats.largeDirs) labels.push('大目录（已脱敏）');
+  if (cats.systemFiles) labels.push('系统文件');
+  if (cats.modelFiles) labels.push('AI 模型文件');
+  if (cats.gameFiles) labels.push('游戏文件');
+  if (cats.mediaFiles) labels.push('媒体文件');
+  if (cats.diskImages) labels.push('磁盘镜像');
+  if (cats.installerFiles) labels.push('安装包');
+  if (cats.downloads) labels.push('下载目录');
+  if (cats.logFiles) labels.push('日志文件');
   return labels;
 });
 </script>

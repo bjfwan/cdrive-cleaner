@@ -87,17 +87,36 @@ pub async fn cmd_ai_analyze(
     ai_state: State<'_, Arc<AiState>>,
     settings: State<'_, Arc<SettingsStore>>,
 ) -> Result<(), String> {
+    eprintln!("[ai] cmd_ai_analyze called, scan_id={scan_id}");
+
     let scan = scanner
         .get_directory_snapshot(&scan_id, &scan_id)
-        .ok_or_else(|| format!("no scan result for scan_id={scan_id}"))?;
+        .ok_or_else(|| {
+            eprintln!("[ai] cmd_ai_analyze FAIL: no scan result for {scan_id}");
+            format!("no scan result for scan_id={scan_id}")
+        })?;
+
+    eprintln!("[ai] snapshot loaded: {} files, {} dirs", scan.total_files, scan.total_dirs);
+
     let (total, free) = disk_usage_for(&scan_id);
+    eprintln!("[ai] disk usage: total={total} free={free}");
+
     let ai_settings = read_ai_settings(&settings);
+    eprintln!("[ai] mode={:?} model={}", ai_settings.mode, ai_settings.provider.model);
 
     if !ai_settings.categories.any_enabled() {
+        eprintln!("[ai] cmd_ai_analyze FAIL: no ai categories enabled");
         return Err("no ai categories enabled".into());
     }
 
+    let t0 = std::time::Instant::now();
     let prepared = sanitizer::build_snapshot(&scan, total, free, &ai_settings);
+    eprintln!("[ai] sanitizer took {:?}, snapshot items: {} disks, {} large_items, {} categories",
+        t0.elapsed(),
+        prepared.snapshot.disks.len(),
+        prepared.snapshot.large_items.len(),
+        prepared.snapshot.categories.len());
+
     ai_state.store_snapshot(
         &scan_id,
         prepared.snapshot.clone(),
@@ -109,15 +128,26 @@ pub async fn cmd_ai_analyze(
     let ai_state_for_task = ai_state.inner().clone();
     let app_for_task = app.clone();
 
+    eprintln!("[ai] spawning background analyze task...");
     tauri::async_runtime::spawn(async move {
+        let t_start = std::time::Instant::now();
+        eprintln!("[ai] background task: calling client::analyze...");
+
         let analyze_result = tokio::task::spawn_blocking(move || {
             client::analyze(&snapshot, &ai_settings)
         })
         .await;
 
+        let elapsed = t_start.elapsed();
+        eprintln!("[ai] background task: client::analyze finished in {elapsed:.2?}");
+
         let suggestions = match analyze_result {
-            Ok(Ok(s)) => s,
+            Ok(Ok(s)) => {
+                eprintln!("[ai] analyze SUCCESS: {} suggestions in {elapsed:.2?}", s.len());
+                s
+            }
             Ok(Err(e)) => {
+                eprintln!("[ai] analyze FAILED: {e} (elapsed: {elapsed:.2?})");
                 tracing::warn!("[ai] analyze failed: {e}");
                 let _ = app_for_task.emit(
                     "ai-analyze-error",
@@ -129,6 +159,7 @@ pub async fn cmd_ai_analyze(
                 return;
             }
             Err(e) => {
+                eprintln!("[ai] analyze JOIN FAILED: {e:?}");
                 tracing::error!("[ai] analyze task join failed: {e}");
                 return;
             }
@@ -142,8 +173,10 @@ pub async fn cmd_ai_analyze(
                 suggestions,
             },
         );
+        eprintln!("[ai] emitted ai-suggestions-ready event");
     });
 
+    eprintln!("[ai] cmd_ai_analyze returning Ok immediately");
     Ok(())
 }
 
