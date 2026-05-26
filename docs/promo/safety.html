@@ -2,323 +2,244 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=1200">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>安全保障 · CSD</title>
-<link rel="stylesheet" href="styles/main.css">
-<link rel="stylesheet" href="styles/safety.css">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<meta name="description" content="基于 Windows Restart Manager、注册表索引、NTFS Reparse Point 检测等底层能力，每次迁移前并行执行六道安全检测，自动给出四级判定。">
+<link rel="icon" href="assets/app-icon.png">
+<link rel="stylesheet" href="styles/editorial.css">
 </head>
 <body>
 
-<div class="bg-mesh">
-  <div class="orb orb-1"></div>
-  <div class="orb orb-2"></div>
-  <div class="orb orb-3"></div>
-  <div class="noise-overlay"></div>
-</div>
-
-<nav class="sticky-nav">
-  <div class="nav-inner">
-    <a class="nav-logo" href="index.html">
-      <img src="assets/app-icon.png" alt="CSD" class="nav-logo-icon">
+<header class="site-header">
+  <div class="shell topbar">
+    <a class="brand" href="index.html">
+      <img src="assets/app-icon.png" alt="CSD">
       <span>CSD</span>
     </a>
-    <div class="nav-links">
-      <a href="index.html">
-        <img src="assets/icons/nav-features.svg" alt="" class="nav-icon">功能
+    <nav class="nav" aria-label="主导航">
+      <a href="index.html" class="nav-link">
+        <img src="assets/icons/nav-features.svg" alt="" aria-hidden="true">
+        <span>总览</span>
       </a>
-      <a href="workflow.html">
-        <img src="assets/icons/nav-workflow.svg" alt="" class="nav-icon">迁移流程
+      <a href="workflow.html" class="nav-link">
+        <img src="assets/icons/nav-workflow.svg" alt="" aria-hidden="true">
+        <span>迁移流程</span>
       </a>
-      <a href="safety.html" class="active">
-        <img src="assets/icons/nav-safety.svg" alt="" class="nav-icon">安全保障
+      <a href="safety.html" class="nav-link active">
+        <img src="assets/icons/nav-safety.svg" alt="" aria-hidden="true">
+        <span>安全保障</span>
       </a>
-      <a href="perf.html">
-        <img src="assets/icons/nav-perf.svg" alt="" class="nav-icon">性能
+      <a href="perf.html" class="nav-link">
+        <img src="assets/icons/nav-perf.svg" alt="" aria-hidden="true">
+        <span>性能</span>
       </a>
-    </div>
-    <a class="nav-cta" href="https://github.com/bjfwan/cdrive-cleaner/releases/download/v0.1.8/CSD_0.1.8_x64-setup.exe" target="_blank">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      下载
+    </nav>
+    <a class="nav-cta" href="https://github.com/bjfwan/cdrive-cleaner/releases/download/v0.1.10/CSD_0.1.10_x64-setup.exe" target="_blank" rel="noopener">
+      <span>下载 0.1.10</span>
     </a>
   </div>
-</nav>
+</header>
 
-<div class="container page-transition">
+<main class="shell page">
 
-  <!-- Page Header -->
-  <section class="page-hero">
-    <span class="overline">Safety First</span>
-    <h1>四级安全判定 + 六道检测门</h1>
-    <p class="page-hero-desc">基于 Windows Restart Manager、注册表索引、NTFS Reparse Point 检测等底层能力，每次迁移前并行执行六道安全检测，自动给出四级判定。</p>
-  </section>
-
-  <!-- ===== Safety Verdict Spectrum ===== -->
-  <section class="safety-spectrum reveal">
-    <div class="spectrum-bar">
-      <div class="spectrum-fill"></div>
-      <div class="spectrum-labels">
-        <span class="spectrum-label sl-safe">Safe</span>
-        <span class="spectrum-label sl-action">SafeAfterAction</span>
-        <span class="spectrum-label sl-blocked">Blocked</span>
-        <span class="spectrum-label sl-critical">SystemCritical</span>
-      </div>
+  <section class="section">
+    <div class="section-head" style="max-width:48rem">
+      <span class="tag tag--accent">Safety First</span>
+      <h2>四级安全判定 + 六道检测门</h2>
+      <p>基于 Windows Restart Manager、注册表索引、NTFS Reparse Point 检测等底层能力，每次迁移前并行执行六道安全检测，自动给出四级判定。</p>
     </div>
-  </section>
 
-  <!-- ===== Four Verdict Levels ===== -->
-  <section class="safety-levels stagger-reveal">
-    <!-- Safe -->
-    <div class="safety-level-card slc-safe">
-      <div class="slc-header">
-        <div class="slc-icon">
-          <svg viewBox="0 0 32 32" fill="none">
-            <circle cx="16" cy="16" r="13" stroke="currentColor" stroke-width="2"/>
-            <path d="M11 16l3.5 3.5L21 13" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="slc-title-group">
-          <span class="slc-level">Verdict::Safe</span>
-          <h3>安全放行</h3>
-        </div>
-        <div class="slc-badge slc-badge-safe">可迁移</div>
-      </div>
-      <div class="slc-body">
-        <div class="slc-left">
-          <p class="slc-desc">
-            六道检测门全部通过，无任何 Warning 或 Blocker。目录无进程占用、无硬链接、无 Reparse Point、无注册表绑定，目标卷空间充足且为 NTFS。
-          </p>
-          <div class="slc-examples">
-            <span class="example-tag et-safe">Steam 游戏库</span>
-            <span class="example-tag et-safe">用户文档</span>
-            <span class="example-tag et-safe">下载目录</span>
-            <span class="example-tag et-safe">应用缓存</span>
-          </div>
-        </div>
-        <div class="slc-right">
-          <div class="gate-list">
-            <div class="gate-item gate-pass"><span class="gate-name">file_locks</span><span class="gate-status">PASS</span></div>
-            <div class="gate-item gate-pass"><span class="gate-name">boot_drivers</span><span class="gate-status">PASS</span></div>
-            <div class="gate-item gate-pass"><span class="gate-name">hardlinks</span><span class="gate-status">PASS</span></div>
-            <div class="gate-item gate-pass"><span class="gate-name">reparse_points</span><span class="gate-status">PASS</span></div>
-            <div class="gate-item gate-pass"><span class="gate-name">target_volume</span><span class="gate-status">PASS</span></div>
-            <div class="gate-item gate-pass"><span class="gate-name">registry_bindings</span><span class="gate-status">PASS</span></div>
-          </div>
+    <div class="safety-spectrum" style="margin-bottom:24px">
+      <div class="spectrum-bar-track">
+        <div class="spectrum-segments">
+          <span class="spec-seg spec-seg-safe">Safe</span>
+          <span class="spec-seg spec-seg-action">SafeAfterAction</span>
+          <span class="spec-seg spec-seg-blocked">Blocked</span>
+          <span class="spec-seg spec-seg-critical">SystemCritical</span>
         </div>
       </div>
     </div>
 
-    <!-- SafeAfterAction -->
-    <div class="safety-level-card slc-action">
-      <div class="slc-header">
-        <div class="slc-icon">
-          <svg viewBox="0 0 32 32" fill="none">
-            <path d="M16 3L3 10v8l13 10 13-10v-8L16 3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            <path d="M16 14v4M16 22v1" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="slc-title-group">
-          <span class="slc-level">Verdict::SafeAfterAction</span>
-          <h3>需用户操作后放行</h3>
-        </div>
-        <div class="slc-badge slc-badge-action">需操作</div>
-      </div>
-      <div class="slc-body">
-        <div class="slc-left">
-          <p class="slc-desc">
-            存在 Warning 级别发现，但无 Blocker。典型场景：目录中的文件被其他进程占用。CSD 会列出占用进程名称和 PID，用户关闭进程后即可安全迁移。
-          </p>
-          <div class="slc-examples">
-            <span class="example-tag et-action">VSCode 正在运行</span>
-            <span class="example-tag et-action">Chrome 占用缓存</span>
-            <span class="example-tag et-action">硬链接文件</span>
+    <div class="verdict-grid">
+      <!-- Safe -->
+      <div class="verdict-card verdict-card--safe" style="border-top:3px solid var(--green)">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--green-soft);color:var(--green);font-weight:700;font-size:0.88rem">&#10003;</div>
+          <div>
+            <p style="margin:0;color:var(--muted);font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase">Verdict::Safe</p>
+            <h3 style="margin:0;font-size:1rem;line-height:1.35">安全放行</h3>
           </div>
+          <span class="tag tag--green" style="margin-left:auto">可迁移</span>
         </div>
-        <div class="slc-right">
-          <div class="gate-list">
-            <div class="gate-item gate-warn"><span class="gate-name">file_locks</span><span class="gate-status">WARN</span></div>
-            <div class="gate-item gate-pass"><span class="gate-name">boot_drivers</span><span class="gate-status">PASS</span></div>
-            <div class="gate-item gate-warn"><span class="gate-name">hardlinks</span><span class="gate-status">WARN</span></div>
-            <div class="gate-item gate-pass"><span class="gate-name">reparse_points</span><span class="gate-status">PASS</span></div>
-            <div class="gate-item gate-pass"><span class="gate-name">target_volume</span><span class="gate-status">PASS</span></div>
-            <div class="gate-item gate-pass"><span class="gate-name">registry_bindings</span><span class="gate-status">PASS</span></div>
-          </div>
+        <p style="color:var(--muted);font-size:0.94rem;line-height:1.76;margin:0 0 10px">
+          六道检测门全部通过，无任何 Warning 或 Blocker。目录无进程占用、无硬链接、无 Reparse Point、无注册表绑定，目标卷空间充足且为 NTFS。
+        </p>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+          <span style="min-height:26px;padding:0 10px;border-radius:999px;background:var(--green-soft);color:var(--green);font-size:0.74rem;font-weight:700">Steam 游戏库</span>
+          <span style="min-height:26px;padding:0 10px;border-radius:999px;background:var(--green-soft);color:var(--green);font-size:0.74rem;font-weight:700">用户文档</span>
+          <span style="min-height:26px;padding:0 10px;border-radius:999px;background:var(--green-soft);color:var(--green);font-size:0.74rem;font-weight:700">下载目录</span>
+          <span style="min-height:26px;padding:0 10px;border-radius:999px;background:var(--green-soft);color:var(--green);font-size:0.74rem;font-weight:700">应用缓存</span>
+        </div>
+        <div class="gate-list-inline">
+          <div class="gi-item gi-pass"><span>file_locks</span><span>PASS</span></div>
+          <div class="gi-item gi-pass"><span>boot_drivers</span><span>PASS</span></div>
+          <div class="gi-item gi-pass"><span>hardlinks</span><span>PASS</span></div>
+          <div class="gi-item gi-pass"><span>reparse_points</span><span>PASS</span></div>
+          <div class="gi-item gi-pass"><span>target_volume</span><span>PASS</span></div>
+          <div class="gi-item gi-pass"><span>registry_bindings</span><span>PASS</span></div>
         </div>
       </div>
-    </div>
 
-    <!-- Blocked -->
-    <div class="safety-level-card slc-blocked">
-      <div class="slc-header">
-        <div class="slc-icon">
-          <svg viewBox="0 0 32 32" fill="none">
-            <circle cx="16" cy="16" r="13" stroke="currentColor" stroke-width="2"/>
-            <path d="M7 7l18 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="slc-title-group">
-          <span class="slc-level">Verdict::Blocked</span>
-          <h3>默认拒绝</h3>
-        </div>
-        <div class="slc-badge slc-badge-blocked">高风险</div>
-      </div>
-      <div class="slc-body">
-        <div class="slc-left">
-          <p class="slc-desc">
-            存在 Blocker 级别发现。典型场景：目录包含 Reparse Point（符号链接/Junction），复制阶段会中止；或 Boot 级内核驱动位于此目录；或目标卷非 NTFS / 空间不足。
-          </p>
-          <div class="slc-examples">
-            <span class="example-tag et-blocked">含 Reparse Point</span>
-            <span class="example-tag et-blocked">Boot 驱动目录</span>
-            <span class="example-tag et-blocked">目标非 NTFS</span>
+      <!-- SafeAfterAction -->
+      <div class="verdict-card verdict-card--action" style="border-top:3px solid #d97706">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:rgba(217,119,6,0.12);color:#d97706;font-weight:700;font-size:0.88rem">&#9888;</div>
+          <div>
+            <p style="margin:0;color:var(--muted);font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase">Verdict::SafeAfterAction</p>
+            <h3 style="margin:0;font-size:1rem;line-height:1.35">需用户操作后放行</h3>
           </div>
+          <span class="tag tag--amber" style="margin-left:auto">需操作</span>
         </div>
-        <div class="slc-right">
-          <div class="gate-list">
-            <div class="gate-item gate-pass"><span class="gate-name">file_locks</span><span class="gate-status">PASS</span></div>
-            <div class="gate-item gate-block"><span class="gate-name">boot_drivers</span><span class="gate-status">BLOCK</span></div>
-            <div class="gate-item gate-pass"><span class="gate-name">hardlinks</span><span class="gate-status">PASS</span></div>
-            <div class="gate-item gate-block"><span class="gate-name">reparse_points</span><span class="gate-status">BLOCK</span></div>
-            <div class="gate-item gate-pass"><span class="gate-name">target_volume</span><span class="gate-status">PASS</span></div>
-            <div class="gate-item gate-pass"><span class="gate-name">registry_bindings</span><span class="gate-status">PASS</span></div>
-          </div>
+        <p style="color:var(--muted);font-size:0.94rem;line-height:1.76;margin:0 0 10px">
+          存在 Warning 级别发现，但无 Blocker。典型场景：目录中的文件被其他进程占用。CSD 会列出占用进程名称和 PID，用户关闭进程后即可安全迁移。
+        </p>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+          <span style="min-height:26px;padding:0 10px;border-radius:999px;background:rgba(217,119,6,0.12);color:#d97706;font-size:0.74rem;font-weight:700">VSCode 正在运行</span>
+          <span style="min-height:26px;padding:0 10px;border-radius:999px;background:rgba(217,119,6,0.12);color:#d97706;font-size:0.74rem;font-weight:700">Chrome 占用缓存</span>
+          <span style="min-height:26px;padding:0 10px;border-radius:999px;background:rgba(217,119,6,0.12);color:#d97706;font-size:0.74rem;font-weight:700">硬链接文件</span>
+        </div>
+        <div class="gate-list-inline">
+          <div class="gi-item gi-warn"><span>file_locks</span><span>WARN</span></div>
+          <div class="gi-item gi-pass"><span>boot_drivers</span><span>PASS</span></div>
+          <div class="gi-item gi-warn"><span>hardlinks</span><span>WARN</span></div>
+          <div class="gi-item gi-pass"><span>reparse_points</span><span>PASS</span></div>
+          <div class="gi-item gi-pass"><span>target_volume</span><span>PASS</span></div>
+          <div class="gi-item gi-pass"><span>registry_bindings</span><span>PASS</span></div>
         </div>
       </div>
-    </div>
 
-    <!-- SystemCritical -->
-    <div class="safety-level-card slc-critical">
-      <div class="slc-header">
-        <div class="slc-icon">
-          <svg viewBox="0 0 32 32" fill="none">
-            <rect x="4" y="10" width="24" height="18" rx="3" stroke="currentColor" stroke-width="2" fill="currentColor" fill-opacity="0.08"/>
-            <path d="M11 10V7a5 5 0 0110 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <circle cx="16" cy="20" r="2" fill="currentColor" opacity="0.6"/>
-          </svg>
+      <!-- Blocked -->
+      <div class="verdict-card verdict-card--blocked" style="border-top:3px solid var(--amber)">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--amber-soft);color:var(--amber);font-weight:700;font-size:0.88rem">&#10007;</div>
+          <div>
+            <p style="margin:0;color:var(--muted);font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase">Verdict::Blocked</p>
+            <h3 style="margin:0;font-size:1rem;line-height:1.35">默认拒绝</h3>
+          </div>
+          <span class="tag tag--amber" style="margin-left:auto">高风险</span>
         </div>
-        <div class="slc-title-group">
-          <span class="slc-level">Verdict::SystemCritical</span>
-          <h3>系统关键 · 硬拒绝</h3>
+        <p style="color:var(--muted);font-size:0.94rem;line-height:1.76;margin:0 0 10px">
+          存在 Blocker 级别发现。典型场景：目录包含 Reparse Point（符号链接/Junction），复制阶段会中止；或 Boot 级内核驱动位于此目录；或目标卷非 NTFS / 空间不足。
+        </p>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+          <span style="min-height:26px;padding:0 10px;border-radius:999px;background:var(--amber-soft);color:var(--amber);font-size:0.74rem;font-weight:700">含 Reparse Point</span>
+          <span style="min-height:26px;padding:0 10px;border-radius:999px;background:var(--amber-soft);color:var(--amber);font-size:0.74rem;font-weight:700">Boot 驱动目录</span>
+          <span style="min-height:26px;padding:0 10px;border-radius:999px;background:var(--amber-soft);color:var(--amber);font-size:0.74rem;font-weight:700">目标非 NTFS</span>
         </div>
-        <div class="slc-badge slc-badge-critical">不可迁移</div>
+        <div class="gate-list-inline">
+          <div class="gi-item gi-pass"><span>file_locks</span><span>PASS</span></div>
+          <div class="gi-item gi-block"><span>boot_drivers</span><span>BLOCK</span></div>
+          <div class="gi-item gi-pass"><span>hardlinks</span><span>PASS</span></div>
+          <div class="gi-item gi-block"><span>reparse_points</span><span>BLOCK</span></div>
+          <div class="gi-item gi-pass"><span>target_volume</span><span>PASS</span></div>
+          <div class="gi-item gi-pass"><span>registry_bindings</span><span>PASS</span></div>
+        </div>
       </div>
-      <div class="slc-body">
-        <div class="slc-left">
-          <p class="slc-desc">
-            路径命中硬编码的 CRITICAL_PATHS 列表或集合根（Program Files 整体、Users 整体、ProgramData 整体等）。不可覆写，不可绕过。迁移此类目录将导致系统无法启动。
-          </p>
-          <div class="slc-examples">
-            <span class="example-tag et-critical">C:\Windows\System32</span>
-            <span class="example-tag et-critical">C:\Windows\WinSxS</span>
-            <span class="example-tag et-critical">C:\Program Files（集合根）</span>
-            <span class="example-tag et-critical">C:\Users（集合根）</span>
+
+      <!-- SystemCritical -->
+      <div class="verdict-card verdict-card--critical" style="border-top:3px solid var(--rose)">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--rose-soft);color:var(--rose);font-weight:700;font-size:0.88rem">&#128274;</div>
+          <div>
+            <p style="margin:0;color:var(--muted);font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase">Verdict::SystemCritical</p>
+            <h3 style="margin:0;font-size:1rem;line-height:1.35">系统关键 · 硬拒绝</h3>
           </div>
+          <span class="tag tag--rose" style="margin-left:auto">不可迁移</span>
         </div>
-        <div class="slc-right">
-          <div class="critical-code">
-            <div class="cc-header"><span class="cc-dot" style="background:#dc2626;"></span><span class="cc-dot" style="background:#f97316;"></span><span class="cc-dot" style="background:#22c55e;"></span><span class="cc-title">detector.rs — CRITICAL_PATHS</span></div>
-            <pre class="cc-body"><span class="cc-kw">const</span> CRITICAL_PATHS: &[(&str, &str)] = &[
-  (<span class="cc-str">"C:\\WINDOWS\\SYSTEM32"</span>,
-   <span class="cc-str">"Windows 系统核心目录"</span>),
-  (<span class="cc-str">"C:\\WINDOWS\\WINSXS"</span>,
-   <span class="cc-str">"Windows 组件存储"</span>),
-  (<span class="cc-str">"C:\\PROGRAM FILES\\WINDOWSAPPS"</span>,
-   <span class="cc-str">"Windows 应用商店"</span>),
-  <span class="cc-cmt">// ... 30+ 条硬编码规则</span>
-];</pre>
-          </div>
+        <p style="color:var(--muted);font-size:0.94rem;line-height:1.76;margin:0 0 10px">
+          路径命中硬编码的 CRITICAL_PATHS 列表或集合根（Program Files 整体、Users 整体、ProgramData 整体等）。不可覆写，不可绕过。迁移此类目录将导致系统无法启动。
+        </p>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+          <span style="min-height:26px;padding:0 10px;border-radius:999px;background:var(--rose-soft);color:var(--rose);font-size:0.74rem;font-weight:700">C:\Windows\System32</span>
+          <span style="min-height:26px;padding:0 10px;border-radius:999px;background:var(--rose-soft);color:var(--rose);font-size:0.74rem;font-weight:700">C:\Windows\WinSxS</span>
+          <span style="min-height:26px;padding:0 10px;border-radius:999px;background:var(--rose-soft);color:var(--rose);font-size:0.74rem;font-weight:700">C:\Program Files（集合根）</span>
+          <span style="min-height:26px;padding:0 10px;border-radius:999px;background:var(--rose-soft);color:var(--rose);font-size:0.74rem;font-weight:700">C:\Users（集合根）</span>
+        </div>
+        <div class="critical-snippet" style="padding:14px;border-radius:8px;background:var(--surface-soft);border:1px solid var(--border);font-family:'Cascadia Code','Fira Code',monospace;font-size:0.78rem;line-height:1.7;color:var(--muted);overflow:auto">
+          <span style="color:var(--text);font-weight:700">detector.rs — CRITICAL_PATHS</span><br>
+          const CRITICAL_PATHS: &amp;[(&amp;str, &amp;str)] = &amp;[<br>
+          &nbsp;&nbsp;(&quot;C:\\WINDOWS\\SYSTEM32&quot;, &quot;Windows 系统核心目录&quot;),<br>
+          &nbsp;&nbsp;(&quot;C:\\WINDOWS\\WINSXS&quot;, &quot;Windows 组件存储&quot;),<br>
+          &nbsp;&nbsp;(&quot;C:\\PROGRAM FILES\\WINDOWSAPPS&quot;, &quot;Windows 应用商店&quot;),<br>
+          &nbsp;&nbsp;// ... 30+ 条硬编码规则<br>
+          ];
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ===== Six Detection Gates ===== -->
-  <section class="safety-mechanisms">
-    <div class="section-header reveal">
-      <span class="overline">Six Gates</span>
+  <section class="section">
+    <div class="section-head" style="max-width:48rem">
+      <span class="tag tag--blue">Six Gates</span>
       <h2>六道并行检测门</h2>
       <p>每次迁移前并行执行，单门超时 3s 自动跳过，整体结果缓存 30s</p>
     </div>
 
-    <div class="mech-grid stagger-reveal">
-      <div class="mech-card">
-        <div class="mech-icon" style="--mech-color: var(--teal);">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="18" r="1" fill="currentColor"/></svg>
-        </div>
-        <h4>file_locks</h4>
-        <p>通过 Windows Restart Manager 检测目录中 exe/dll/sys 等文件是否被进程占用，最多扫描 32 个关键文件、256 个子目录。列出占用进程名和 PID。</p>
+    <div class="gate-grid">
+      <div class="gate-card panel" style="border-left:3px solid #14b8a6">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#14b8a6" stroke-width="2" style="width:24px;height:24px;margin-bottom:10px"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>
+        <strong>file_locks</strong>
+        <span>通过 Windows Restart Manager 检测目录中 exe/dll/sys 等文件是否被进程占用，最多扫描 32 个关键文件、256 个子目录。</span>
       </div>
-
-      <div class="mech-card">
-        <div class="mech-icon" style="--mech-color: var(--sky);">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-        </div>
-        <h4>boot_drivers</h4>
-        <p>扫描注册表 Services 键，检测 Boot 级（start=0）和 System 级（start=1）内核驱动是否位于目标目录。Boot 驱动给 Blocker，System 驱动给 Warning。</p>
+      <div class="gate-card panel" style="border-left:3px solid #38bdf8">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" style="width:24px;height:24px;margin-bottom:10px"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        <strong>boot_drivers</strong>
+        <span>扫描注册表 Services 键，检测 Boot 级（start=0）和 System 级（start=1）内核驱动是否位于目标目录。Boot 驱动 Blocker。</span>
       </div>
-
-      <div class="mech-card">
-        <div class="mech-icon" style="--mech-color: var(--amber);">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-        </div>
-        <h4>hardlinks</h4>
-        <p>遍历目录中 exe/dll/sys 等文件的硬链接计数（nNumberOfLinks），跨卷迁移会断裂硬链接关系。最多检查 100 个文件，深度 2 层。</p>
+      <div class="gate-card panel" style="border-left:3px solid #f59e0b">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" style="width:24px;height:24px;margin-bottom:10px"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/></svg>
+        <strong>hardlinks</strong>
+        <span>遍历目录中 exe/dll/sys 等文件的硬链接计数（nNumberOfLinks），跨卷迁移会断裂硬链接关系。最多检查 100 文件，深度 2 层。</span>
       </div>
-
-      <div class="mech-card">
-        <div class="mech-icon" style="--mech-color: var(--emerald);">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
-        </div>
-        <h4>reparse_points</h4>
-        <p>递归检测 NTFS Reparse Point（Junction/Symlink），深度 4 层，上限 20000 条目。包含 Reparse Point 的目录直接 Blocker，因为复制阶段会中止。</p>
+      <div class="gate-card panel" style="border-left:3px solid #10b981">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" style="width:24px;height:24px;margin-bottom:10px"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+        <strong>reparse_points</strong>
+        <span>递归检测 NTFS Reparse Point（Junction/Symlink），深度 4 层，上限 20000 条目。包含 Reparse Point 的目录直接 Blocker。</span>
       </div>
-
-      <div class="mech-card">
-        <div class="mech-icon" style="--mech-color: var(--rose);">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-        </div>
-        <h4>target_volume</h4>
-        <p>检测目标卷文件系统是否为 NTFS（Junction 仅在 NTFS 有效），并计算可用空间是否充足。空间需求 = 源大小 + 1% 预留（64MB~512MB）。</p>
+      <div class="gate-card panel" style="border-left:3px solid #f43f5e">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2" style="width:24px;height:24px;margin-bottom:10px"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        <strong>target_volume</strong>
+        <span>检测目标卷文件系统是否为 NTFS（Junction 仅在 NTFS 有效），并计算可用空间是否充足。空间需求 = 源大小 + 1% 预留。</span>
       </div>
-
-      <div class="mech-card">
-        <div class="mech-icon" style="--mech-color: var(--violet);">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        </div>
-        <h4>registry_bindings</h4>
-        <p>仅在无链接模式（LinkType::None）下触发。扫描 Services、COM 组件、App Paths、计划任务、Uninstall 五类注册表绑定，路径断裂则 Blocker。</p>
+      <div class="gate-card panel" style="border-left:3px solid #a78bfa">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" style="width:24px;height:24px;margin-bottom:10px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <strong>registry_bindings</strong>
+        <span>仅在无链接模式（LinkType::None）下触发。扫描 Services、COM 组件、App Paths、计划任务、Uninstall 五类注册表绑定，路径断裂则 Blocker。</span>
       </div>
     </div>
   </section>
 
-  <!-- ===== CTA ===== -->
-  <section class="cta">
-    <div class="cta-glow"></div>
-    <h2>安全迁移，放心使用</h2>
-    <p>四级判定 + 六道检测门，每一步都有保障</p>
-    <a class="btn btn-primary" href="index.html">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      返回首页
-    </a>
+  <section class="section">
+    <div class="band">
+      <div class="band-inner">
+        <div>
+          <span class="tag tag--accent">Safety</span>
+          <h2>安全迁移，放心使用</h2>
+          <p>四级判定 + 六道检测门，每一步都有保障。</p>
+        </div>
+        <div class="band-actions">
+          <a class="btn btn-primary" href="index.html">
+            <span>返回首页</span>
+          </a>
+        </div>
+      </div>
+    </div>
   </section>
 
   <footer class="footer">
-    <p>CSD · 磁盘空间管理 &mdash; <a href="https://github.com/bjfwan/cdrive-cleaner">GitHub</a> &middot; GPL-3.0 &copy; 2026 bjfwan</p>
+    <p>CSD · 磁盘空间管理 · <a href="https://github.com/bjfwan/cdrive-cleaner" target="_blank" rel="noopener">GitHub</a> · GPL-3.0 · 2026</p>
   </footer>
-
-</div>
-
-<script>
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) entry.target.classList.add('visible');
-    });
-  }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
-
-  document.querySelectorAll('.reveal, .mech-card').forEach(el => observer.observe(el));
-</script>
+</main>
 
 </body>
 </html>

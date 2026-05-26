@@ -108,62 +108,64 @@ onUnmounted(() => cancelHold());
 </script>
 
 <template>
-  <div v-if="show" class="confirm-overlay" @click.self="handleCancel">
-    <div class="confirm-dialog" :class="{ 'confirm-dialog--high-risk': highRisk }" @click.stop>
-      <div v-if="highRisk" class="confirm-risk-ribbon" aria-hidden="true"></div>
-      <div class="confirm-icon" :class="`icon-${type}`">
-        <IconError v-if="type === 'danger'" :size="48" />
-        <IconWarning v-else-if="type === 'warning'" :size="48" />
-        <IconInfo v-else :size="48" />
-      </div>
-      <h3>{{ title }}</h3>
-      <p>{{ message }}</p>
+  <Teleport to="body">
+    <div v-if="show" class="confirm-overlay" @click.self="handleCancel">
+      <div class="confirm-dialog" :class="{ 'confirm-dialog--high-risk': highRisk }" @click.stop>
+        <div v-if="highRisk" class="confirm-risk-ribbon" aria-hidden="true"></div>
+        <div class="confirm-icon" :class="`icon-${type}`">
+          <IconError v-if="type === 'danger'" :size="48" />
+          <IconWarning v-else-if="type === 'warning'" :size="48" />
+          <IconInfo v-else :size="48" />
+        </div>
+        <h3>{{ title }}</h3>
+        <p>{{ message }}</p>
 
-      <div v-if="usesWord" class="confirm-gate">
-        <label class="confirm-gate__label">
-          <span class="confirm-gate__hint">{{ confirmWord }}</span>
-          <input
-            v-model="wordInput"
-            type="text"
-            class="confirm-gate__input"
-            :placeholder="confirmWord"
-            autocomplete="off"
-            spellcheck="false"
-          />
-        </label>
-      </div>
+        <div v-if="usesWord" class="confirm-gate">
+          <label class="confirm-gate__label">
+            <span class="confirm-gate__hint">{{ confirmWord }}</span>
+            <input
+              v-model="wordInput"
+              type="text"
+              class="confirm-gate__input"
+              :placeholder="confirmWord"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+        </div>
 
-      <div class="confirm-actions" :class="{ 'confirm-actions--high-risk': highRisk }">
-        <button
-          v-if="cancelText"
-          class="btn-base btn-secondary confirm-cancel"
-          :class="{ 'confirm-cancel--dominant': highRisk }"
-          @click="handleCancel"
-        >{{ cancelText }}</button>
-        <button
-          v-if="!usesHold"
-          class="btn-base"
-          :class="[`btn-${type === 'danger' ? 'danger' : type === 'warning' ? 'caution' : 'primary'}`]"
-          :disabled="!canConfirm"
-          @click="handleConfirm"
-        >{{ confirmText }}</button>
-        <button
-          v-else
-          class="btn-base btn-danger confirm-hold"
-          :style="{ '--hold-progress': holdProgress }"
-          @pointerdown="startHold"
-          @pointerup="stopHold"
-          @pointerleave="stopHold"
-          @pointercancel="stopHold"
-          @keydown.space.prevent="startHold"
-          @keyup.space.prevent="stopHold"
-        >
-          <span class="confirm-hold__fill" :style="{ transform: `scaleX(${holdProgress})` }"></span>
-          <span class="confirm-hold__label">{{ confirmText }}</span>
-        </button>
+        <div class="confirm-actions" :class="{ 'confirm-actions--high-risk': highRisk }">
+          <button
+            v-if="cancelText"
+            class="btn-base btn-secondary confirm-cancel"
+            :class="{ 'confirm-cancel--dominant': highRisk }"
+            @click="handleCancel"
+          >{{ cancelText }}</button>
+          <button
+            v-if="!usesHold"
+            class="btn-base"
+            :class="[`btn-${type === 'danger' ? 'danger' : type === 'warning' ? 'caution' : 'primary'}`]"
+            :disabled="!canConfirm"
+            @click="handleConfirm"
+          >{{ confirmText }}</button>
+          <button
+            v-else
+            class="btn-base btn-danger confirm-hold"
+            :style="{ '--hold-progress': holdProgress }"
+            @pointerdown="startHold"
+            @pointerup="stopHold"
+            @pointerleave="stopHold"
+            @pointercancel="stopHold"
+            @keydown.space.prevent="startHold"
+            @keyup.space.prevent="stopHold"
+          >
+            <span class="confirm-hold__fill" :style="{ transform: `scaleX(${holdProgress})` }"></span>
+            <span class="confirm-hold__label">{{ confirmText }}</span>
+          </button>
+        </div>
       </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -174,7 +176,7 @@ onUnmounted(() => cancelHold());
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2200;
+  z-index: 9200;
   animation: fadeIn var(--motion-fade-duration) var(--motion-fade-easing);
   font-family: var(--font-sans);
 }

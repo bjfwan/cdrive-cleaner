@@ -100,92 +100,94 @@ function onConfirm() {
 </script>
 
 <template>
-  <div v-if="show" class="dry-overlay" @click.self="onCancel">
-    <div class="dry-dialog" role="dialog" aria-labelledby="dry-title">
-      <header class="dry-head">
-        <div>
-          <h3 id="dry-title">清理预览</h3>
-          <p>开始清理前的安全检查。所有可疑路径已自动跳过。</p>
-        </div>
-        <button class="dry-close" type="button" :disabled="busy" aria-label="关闭" @click="onCancel">
-          <IconClose :size="18" />
-        </button>
-      </header>
-
-      <section class="dry-stats">
-        <div class="dry-stat dry-stat--go">
-          <span class="dry-stat__num">{{ deleteCount }}</span>
-          <span class="dry-stat__lbl">将清理</span>
-        </div>
-        <div class="dry-stat dry-stat--skip">
-          <span class="dry-stat__num">{{ skipCount }}</span>
-          <span class="dry-stat__lbl">已跳过</span>
-        </div>
-        <div class="dry-stat dry-stat--size">
-          <span class="dry-stat__num">{{ totalFreedLabel }}</span>
-          <span class="dry-stat__lbl">预计释放</span>
-        </div>
-        <div class="dry-stat dry-stat--eta">
-          <span class="dry-stat__num">{{ etaLabel }}</span>
-          <span class="dry-stat__lbl">预计耗时</span>
-        </div>
-      </section>
-
-      <section v-if="skipGroups.length > 0" class="dry-skip">
-        <h4>跳过原因</h4>
-        <div class="dry-skip-grid">
-          <article v-for="g in skipGroups" :key="g.key" class="dry-skip-card">
-            <header>
-              <strong>{{ g.label }}</strong>
-              <span>{{ g.count }} 项</span>
-            </header>
-            <ul>
-              <li v-for="s in g.samples" :key="s.path">
-                <MiddlePath :path="s.path" />
-                <small v-if="s.detail">{{ s.detail }}</small>
-              </li>
-              <li v-if="g.count > g.samples.length" class="dry-skip-more">
-                还有 {{ g.count - g.samples.length }} 项同类
-              </li>
-            </ul>
-          </article>
-        </div>
-      </section>
-
-      <section class="dry-list">
-        <header class="dry-list-head">
-          <h4>清理清单 · 前 {{ visibleDelete.length }} / {{ deleteCount }}</h4>
-          <button v-if="hiddenDelete > 0" type="button" class="dry-expand" @click="expand">
-            展开下一批
+  <Teleport to="body">
+    <div v-if="show" class="dry-overlay" @click.self="onCancel">
+      <div class="dry-dialog" role="dialog" aria-labelledby="dry-title">
+        <header class="dry-head">
+          <div>
+            <h3 id="dry-title">清理预览</h3>
+            <p>开始清理前的安全检查。所有可疑路径已自动跳过。</p>
+          </div>
+          <button class="dry-close" type="button" :disabled="busy" aria-label="关闭" @click="onCancel">
+            <IconClose :size="18" />
           </button>
         </header>
-        <div v-if="deleteCount === 0" class="dry-empty">没有满足条件的清理目标。</div>
-        <ul v-else class="dry-rows">
-          <li v-for="item in visibleDelete" :key="item.path" class="dry-row">
-            <MiddlePath class="dry-row-path" :path="item.path" />
-            <div class="dry-row-meta">
-              <span>{{ item.size_mb }} MB</span>
-              <span>{{ item.mtime_iso || '时间未知' }}</span>
-              <span v-if="item.is_symlink" class="dry-row-symlink">符号链接</span>
-            </div>
-          </li>
-        </ul>
-      </section>
 
-      <footer class="dry-foot">
-        <button class="btn-base btn-secondary" type="button" :disabled="busy" @click="onCancel">取消</button>
-        <button
-          class="btn-base"
-          :class="mode === 'permanent' ? 'btn-danger' : 'btn-primary'"
-          type="button"
-          :disabled="confirmDisabled"
-          @click="onConfirm"
-        >
-          {{ confirmLabel }}
-        </button>
-      </footer>
+        <section class="dry-stats">
+          <div class="dry-stat dry-stat--go">
+            <span class="dry-stat__num">{{ deleteCount }}</span>
+            <span class="dry-stat__lbl">将清理</span>
+          </div>
+          <div class="dry-stat dry-stat--skip">
+            <span class="dry-stat__num">{{ skipCount }}</span>
+            <span class="dry-stat__lbl">已跳过</span>
+          </div>
+          <div class="dry-stat dry-stat--size">
+            <span class="dry-stat__num">{{ totalFreedLabel }}</span>
+            <span class="dry-stat__lbl">预计释放</span>
+          </div>
+          <div class="dry-stat dry-stat--eta">
+            <span class="dry-stat__num">{{ etaLabel }}</span>
+            <span class="dry-stat__lbl">预计耗时</span>
+          </div>
+        </section>
+
+        <section v-if="skipGroups.length > 0" class="dry-skip">
+          <h4>跳过原因</h4>
+          <div class="dry-skip-grid">
+            <article v-for="g in skipGroups" :key="g.key" class="dry-skip-card">
+              <header>
+                <strong>{{ g.label }}</strong>
+                <span>{{ g.count }} 项</span>
+              </header>
+              <ul>
+                <li v-for="s in g.samples" :key="s.path">
+                  <MiddlePath :path="s.path" />
+                  <small v-if="s.detail">{{ s.detail }}</small>
+                </li>
+                <li v-if="g.count > g.samples.length" class="dry-skip-more">
+                  还有 {{ g.count - g.samples.length }} 项同类
+                </li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="dry-list">
+          <header class="dry-list-head">
+            <h4>清理清单 · 前 {{ visibleDelete.length }} / {{ deleteCount }}</h4>
+            <button v-if="hiddenDelete > 0" type="button" class="dry-expand" @click="expand">
+              展开下一批
+            </button>
+          </header>
+          <div v-if="deleteCount === 0" class="dry-empty">没有满足条件的清理目标。</div>
+          <ul v-else class="dry-rows">
+            <li v-for="item in visibleDelete" :key="item.path" class="dry-row">
+              <MiddlePath class="dry-row-path" :path="item.path" />
+              <div class="dry-row-meta">
+                <span>{{ item.size_mb }} MB</span>
+                <span>{{ item.mtime_iso || '时间未知' }}</span>
+                <span v-if="item.is_symlink" class="dry-row-symlink">符号链接</span>
+              </div>
+            </li>
+          </ul>
+        </section>
+
+        <footer class="dry-foot">
+          <button class="btn-base btn-secondary" type="button" :disabled="busy" @click="onCancel">取消</button>
+          <button
+            class="btn-base"
+            :class="mode === 'permanent' ? 'btn-danger' : 'btn-primary'"
+            type="button"
+            :disabled="confirmDisabled"
+            @click="onConfirm"
+          >
+            {{ confirmLabel }}
+          </button>
+        </footer>
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -193,7 +195,7 @@ function onConfirm() {
   position: fixed;
   inset: 0;
   background: var(--modal-backdrop);
-  z-index: 2300;
+  z-index: 9400;
   display: flex;
   align-items: center;
   justify-content: center;

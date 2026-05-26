@@ -2,377 +2,261 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=1200">
-<title>CSD · 磁盘空间管理</title>
-<link rel="stylesheet" href="styles/main.css">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSD · 磁盘工作台</title>
+<meta name="description" content="CSD 是一款简约、清新、可回退的磁盘工作台。看清空间占用，安全迁移目录，一键回滚。">
+<link rel="icon" href="assets/app-icon.png">
+<link rel="stylesheet" href="styles/editorial.css">
 </head>
 <body>
-
-<div class="bg-mesh">
-  <div class="orb orb-1"></div>
-  <div class="orb orb-2"></div>
-  <div class="orb orb-3"></div>
-  <div class="noise-overlay"></div>
-</div>
-
-<!-- ===== Sticky Nav ===== -->
-<nav class="sticky-nav">
-  <div class="nav-inner">
-    <a class="nav-logo" href="index.html">
-      <img src="assets/app-icon.png" alt="CSD" class="nav-logo-icon">
+<header class="site-header">
+  <div class="shell topbar">
+    <a class="brand" href="index.html">
+      <img src="assets/app-icon.png" alt="CSD">
       <span>CSD</span>
     </a>
-    <div class="nav-links">
-      <a href="index.html" class="active">
-        <img src="assets/icons/nav-features.svg" alt="" class="nav-icon">功能
+    <nav class="nav" aria-label="主导航">
+      <a href="index.html" class="nav-link active">
+        <img src="assets/icons/nav-features.svg" alt="" aria-hidden="true">
+        <span>总览</span>
       </a>
-      <a href="workflow.html">
-        <img src="assets/icons/nav-workflow.svg" alt="" class="nav-icon">迁移流程
+      <a href="workflow.html" class="nav-link">
+        <img src="assets/icons/nav-workflow.svg" alt="" aria-hidden="true">
+        <span>迁移流程</span>
       </a>
-      <a href="safety.html">
-        <img src="assets/icons/nav-safety.svg" alt="" class="nav-icon">安全保障
+      <a href="safety.html" class="nav-link">
+        <img src="assets/icons/nav-safety.svg" alt="" aria-hidden="true">
+        <span>安全保障</span>
       </a>
-      <a href="perf.html">
-        <img src="assets/icons/nav-perf.svg" alt="" class="nav-icon">性能
+      <a href="perf.html" class="nav-link">
+        <img src="assets/icons/nav-perf.svg" alt="" aria-hidden="true">
+        <span>性能</span>
       </a>
-    </div>
-    <a class="nav-cta" href="https://github.com/bjfwan/cdrive-cleaner/releases/download/v0.1.8/CSD_0.1.8_x64-setup.exe" target="_blank">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      下载
+    </nav>
+    <a class="nav-cta" href="https://github.com/bjfwan/cdrive-cleaner/releases/download/v0.1.10/CSD_0.1.10_x64-setup.exe" target="_blank" rel="noopener">
+      <span>下载 0.1.10</span>
     </a>
   </div>
-</nav>
+</header>
 
-<div class="container page-transition">
-
-  <!-- ===== Hero ===== -->
-  <section class="hero" id="hero">
-    <div class="hero-left">
-      <div class="hero-badge">
-        <span class="pulse-dot"></span>
-        <span>v0.1.8 · 开源免费 · GPL-3.0</span>
+<main class="shell page">
+  <section class="hero">
+    <div class="hero-copy">
+      <span class="kicker">v0.1.10 · editorial release</span>
+      <div class="hero-title">
+        <span class="hero-brand">CSD</span>
+        <span class="hero-subtitle">磁盘工作台</span>
       </div>
-      <h1>
-        <span class="title-csd">CSD</span>
-        <span class="title-divider"></span>
-        <span class="title-sub">磁盘空间管理</span>
-      </h1>
-      <p class="hero-desc">
-        C 盘越来越满？CSD 帮你<strong>看清空间去向</strong>、<strong>安全迁移目录</strong>、<strong>一键回滚</strong>。
-        Tauri 2 + Vue 3 + Rust 原生构建，MFT/USN 加速扫描，几十万文件秒级出图。
+      <p class="hero-lead">
+        一款简约、清新、可回退的 C 盘整理工具。
+        看清空间占用，安全迁移目录，保留原路径，必要时随时回滚。
       </p>
-      <div class="hero-tags">
-        <span class="tag">Tauri 2</span>
-        <span class="tag">Vue 3</span>
-        <span class="tag">Rust</span>
-        <span class="tag">NTFS MFT/USN</span>
-        <span class="tag">Windows 10/11</span>
-        <span class="tag">Junction / Symlink</span>
-      </div>
+
       <div class="hero-actions">
-        <div class="dropdown">
-          <div class="btn btn-primary">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            下载安装包
-            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-          </div>
-          <div class="dropdown-menu">
-            <a class="dropdown-item" href="https://github.com/bjfwan/cdrive-cleaner/releases/download/v0.1.8/CSD_0.1.8_x64-setup.exe" target="_blank">
-              <svg class="item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--teal);"><path d="M4 12V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4"/><path d="m8 12 4 4 4-4"/><path d="M12 4v11"/></svg>
-              <div class="item-text">
-                <span class="item-title">官方下载 (.exe 安装版)</span>
-                <span class="item-desc">推荐，直接从 GitHub 官方高速下载</span>
-              </div>
-            </a>
-            <a class="dropdown-item" href="https://github.com/bjfwan/cdrive-cleaner/releases/download/v0.1.8/CSD_0.1.8_x64_zh-CN.msi" target="_blank">
-              <svg class="item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--emerald);"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-              <div class="item-text">
-                <span class="item-title">官方下载 (.msi 绿色版)</span>
-                <span class="item-desc">免配置绿色封包，支持无窗口静默部署</span>
-              </div>
-            </a>
-            <div class="dropdown-divider"></div>
-            <a class="dropdown-item" href="https://github.com/bjfwan/cdrive-cleaner/releases" target="_blank">
-              <svg class="item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted);"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.87 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
-              <div class="item-text">
-                <span class="item-title">GitHub Releases</span>
-                <span class="item-desc">前往官方发布页面 (国内直连较慢)</span>
-              </div>
-            </a>
-          </div>
-        </div>
-        <a class="btn btn-ghost" href="https://github.com/bjfwan/cdrive-cleaner" target="_blank">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-          GitHub 源码
+        <a class="btn btn-primary" href="https://github.com/bjfwan/cdrive-cleaner/releases/download/v0.1.10/CSD_0.1.10_x64-setup.exe" target="_blank" rel="noopener">
+          <span>下载安装版</span>
+        </a>
+        <a class="btn btn-secondary" href="https://github.com/bjfwan/cdrive-cleaner/releases/download/v0.1.10/CSD_0.1.10_x64_zh-CN.msi" target="_blank" rel="noopener">
+          <span>下载 MSI</span>
+        </a>
+        <a class="btn btn-secondary" href="https://github.com/bjfwan/cdrive-cleaner" target="_blank" rel="noopener">
+          <span>查看源码</span>
         </a>
       </div>
-      <p class="hero-note"><strong>Windows 10/11</strong> · x64 · 安装包约 5 MB · 无广告无后台</p>
-    </div>
-    <div class="hero-right">
-      <div class="hero-icon-wrap">
-        <div class="icon-glow"></div>
-        <img src="assets/app-icon.png" alt="CSD Icon">
-      </div>
-    </div>
-  </section>
 
-  <!-- ===== Stats ===== -->
-  <section class="stats stagger-reveal">
-    <div class="stat">
-      <div class="stat-value" style="--stat-color: var(--teal);">&lt;1<span class="unit">s</span></div>
-      <div class="stat-label">MFT 全盘扫描</div>
+      <ul class="hero-points">
+        <li>NTFS MFT / USN 加速扫描，几万到几十万文件都能顺手看完</li>
+        <li>安全分析、迁移、回滚都在同一条工作流里完成</li>
+        <li>AI 建议默认关闭，启用前会先看见数据上送边界</li>
+        <li>0.1.10 重新整理了层级、默认盘和垃圾清理提示</li>
+      </ul>
     </div>
-    <div class="stat">
-      <div class="stat-value" style="--stat-color: var(--emerald);">227K</div>
-      <div class="stat-label">文件/秒 吞吐量</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value" style="--stat-color: var(--amber);">5</div>
-      <div class="stat-label">步安全迁移流程</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value" style="--stat-color: var(--sky);">100%</div>
-      <div class="stat-label">可逆 · 一键回滚</div>
-    </div>
-  </section>
 
-  <!-- ===== Features ===== -->
-  <section class="features-section">
-    <div class="section-header reveal">
-      <span class="overline">Core Features</span>
-      <h2>从扫描到迁移，一站式解决</h2>
-      <p>不只是告诉你空间去哪了，还帮你安全地搬走它</p>
-    </div>
-    <div class="feature-grid stagger-reveal">
-      <div class="feature-card" style="--card-accent: var(--teal);">
-        <div class="feature-icon">
-          <svg viewBox="0 0 32 32" fill="none">
-            <circle cx="14" cy="14" r="9" stroke="currentColor" stroke-width="2"/>
-            <path d="M14 10v8M10 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <path d="M21 21l5 5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-            <circle cx="14" cy="14" r="3" fill="currentColor" opacity="0.2"/>
-          </svg>
+    <div class="hero-panel">
+      <div class="mock-window" aria-label="CSD 界面预览">
+        <div class="mock-window-bar">
+          <div class="window-dots" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+          <span>CSD · v0.1.10</span>
+          <span class="window-pill">简约编辑版</span>
         </div>
-        <h3>极速磁盘扫描</h3>
-        <p>管理员模式走 NTFS MFT + USN Journal，几十万文件秒级完成。普通权限自动回退原生枚举，功能不打折。第二次扫描走增量，只重扫变更子树。</p>
-      </div>
-      <div class="feature-card" style="--card-accent: var(--sky);">
-        <div class="feature-icon">
-          <svg viewBox="0 0 32 32" fill="none">
-            <rect x="4" y="4" width="24" height="24" rx="3" stroke="currentColor" stroke-width="2"/>
-            <rect x="8" y="18" width="4" height="6" rx="1" fill="currentColor" opacity="0.3"/>
-            <rect x="14" y="12" width="4" height="12" rx="1" fill="currentColor" opacity="0.5"/>
-            <rect x="20" y="8" width="4" height="16" rx="1" fill="currentColor" opacity="0.7"/>
-          </svg>
-        </div>
-        <h3>多维空间分析</h3>
-        <p>Treemap 面积图一眼看胖子，List 列表按大小/名称/时间排序，Large Files 跨目录挑大文件，Smart Groups 自动分组标记可清理/可迁移/系统关键。</p>
-      </div>
-      <div class="feature-card" style="--card-accent: var(--emerald);">
-        <div class="feature-icon">
-          <svg viewBox="0 0 32 32" fill="none">
-            <path d="M6 16h20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <path d="M22 10l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <rect x="4" y="6" width="8" height="20" rx="2" stroke="currentColor" stroke-width="2"/>
-            <path d="M6 10h4M6 14h4M6 18h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
-          </svg>
-        </div>
-        <h3>目录安全迁移</h3>
-        <p>copy → verify → backup → create-link → cleanup 五步事务。原位置留 Junction/Symlink，应用零感知继续运行。CopyFile2 大文件 unbuffered IO + Rayon 并行复制。</p>
-      </div>
-      <div class="feature-card" style="--card-accent: var(--rose);">
-        <div class="feature-icon">
-          <svg viewBox="0 0 32 32" fill="none">
-            <path d="M16 4L4 10v12l12 6 12-6V10L16 4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            <path d="M16 16l12-6" stroke="currentColor" stroke-width="1.5" opacity="0.4"/>
-            <path d="M16 16v12" stroke="currentColor" stroke-width="1.5" opacity="0.4"/>
-            <path d="M4 10l12 6" stroke="currentColor" stroke-width="1.5" opacity="0.4"/>
-            <path d="M12 15l5-2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <path d="M16 22l4-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <h3>四级安全检测</h3>
-        <p>迁移前自动跑安全分析：路径白名单 → 应用类型识别 → reparse 深度 → 进程占用 → 注册表关键键。系统关键目录硬拒绝，绝不踩坑。</p>
-      </div>
-      <div class="feature-card" style="--card-accent: var(--amber);">
-        <div class="feature-icon">
-          <svg viewBox="0 0 32 32" fill="none">
-            <rect x="4" y="8" width="24" height="18" rx="3" stroke="currentColor" stroke-width="2"/>
-            <path d="M12 4l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="12" cy="17" r="2.5" fill="currentColor" opacity="0.4"/>
-            <circle cx="20" cy="17" r="2.5" fill="currentColor" opacity="0.4"/>
-            <path d="M10 22c1-1 2.5-1.5 3-1.5s2 .5 3 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
-          </svg>
-        </div>
-        <h3>游戏库一键迁移</h3>
-        <p>自动识别 Steam / Epic / Game Pass 已安装游戏，免去手工找路径。Junction 链接让启动器无缝运行，专属迁移记录追踪每一款游戏。</p>
-      </div>
-      <div class="feature-card" style="--card-accent: var(--violet);">
-        <div class="feature-icon">
-          <svg viewBox="0 0 32 32" fill="none">
-            <circle cx="16" cy="16" r="12" stroke="currentColor" stroke-width="2"/>
-            <path d="M16 8v8l5.5 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M4 16h2M26 16h2M16 4v2M16 26v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
-            <circle cx="16" cy="16" r="2" fill="currentColor" opacity="0.4"/>
-          </svg>
-        </div>
-        <h3>历史回滚 & 趋势</h3>
-        <p>每次迁移完整记录到 SQLite (WAL)，一键回滚到原状。Space Trend 90 天空间走势图，持续监控磁盘健康。重复文件检测 (xxhash) 批量清理。</p>
-      </div>
-    </div>
-  </section>
 
-  <!-- ===== Tech Stack (Integrated) ===== -->
-  <section class="tech-section">
-    <div class="section-header reveal">
-      <span class="overline">Tech Stack</span>
-      <h2>现代技术栈驱动</h2>
-      <p>原生性能 + 现代前端 + 类型安全，每个技术选型都有理由</p>
-    </div>
-    <div class="tech-grid stagger-reveal">
-      <div class="tech-card">
-        <img src="assets/icons/rust.svg" alt="Rust" class="tech-card-icon">
-        <div class="tech-card-body">
-          <h4>Rust</h4>
-          <p>后端核心语言，零成本抽象 + 内存安全。MFT 解析、文件操作、并发复制全部 Rust 实现，无 GC 暂停。</p>
-        </div>
-      </div>
-      <div class="tech-card">
-        <img src="assets/icons/tauri.svg" alt="Tauri 2" class="tech-card-icon">
-        <div class="tech-card-body">
-          <h4>Tauri 2</h4>
-          <p>桌面应用框架，Rust 后端 + WebView 前端。安装包仅 5MB，内存占用远低于 Electron，原生系统集成。</p>
-        </div>
-      </div>
-      <div class="tech-card">
-        <img src="assets/icons/vue.svg" alt="Vue 3" class="tech-card-icon">
-        <div class="tech-card-body">
-          <h4>Vue 3</h4>
-          <p>前端 UI 框架，Composition API + 响应式系统。Treemap、列表、趋势图等复杂交互组件均基于 Vue 3 构建。</p>
-        </div>
-      </div>
-      <div class="tech-card">
-        <img src="assets/icons/typescript.svg" alt="TypeScript" class="tech-card-icon">
-        <div class="tech-card-body">
-          <h4>TypeScript</h4>
-          <p>前端类型安全，严格模式编译。Tauri IPC 通信层全量类型定义，前后端接口零歧义。</p>
-        </div>
-      </div>
-      <div class="tech-card">
-        <img src="assets/icons/sqlite.svg" alt="SQLite + WAL" class="tech-card-icon">
-        <div class="tech-card-body">
-          <h4>SQLite + WAL</h4>
-          <p>本地数据库，WAL 模式支持并发读写。迁移记录、扫描缓存、空间趋势数据全部持久化存储。</p>
-        </div>
-      </div>
-      <div class="tech-card">
-        <img src="assets/icons/ntfs.svg" alt="NTFS MFT/USN" class="tech-card-icon">
-        <div class="tech-card-body">
-          <h4>NTFS MFT/USN</h4>
-          <p>Windows NTFS 原生 API，MFT 全量解析 + USN Journal 增量追踪。磁盘扫描性能的核心加速引擎。</p>
-        </div>
-      </div>
-      <div class="tech-card">
-        <img src="assets/icons/echarts.svg" alt="ECharts" class="tech-card-icon">
-        <div class="tech-card-body">
-          <h4>ECharts</h4>
-          <p>数据可视化引擎，Treemap 矩形树图、折线趋势图、饼图占比分析。Canvas 渲染，大数据量下依然流畅。</p>
-        </div>
-      </div>
-      <div class="tech-card">
-        <img src="assets/icons/element-plus.svg" alt="Element Plus" class="tech-card-icon">
-        <div class="tech-card-body">
-          <h4>Element Plus</h4>
-          <p>Vue 3 UI 组件库，提供表格、对话框、进度条等基础组件。暗色主题深度定制，与整体设计语言统一。</p>
-        </div>
-      </div>
-      <div class="tech-card">
-        <img src="assets/icons/rayon-tokio.svg" alt="Rayon + Tokio" class="tech-card-icon">
-        <div class="tech-card-body">
-          <h4>Rayon + Tokio</h4>
-          <p>Rayon 数据并行（文件复制、校验）+ Tokio 异步运行时（IPC 通信、后台任务）。CPU 密集和 IO 密集各得其所。</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== CTA ===== -->
-  <section class="cta">
-    <div class="cta-glow"></div>
-    <h2>告别 C 盘焦虑</h2>
-    <p>开源免费 · 无广告无后台 · 安装包仅约 5 MB</p>
-    <div class="hero-actions">
-      <div class="dropdown">
-        <div class="btn btn-primary">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          立即下载
-          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-        <div class="dropdown-menu">
-          <a class="dropdown-item" href="https://github.com/bjfwan/cdrive-cleaner/releases/download/v0.1.8/CSD_0.1.8_x64-setup.exe" target="_blank">
-            <svg class="item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--teal);"><path d="M4 12V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4"/><path d="m8 12 4 4 4-4"/><path d="M12 4v11"/></svg>
-            <div class="item-text">
-              <span class="item-title">官方下载 (.exe 安装版)</span>
-              <span class="item-desc">推荐，直接从 GitHub 官方高速下载</span>
+        <div class="mock-window-body">
+          <aside class="mock-rail">
+            <div class="tag tag--accent">磁盘</div>
+            <div class="mock-drive active">
+              <span>C:</span>
+              <strong>系统盘</strong>
             </div>
+            <div class="mock-drive">
+              <span>D:</span>
+              <strong>资料盘</strong>
+            </div>
+            <div class="mock-drive">
+              <span>E:</span>
+              <strong>备份盘</strong>
+            </div>
+            <div class="mock-ai">
+              <small>AI 建议</small>
+              <strong>侧栏入口已加入磁盘列表，随时切换查看建议。</strong>
+            </div>
+          </aside>
+
+          <section class="mock-main">
+            <div class="mock-main-head">
+              <div>
+                <p>Workspace</p>
+                <h2>C: · Local Disk</h2>
+              </div>
+              <a class="mock-action" href="workflow.html">重新扫描</a>
+            </div>
+
+            <div class="mock-panels">
+              <div class="mock-panel">
+                <div class="mock-panel-head">
+                  <div>
+                    <strong>空间分布</strong>
+                    <span>目录占用一眼看清</span>
+                  </div>
+                  <span class="tag tag--blue">扫描后</span>
+                </div>
+
+                <div class="mock-bars">
+                  <div class="mock-bar">
+                    <strong>Program Files</strong>
+                    <div class="mock-bar-track"><div class="mock-bar-fill" style="width: 74%"></div></div>
+                    <span>74%</span>
+                  </div>
+                  <div class="mock-bar mock-bar--blue">
+                    <strong>Users</strong>
+                    <div class="mock-bar-track"><div class="mock-bar-fill" style="width: 58%"></div></div>
+                    <span>58%</span>
+                  </div>
+                  <div class="mock-bar mock-bar--soft">
+                    <strong>Windows</strong>
+                    <div class="mock-bar-track"><div class="mock-bar-fill" style="width: 41%"></div></div>
+                    <span>41%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mock-mini-grid">
+                <div class="mock-mini">
+                  <p>后端</p>
+                  <strong>MFT + USN</strong>
+                </div>
+                <div class="mock-mini">
+                  <p>历史</p>
+                  <strong>一键回滚</strong>
+                </div>
+                <div class="mock-mini">
+                  <p>AI</p>
+                  <strong>建议面板</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="mock-stats">
+              <div>
+                <strong>0.1.10</strong>
+                <span>当前版本，界面层级和默认盘布局已优化。</span>
+              </div>
+              <div>
+                <strong>可逆</strong>
+                <span>迁移留链接，回滚路径保持一致。</span>
+              </div>
+              <div>
+                <strong>本地</strong>
+                <span>数据只在本机处理，不做后台上送。</span>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <span class="tag tag--accent">Highlights</span>
+      <h2>把 C 盘处理成一条清晰的工作流</h2>
+      <p>页面信息更轻，决策链更短。先看清，再判断，最后再动手。</p>
+    </div>
+
+    <div class="grid-3">
+      <article class="info-card">
+        <span class="tag tag--green">Scan</span>
+        <h3>看清空间去向</h3>
+        <p>目录体积、文件类别和大文件分布都汇到同一张视图里，先判断再操作。</p>
+      </article>
+      <article class="info-card">
+        <span class="tag tag--blue">Migrate</span>
+        <h3>安全搬运</h3>
+        <p>把大目录挪到其他盘，保留原路径，常用软件不用重新装。</p>
+      </article>
+      <article class="info-card">
+        <span class="tag tag--amber">Rollback</span>
+        <h3>随时回退</h3>
+        <p>只要流程走完，历史记录还在，点回滚就能回到原状。</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="band">
+      <div class="band-inner">
+        <div>
+          <span class="tag tag--accent">Release 0.1.10</span>
+          <h2>这次把弹层、默认盘和垃圾清理说明一起收整了</h2>
+          <p>AI 面板、设置弹窗和清理说明统一抬高，默认目标磁盘改成更顺手的完整行，垃圾清理提示也统一为风险口径。</p>
+        </div>
+        <div class="band-actions">
+          <a class="btn btn-primary" href="https://github.com/bjfwan/cdrive-cleaner/releases/download/v0.1.10/CSD_0.1.10_x64-setup.exe" target="_blank" rel="noopener">
+            <span>下载 0.1.10</span>
           </a>
-          <a class="dropdown-item" href="https://github.com/bjfwan/cdrive-cleaner/releases/download/v0.1.8/CSD_0.1.8_x64_zh-CN.msi" target="_blank">
-            <svg class="item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--emerald);"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-            <div class="item-text">
-              <span class="item-title">官方下载 (.msi 绿色版)</span>
-              <span class="item-desc">免配置绿色封包，支持无窗口静默部署</span>
-            </div>
-          </a>
-          <div class="dropdown-divider"></div>
-          <a class="dropdown-item" href="https://github.com/bjfwan/cdrive-cleaner/releases" target="_blank">
-            <svg class="item-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted);"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.87 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
-            <div class="item-text">
-              <span class="item-title">GitHub Releases</span>
-              <span class="item-desc">前往官方发布页面 (国内直连较慢)</span>
-            </div>
+          <a class="btn btn-secondary" href="https://github.com/bjfwan/cdrive-cleaner/releases" target="_blank" rel="noopener">
+            <span>查看 Releases</span>
           </a>
         </div>
       </div>
-      <a class="btn btn-ghost" href="https://github.com/bjfwan/cdrive-cleaner" target="_blank">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-        Star 支持
-      </a>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <span class="tag tag--blue">Tech stack</span>
+      <h2>用轻量但扎实的组合做桌面工具</h2>
+      <p>没有花哨装饰，只有适合这类工具的稳定底座。</p>
+    </div>
+
+    <div class="grid-4">
+      <article class="stack-card">
+        <img src="assets/icons/rust.svg" alt="">
+        <strong>Rust</strong>
+        <span>后端逻辑、扫描和安全分析都放在这里。</span>
+      </article>
+      <article class="stack-card">
+        <img src="assets/icons/tauri.svg" alt="">
+        <strong>Tauri</strong>
+        <span>保留原生壳，体积轻，启动快。</span>
+      </article>
+      <article class="stack-card">
+        <img src="assets/icons/vue.svg" alt="">
+        <strong>Vue + TypeScript</strong>
+        <span>前端界面保持清晰、可维护。</span>
+      </article>
+      <article class="stack-card">
+        <img src="assets/icons/sqlite.svg" alt="">
+        <strong>SQLite</strong>
+        <span>迁移历史、缓存和恢复记录都能稳定落地。</span>
+      </article>
     </div>
   </section>
 
   <footer class="footer">
-    <p>CSD · 磁盘空间管理 &mdash; <a href="https://github.com/bjfwan/cdrive-cleaner">GitHub</a> &middot; GPL-3.0 &copy; 2026 bjfwan</p>
+    <p>CSD · 磁盘空间管理 · <a href="https://github.com/bjfwan/cdrive-cleaner" target="_blank" rel="noopener">GitHub</a> · GPL-3.0 · 2026</p>
   </footer>
-
-</div>
-
-<script>
-  // Dropdown
-  document.querySelectorAll('.dropdown').forEach(dropdown => {
-    const btn = dropdown.querySelector('.btn');
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const isActive = dropdown.classList.contains('active');
-      document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('active'));
-      if (!isActive) dropdown.classList.add('active');
-    });
-  });
-  document.addEventListener('click', () => {
-    document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('active'));
-  });
-
-  // Scroll reveal
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) entry.target.classList.add('visible');
-    });
-  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-
-  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-</script>
-
+</main>
 </body>
 </html>

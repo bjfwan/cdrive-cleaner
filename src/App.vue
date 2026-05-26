@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import appIcon from './assets/app-icon.png';
 import ConfirmDialog from './components/ConfirmDialog.vue';
-import { IconClose, IconDeepScan, IconHistory, IconSettings } from './components/icons';
+import { IconClose, IconDeepScan, IconHistory, IconSettings, IconSparkles } from './components/icons';
 import Toast from './components/Toast.vue';
 import Cart from './components/Cart.vue';
 import Workspace from './components/Workspace.vue';
@@ -1059,6 +1059,40 @@ async function resumePendingScanIntent() {
         </button>
       </section>
 
+      <button
+        v-if="aiState.settings.enabled"
+        type="button"
+        class="ai-rail-entry"
+        :class="{ active: activeTab === 'ai' }"
+        @click="activeTab = 'ai'"
+      >
+        <span class="ai-rail-entry-glow" aria-hidden="true"></span>
+        <span class="ai-rail-entry-icon">
+          <IconSparkles :size="18" />
+        </span>
+        <span class="ai-rail-entry-body">
+          <span class="ai-rail-entry-title">AI 建议</span>
+          <span class="ai-rail-entry-sub">{{ aiState.suggestions.length > 0 ? `${aiState.suggestions.length} 条待看` : '让 AI 帮你看看' }}</span>
+        </span>
+        <span v-if="aiState.suggestions.length > 0" class="ai-rail-entry-badge">{{ aiState.suggestions.length }}</span>
+      </button>
+
+      <button
+        v-else
+        type="button"
+        class="ai-rail-entry ai-rail-entry--cta"
+        @click="openSettings"
+      >
+        <span class="ai-rail-entry-glow" aria-hidden="true"></span>
+        <span class="ai-rail-entry-icon">
+          <IconSparkles :size="18" />
+        </span>
+        <span class="ai-rail-entry-body">
+          <span class="ai-rail-entry-title">开启 AI 建议</span>
+          <span class="ai-rail-entry-sub">前往设置 · 仅本地</span>
+        </span>
+      </button>
+
       <div class="rail-footnote">
         <span class="rail-footnote-dot"></span>
         <span>
@@ -1102,10 +1136,14 @@ async function resumePendingScanIntent() {
               >垃圾清理</button>
               <button
                 v-if="aiState.settings.enabled"
-                class="workspace-tab"
+                class="workspace-tab workspace-tab--ai"
                 :class="{ active: activeTab === 'ai' }"
                 @click="activeTab = 'ai'"
-              >AI 建议</button>
+              >
+                <IconSparkles :size="14" />
+                <span>AI 建议</span>
+                <span v-if="aiState.suggestions.length > 0" class="workspace-tab-badge">{{ aiState.suggestions.length }}</span>
+              </button>
             </div>
             <div class="workspace-chip" :data-tone="scanCapabilityTone" :title="scanCapabilityLabel">
               <span>后端</span>
@@ -1139,8 +1177,9 @@ async function resumePendingScanIntent() {
             @click="startDeepScan"
             :disabled="deepScanning || !selectedDisk"
           >
-            <IconDeepScan :size="18" />
-            <span>{{ deepScanning ? '扫描中' : hasDeepScanned ? '重新扫描' : '开始扫描' }}</span>
+            <IconDeepScan v-if="!deepScanning" :size="18" />
+            <span v-else class="topbar-cta-spinner" aria-hidden="true"></span>
+            <span>{{ deepScanning ? '扫描中…' : hasDeepScanned ? '重新扫描' : '开始扫描' }}</span>
           </button>
         </div>
       </header>

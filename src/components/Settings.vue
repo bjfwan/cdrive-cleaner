@@ -485,7 +485,7 @@ async function exportDiagnostics() {
             <p>把文件搬到其他盘时的默认动作，链接保持下来软件就不用重装。</p>
           </div>
 
-          <div class="setting-item">
+          <div class="setting-item setting-item--stacked setting-item--disk-target">
             <div class="setting-label">
               <label for="target-disk">默认目标磁盘</label>
               <span class="setting-description">迁移文件时的默认目标位置</span>
@@ -493,7 +493,7 @@ async function exportDiagnostics() {
             <DiskSelect
               id="target-disk"
               v-model="settings.defaultTargetDisk"
-              class="setting-disk-select"
+              class="setting-disk-select setting-disk-select--full"
               :disks="availableDisks"
               placeholder="每次选择"
               empty-label="每次选择"
@@ -1185,98 +1185,100 @@ async function exportDiagnostics() {
       @cancel="showDeleteCacheConfirm = false; deletingCacheEntry = null"
     />
 
-    <!-- About dialog -->
-    <div v-if="showAbout" class="about-overlay" @click.self="showAbout = false">
-      <div class="about-panel" @click.stop>
-        <button class="close-btn about-close" @click="showAbout = false">
-          <IconClose :size="18" />
-        </button>
-        <img :src="appIcon" alt="应用图标" class="about-icon" />
-        <h3 class="about-title">CDrive Cleaner</h3>
-        <p class="about-version">v0.1.8</p>
-        <p class="about-desc">
-          一键扫描、智能搬运、安全回滚——为 C 盘瘦身的桌面工具。
-        </p>
-
-        <div class="about-section">
-          <h4>联系方式</h4>
-          <ul>
-            <li>QQ 邮箱：2632507193@qq.com</li>
-            <li>Gmail：bajianfeng302@gmail.com</li>
-          </ul>
-        </div>
-
-        <div class="about-section">
-          <h4>隐私政策</h4>
-          <p>
-            CDrive Cleaner 仅在本地运行，不收集、不上传任何用户数据。
-            扫描结果和迁移记录均存储在本机，应用不包含任何遥测或分析功能。
-            我们不会将您的文件信息发送到任何服务器。
-          </p>
-        </div>
-
-        <p class="about-footer">© 2024–2026 CDrive Cleaner · GPL-3.0 License</p>
-      </div>
-    </div>
-
-    <div v-if="showConsentModal" class="ai-modal-overlay" @click.self="rejectConsent">
-      <div class="ai-modal" @click.stop>
-        <header class="ai-modal-head">
-          <div class="ai-modal-title">
-            <IconShield :size="20" />
-            <h3>启用 AI 分析前的同意</h3>
-          </div>
-          <button class="close-btn" @click="rejectConsent">
+    <Teleport to="body">
+      <!-- About dialog -->
+      <div v-if="showAbout" class="about-overlay" @click.self="showAbout = false">
+        <div class="about-panel" @click.stop>
+          <button class="close-btn about-close" @click="showAbout = false">
             <IconClose :size="18" />
           </button>
-        </header>
-        <div class="ai-modal-body">
-          <p>启用 AI 分析后，<strong>且只有当你在「数据类别」面板里勾选某一项时</strong>，对应类别的脱敏数据才会被打包到请求中。</p>
-          <ul>
-            <li>Builtin 模式：请求经我们的 Cloudflare Worker 代理到上游模型服务商。</li>
-            <li>BYOK 模式：请求直连你填写的服务，不经我们的代理。</li>
-            <li>所有路径都会先在本地脱敏，绝不发送真实用户名或绝对路径。</li>
-            <li>所有 AI 建议都需要你手动点「采纳」才会触发动作。</li>
-          </ul>
-          <p>
-            完整说明请参见
-            <button class="inline-link" @click="openPrivacyFromSettings">隐私政策</button>。
+          <img :src="appIcon" alt="应用图标" class="about-icon" />
+          <h3 class="about-title">CDrive Cleaner</h3>
+          <p class="about-version">v0.1.10</p>
+          <p class="about-desc">
+            一键扫描、智能搬运、安全回滚——为 C 盘瘦身的桌面工具。
           </p>
 
-          <label class="ai-consent-check">
-            <input type="checkbox" v-model="consentAgreed" />
-            <span>我已阅读并同意上述说明。</span>
-          </label>
-        </div>
-        <footer class="ai-modal-footer">
-          <button class="btn btn-secondary" @click="rejectConsent">取消</button>
-          <button class="btn btn-primary" :disabled="!consentAgreed" @click="acceptConsent">同意并启用</button>
-        </footer>
-      </div>
-    </div>
-
-    <div v-if="showPreviewModal" class="ai-modal-overlay" @click.self="closePreviewModal">
-      <div class="ai-modal ai-modal--wide" @click.stop>
-        <header class="ai-modal-head">
-          <div class="ai-modal-title">
-            <IconInfo :size="20" />
-            <h3>发送前预览</h3>
+          <div class="about-section">
+            <h4>联系方式</h4>
+            <ul>
+              <li>QQ 邮箱：2632507193@qq.com</li>
+              <li>Gmail：bajianfeng302@gmail.com</li>
+            </ul>
           </div>
-          <button class="close-btn" @click="closePreviewModal">
-            <IconClose :size="18" />
-          </button>
-        </header>
-        <div class="ai-modal-body">
-          <p class="ai-preview-hint">下面是即将随下一次请求发出的完整 JSON。没勾选的数据类别一定不会出现在这里。</p>
-          <div v-if="previewLoading" class="ai-preview-loading">加载中…</div>
-          <pre v-else class="ai-preview-json">{{ previewSnapshotJson || '{}' }}</pre>
+
+          <div class="about-section">
+            <h4>隐私政策</h4>
+            <p>
+              CDrive Cleaner 仅在本地运行，不收集、不上传任何用户数据。
+              扫描结果和迁移记录均存储在本机，应用不包含任何遥测或分析功能。
+              我们不会将您的文件信息发送到任何服务器。
+            </p>
+          </div>
+
+          <p class="about-footer">© 2024–2026 CDrive Cleaner · GPL-3.0 License</p>
         </div>
-        <footer class="ai-modal-footer">
-          <button class="btn btn-secondary" @click="copyPreviewSnapshot" :disabled="previewLoading || !previewSnapshot">复制 JSON</button>
-          <button class="btn btn-primary" @click="closePreviewModal">已确认</button>
-        </footer>
       </div>
-    </div>
+
+      <div v-if="showConsentModal" class="ai-modal-overlay" @click.self="rejectConsent">
+        <div class="ai-modal" @click.stop>
+          <header class="ai-modal-head">
+            <div class="ai-modal-title">
+              <IconShield :size="20" />
+              <h3>启用 AI 分析前的同意</h3>
+            </div>
+            <button class="close-btn" @click="rejectConsent">
+              <IconClose :size="18" />
+            </button>
+          </header>
+          <div class="ai-modal-body">
+            <p>启用 AI 分析后，<strong>且只有当你在「数据类别」面板里勾选某一项时</strong>，对应类别的脱敏数据才会被打包到请求中。</p>
+            <ul>
+              <li>Builtin 模式：请求经我们的 Cloudflare Worker 代理到上游模型服务商。</li>
+              <li>BYOK 模式：请求直连你填写的服务，不经我们的代理。</li>
+              <li>所有路径都会先在本地脱敏，绝不发送真实用户名或绝对路径。</li>
+              <li>所有 AI 建议都需要你手动点「采纳」才会触发动作。</li>
+            </ul>
+            <p>
+              完整说明请参见
+              <button class="inline-link" @click="openPrivacyFromSettings">隐私政策</button>。
+            </p>
+
+            <label class="ai-consent-check">
+              <input type="checkbox" v-model="consentAgreed" />
+              <span>我已阅读并同意上述说明。</span>
+            </label>
+          </div>
+          <footer class="ai-modal-footer">
+            <button class="btn btn-secondary" @click="rejectConsent">取消</button>
+            <button class="btn btn-primary" :disabled="!consentAgreed" @click="acceptConsent">同意并启用</button>
+          </footer>
+        </div>
+      </div>
+
+      <div v-if="showPreviewModal" class="ai-modal-overlay" @click.self="closePreviewModal">
+        <div class="ai-modal ai-modal--wide" @click.stop>
+          <header class="ai-modal-head">
+            <div class="ai-modal-title">
+              <IconInfo :size="20" />
+              <h3>发送前预览</h3>
+            </div>
+            <button class="close-btn" @click="closePreviewModal">
+              <IconClose :size="18" />
+            </button>
+          </header>
+          <div class="ai-modal-body">
+            <p class="ai-preview-hint">下面是即将随下一次请求发出的完整 JSON。没勾选的数据类别一定不会出现在这里。</p>
+            <div v-if="previewLoading" class="ai-preview-loading">加载中…</div>
+            <pre v-else class="ai-preview-json">{{ previewSnapshotJson || '{}' }}</pre>
+          </div>
+          <footer class="ai-modal-footer">
+            <button class="btn btn-secondary" @click="copyPreviewSnapshot" :disabled="previewLoading || !previewSnapshot">复制 JSON</button>
+            <button class="btn btn-primary" @click="closePreviewModal">已确认</button>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -1486,6 +1488,16 @@ async function exportDiagnostics() {
   transition: all var(--transition-base);
 }
 
+.setting-item--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.85rem;
+}
+
+.setting-item--disk-target .setting-label {
+  min-width: 0;
+}
+
 .setting-item:hover {
   background: var(--color-surface-hover);
   border-color: var(--color-border-medium);
@@ -1518,6 +1530,11 @@ async function exportDiagnostics() {
   width: min(100%, 320px);
   min-width: 260px;
   flex-shrink: 0;
+}
+
+.setting-disk-select--full {
+  width: 100%;
+  min-width: 0;
 }
 
 .threshold-input-group {
@@ -2179,7 +2196,7 @@ async function exportDiagnostics() {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2400;
+  z-index: 9300;
   animation: settingsOverlayIn 0.2s ease;
 }
 
@@ -2537,7 +2554,7 @@ async function exportDiagnostics() {
   inset: 0;
   background: rgba(15, 18, 28, 0.5);
   backdrop-filter: blur(4px);
-  z-index: 2000;
+  z-index: 9300;
   display: flex;
   align-items: center;
   justify-content: center;

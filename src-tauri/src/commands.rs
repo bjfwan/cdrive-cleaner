@@ -2078,22 +2078,10 @@ pub async fn download_update(
     app: AppHandle,
     url: String,
 ) -> Result<String, String> {
-    tokio::task::spawn_blocking(move || {
-        let resp = ureq::get(&url)
-            .set("User-Agent", "CSD")
-            .call()
-            .map_err(|e| format!("下载失败: {e}"))?;
-
-        let total: u64 = resp
-            .header("Content-Length")
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(0);
-
+    tokio::task::spawn_blocking(move || -> Result<String, String> {
         let temp_dir = std::env::temp_dir().join("csd-update");
         std::fs::create_dir_all(&temp_dir)
             .map_err(|e| format!("创建临时目录失败: {e}"))?;
-
-        // Extract filename from URL or use default
         let filename = url
             .rsplit('/')
             .next()
@@ -2101,52 +2089,234 @@ pub async fn download_update(
             .to_string();
         let dest = temp_dir.join(&filename);
 
-        let mut file = std::fs::File::create(&dest)
-            .map_err(|e| format!("创建文件失败: {e}"))?;
-
-        let mut reader = resp.into_reader();
-        let mut buf = [0u8; 65536];
-        let mut downloaded: u64 = 0;
-        let mut last_emit = std::time::Instant::now();
-
-        loop {
-            let n = reader
-                .read(&mut buf)
-                .map_err(|e| format!("读取数据失败: {e}"))?;
-            if n == 0 {
-                break;
+        let (total, accepts_range) = match ureq::request("HEAD", &url)
+            .set("User-Agent", "CSD")
+            .timeout(Duration::from_secs(15))
+            .call()
+        {
+            Ok(resp) => {
+                let len: u64 = resp
+                    .header("Content-Length")
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(0);
+                let ranges = resp
+                    .header("Accept-Ranges")
+                    .map(|v| v.to_ascii_lowercase().contains("bytes"))
+                    .unwrap_or(true);
+                (len, ranges)
             }
-            std::io::Write::write_all(&mut file, &buf[..n])
-                .map_err(|e| format!("写入文件失败: {e}"))?;
-            downloaded += n as u64;
+            Err(_) => (0, false),
+        };
 
-            // Emit progress at most every 100ms
-            if last_emit.elapsed() >= Duration::from_millis(100) || downloaded == total {
-                let percent = if total > 0 {
-                    (downloaded as f64 / total as f64) * 100.0
-                } else {
-                    0.0
-                };
-                let _ = app.emit("download-progress", DownloadProgress {
-                    downloaded,
-                    total,
-                    percent,
-                });
-                last_emit = std::time::Instant::now();
-            }
+        let chunks: usize = if accepts_range && total > 2_000_000 {
+            8usize.min(((total / 512_000) as usize).max(1))
+        } else {
+            1
+        };
+
+        if chunks > 1 {
+            download_parallel(&url, &dest, total, chunks, &app)
+        } else {
+            download_sequential(&url, &dest, &app)
         }
-
-        // Final 100% emit
-        let _ = app.emit("download-progress", DownloadProgress {
-            downloaded,
-            total,
-            percent: 100.0,
-        });
-
-        Ok(dest.to_string_lossy().to_string())
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+fn download_sequential(url: &str, dest: &Path, app: &AppHandle) -> Result<String, String> {
+    let resp = ureq::get(url)
+        .set("User-Agent", "CSD")
+        .timeout(Duration::from_secs(180))
+        .call()
+        .map_err(|e| format!("下载失败: {e}"))?;
+
+    let total: u64 = resp
+        .header("Content-Length")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+
+    let mut file = std::fs::File::create(dest)
+        .map_err(|e| format!("创建文件失败: {e}"))?;
+
+    let mut reader = resp.into_reader();
+    let mut buf = vec![0u8; 1024 * 1024];
+    let mut downloaded: u64 = 0;
+    let mut last_emit = std::time::Instant::now();
+
+    loop {
+        let n = reader
+            .read(&mut buf)
+            .map_err(|e| format!("读取数据失败: {e}"))?;
+        if n == 0 {
+            break;
+        }
+        std::io::Write::write_all(&mut file, &buf[..n])
+            .map_err(|e| format!("写入文件失败: {e}"))?;
+        downloaded += n as u64;
+
+        if last_emit.elapsed() >= Duration::from_millis(120) {
+            let percent = if total > 0 {
+                (downloaded as f64 / total as f64) * 100.0
+            } else {
+                0.0
+            };
+            let _ = app.emit("download-progress", DownloadProgress {
+                downloaded,
+                total,
+                percent,
+            });
+            last_emit = std::time::Instant::now();
+        }
+    }
+
+    let _ = app.emit("download-progress", DownloadProgress {
+        downloaded,
+        total,
+        percent: 100.0,
+    });
+
+    Ok(dest.to_string_lossy().to_string())
+}
+
+fn download_parallel(
+    url: &str,
+    dest: &Path,
+    total: u64,
+    chunks: usize,
+    app: &AppHandle,
+) -> Result<String, String> {
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
+
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(dest)
+        .map_err(|e| format!("创建文件失败: {e}"))?;
+    file.set_len(total)
+        .map_err(|e| format!("分配空间失败: {e}"))?;
+    drop(file);
+
+    let downloaded = Arc::new(AtomicU64::new(0));
+    let cancel = Arc::new(AtomicBool::new(false));
+    let progress_done = Arc::new(AtomicBool::new(false));
+
+    let progress_handle = {
+        let app_c = app.clone();
+        let dl = downloaded.clone();
+        let done = progress_done.clone();
+        std::thread::spawn(move || {
+            while !done.load(AtomicOrdering::Relaxed) {
+                let n = dl.load(AtomicOrdering::Relaxed);
+                let percent = if total > 0 {
+                    (n as f64 / total as f64) * 100.0
+                } else {
+                    0.0
+                };
+                let _ = app_c.emit(
+                    "download-progress",
+                    DownloadProgress {
+                        downloaded: n,
+                        total,
+                        percent,
+                    },
+                );
+                std::thread::sleep(Duration::from_millis(120));
+            }
+        })
+    };
+
+    let chunk_size = total / chunks as u64;
+    let mut handles = Vec::with_capacity(chunks);
+    for i in 0..chunks {
+        let start = i as u64 * chunk_size;
+        let end = if i == chunks - 1 {
+            total - 1
+        } else {
+            (i as u64 + 1) * chunk_size - 1
+        };
+        let url_c = url.to_string();
+        let dest_c = dest.to_path_buf();
+        let dl = downloaded.clone();
+        let cancel_c = cancel.clone();
+        handles.push(std::thread::spawn(move || -> Result<(), String> {
+            let resp = ureq::get(&url_c)
+                .set("User-Agent", "CSD")
+                .set("Range", &format!("bytes={start}-{end}"))
+                .timeout(Duration::from_secs(180))
+                .call()
+                .map_err(|e| format!("分块 {i} 请求失败: {e}"))?;
+
+            let status = resp.status();
+            if status != 206 && status != 200 {
+                return Err(format!("分块 {i} 服务返回 {status}"));
+            }
+
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .open(&dest_c)
+                .map_err(|e| format!("分块 {i} 打开失败: {e}"))?;
+            std::io::Seek::seek(&mut file, std::io::SeekFrom::Start(start))
+                .map_err(|e| format!("分块 {i} 定位失败: {e}"))?;
+
+            let mut reader = resp.into_reader();
+            let mut buf = vec![0u8; 256 * 1024];
+            loop {
+                if cancel_c.load(AtomicOrdering::Relaxed) {
+                    return Err("已取消".to_string());
+                }
+                let n = reader
+                    .read(&mut buf)
+                    .map_err(|e| format!("分块 {i} 读取失败: {e}"))?;
+                if n == 0 {
+                    break;
+                }
+                std::io::Write::write_all(&mut file, &buf[..n])
+                    .map_err(|e| format!("分块 {i} 写入失败: {e}"))?;
+                dl.fetch_add(n as u64, AtomicOrdering::Relaxed);
+            }
+            Ok(())
+        }));
+    }
+
+    let mut first_err: Option<String> = None;
+    for h in handles {
+        match h.join() {
+            Ok(Ok(_)) => {}
+            Ok(Err(e)) => {
+                if first_err.is_none() {
+                    first_err = Some(e);
+                }
+                cancel.store(true, AtomicOrdering::Relaxed);
+            }
+            Err(_) => {
+                if first_err.is_none() {
+                    first_err = Some("下载线程异常退出".to_string());
+                }
+                cancel.store(true, AtomicOrdering::Relaxed);
+            }
+        }
+    }
+
+    progress_done.store(true, AtomicOrdering::Relaxed);
+    let _ = progress_handle.join();
+
+    if let Some(e) = first_err {
+        let _ = std::fs::remove_file(dest);
+        return Err(e);
+    }
+
+    let _ = app.emit(
+        "download-progress",
+        DownloadProgress {
+            downloaded: total,
+            total,
+            percent: 100.0,
+        },
+    );
+
+    Ok(dest.to_string_lossy().to_string())
 }
 
 #[tauri::command]

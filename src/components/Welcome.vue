@@ -12,7 +12,7 @@ const emit = defineEmits<{ close: [] }>();
 
       <img :src="appIcon" alt="" class="welcome-logo" />
       <h2 class="welcome-title">CDrive Cleaner</h2>
-      <p class="welcome-version">v0.1.7</p>
+      <p class="welcome-version">v0.1.10</p>
 
       <ul class="welcome-features">
         <li>

@@ -16,10 +16,30 @@ const props = withDefaults(defineProps<Props>(), {
 
 const open = ref(false);
 const triggerRef = ref<HTMLButtonElement | null>(null);
+const bubbleRef = ref<HTMLElement | null>(null);
+const bubbleStyle = ref<Record<string, string>>({});
+const bubblePlacement = ref<'top' | 'bottom'>('top');
 
-const triggerLabel = computed(() => (props.whySafe ? '为什么这是可清的？' : '没有补充说明'));
+const triggerText = computed(() => {
+  if (!props.whySafe) return '未补充';
+  if (props.risk === 'risky') return '为什么不建议';
+  if (props.risk === 'caution') return '为什么建议清';
+  return '为什么可清';
+});
 
-const bodyText = computed(() => props.whySafe?.trim() || '此规则尚未补充安全说明。建议保持默认勾选状态，仍可使用「这条不对？」反馈。');
+const triggerLabel = computed(() => {
+  if (!props.whySafe) return '没有补充说明';
+  if (props.risk === 'risky') return '查看为什么不建议清理';
+  if (props.risk === 'caution') return '查看为什么建议谨慎清理';
+  return '查看为什么这是可清理项';
+});
+
+const bodyText = computed(() => {
+  const text = props.whySafe?.trim();
+  if (text) return text;
+  if (props.risk === 'risky') return '此规则风险较高，默认不建议勾选。仍可使用「这条不对？」反馈补充说明。';
+  return '此规则尚未补充安全说明。建议保持默认勾选状态，仍可使用「这条不对？」反馈。';
+});
 
 const badgeLevel = computed(() => {
   if (props.risk === 'safe') return 'safe';
@@ -28,11 +48,18 @@ const badgeLevel = computed(() => {
 });
 
 function toggle() {
-  open.value = !open.value;
+  if (open.value) {
+    close();
+    return;
+  }
+  updateBubblePosition();
+  open.value = true;
+  attach();
 }
 
 function close() {
   open.value = false;
+  detach();
 }
 
 function onKey(event: KeyboardEvent) {
@@ -41,20 +68,45 @@ function onKey(event: KeyboardEvent) {
 
 function onDocClick(event: MouseEvent) {
   const trigger = triggerRef.value;
+  const bubble = bubbleRef.value;
+  const target = event.target as Node;
   if (!trigger) return;
-  if (trigger === event.target) return;
-  if (trigger.contains(event.target as Node)) return;
+  if (trigger === target || trigger.contains(target)) return;
+  if (bubble && (bubble === target || bubble.contains(target))) return;
   close();
+}
+
+function updateBubblePosition() {
+  const trigger = triggerRef.value;
+  if (!trigger) return;
+
+  const rect = trigger.getBoundingClientRect();
+  const width = Math.min(320, window.innerWidth - 16);
+  let left = rect.left + rect.width / 2 - width / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+
+  const showAbove = rect.top > 220;
+  bubblePlacement.value = showAbove ? 'top' : 'bottom';
+  bubbleStyle.value = {
+    width: `${width}px`,
+    left: `${left}px`,
+    top: `${showAbove ? rect.top - 8 : rect.bottom + 8}px`,
+    transform: showAbove ? 'translateY(-100%)' : 'none',
+  };
 }
 
 function attach() {
   document.addEventListener('keydown', onKey);
   document.addEventListener('mousedown', onDocClick);
+  window.addEventListener('resize', updateBubblePosition);
+  window.addEventListener('scroll', updateBubblePosition, true);
 }
 
 function detach() {
   document.removeEventListener('keydown', onKey);
   document.removeEventListener('mousedown', onDocClick);
+  window.removeEventListener('resize', updateBubblePosition);
+  window.removeEventListener('scroll', updateBubblePosition, true);
 }
 
 onBeforeUnmount(detach);
@@ -66,18 +118,25 @@ onBeforeUnmount(detach);
       ref="triggerRef"
       type="button"
       class="why__trigger"
-      :class="{ 'why__trigger--missing': !whySafe }"
+      :class="[`why__trigger--${risk}`, { 'why__trigger--missing': !whySafe }]"
       :aria-expanded="open"
       :aria-label="triggerLabel"
       @click.stop="toggle"
-      @focus="attach"
-      @blur="detach"
     >
       <span class="why__trigger-icon" aria-hidden="true">?</span>
-      <span class="why__trigger-label">{{ whySafe ? '为什么可清' : '未补充' }}</span>
+      <span class="why__trigger-label">{{ triggerText }}</span>
     </button>
 
-    <div v-if="open" class="why__bubble" role="dialog" aria-label="清理理由说明">
+    <Teleport to="body">
+    <div
+      v-if="open"
+      ref="bubbleRef"
+      class="why__bubble"
+      :class="`why__bubble--${bubblePlacement}`"
+      :style="bubbleStyle"
+      role="dialog"
+      aria-label="清理理由说明"
+    >
       <header class="why__bubble-head">
         <strong class="why__bubble-name">{{ ruleName }}</strong>
         <RiskBadge :level="badgeLevel" />
@@ -87,6 +146,7 @@ onBeforeUnmount(detach);
         <small>来源：内置规则库 · 可在反馈中纠正</small>
       </footer>
     </div>
+    </Teleport>
   </span>
 </template>
 
@@ -122,6 +182,11 @@ onBeforeUnmount(detach);
   color: var(--color-text-tertiary);
 }
 
+.why__trigger--risky {
+  color: var(--risk-risky-text);
+  border-color: var(--risk-risky-ring);
+}
+
 .why__trigger-icon {
   display: inline-flex;
   width: 14px;
@@ -135,12 +200,14 @@ onBeforeUnmount(detach);
   font-weight: 800;
 }
 
+.why__trigger--risky .why__trigger-icon {
+  background: var(--risk-risky-soft);
+  color: var(--risk-risky-text);
+}
+
 .why__bubble {
-  position: absolute;
-  top: calc(100% + 0.4rem);
-  right: 0;
-  z-index: 60;
-  width: 280px;
+  position: fixed;
+  z-index: 9600;
   padding: 0.75rem 0.9rem;
   border-radius: var(--radius-md);
   background: var(--color-bg-primary);
@@ -149,11 +216,15 @@ onBeforeUnmount(detach);
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+  max-height: min(320px, calc(100vh - 16px));
+  overflow: auto;
+  pointer-events: auto;
+  animation: why-pop-in 0.14s ease;
 }
 
-.why--inline .why__bubble {
-  right: auto;
-  left: 0;
+@keyframes why-pop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .why__bubble-head {
@@ -173,6 +244,7 @@ onBeforeUnmount(detach);
   font-size: 0.8rem;
   color: var(--color-text-secondary);
   line-height: 1.5;
+  word-break: break-word;
 }
 
 .why__bubble-foot small {

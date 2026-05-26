@@ -8,6 +8,7 @@ export { default as IconArrowDown } from './common/IconArrowDown.vue'
 export { default as IconCart } from './common/IconCart.vue'
 export { default as IconTruck } from './common/IconTruck.vue'
 export { default as IconScanEmpty } from './common/IconScanEmpty.vue'
+export { default as IconSparkles } from './common/IconSparkles.vue'
 
 export { default as IconSuccess } from './status/IconSuccess.vue'
 export { default as IconInfo } from './status/IconInfo.vue'

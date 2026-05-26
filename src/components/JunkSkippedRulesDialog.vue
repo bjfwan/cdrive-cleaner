@@ -58,29 +58,31 @@ const hasAdmin = computed(() => items.value.some((item) => item.reason === 'admi
 </script>
 
 <template>
-  <div v-if="show" class="skipped-overlay" @click.self="emit('close')">
-    <div class="skipped-dialog" @click.stop>
-      <button class="skipped-close" type="button" aria-label="关闭" @click="emit('close')">×</button>
-      <h3>已跳过 {{ count }} 条规则</h3>
-      <p class="skipped-subtitle">这些规则因为下面原因没扫描，可能漏报一部分垃圾。</p>
-      <ul v-if="count > 0" class="skipped-list">
-        <li v-for="item in items" :key="item.id" class="skipped-item">
-          <div class="skipped-item-main">
-            <span class="skipped-item-name">{{ item.name }}</span>
-            <span class="skipped-item-reason">{{ item.reasonText }}</span>
-          </div>
-          <span class="skipped-tag" :class="`skipped-tag-${item.reason}`">{{ item.reasonText }}</span>
-        </li>
-      </ul>
-      <div v-else class="skipped-empty">没有被跳过的规则。</div>
-      <div class="skipped-actions">
-        <button v-if="hasAdmin" class="btn btn-primary" type="button" @click="emit('rescan')">
-          以管理员身份重扫
-        </button>
-        <button class="btn btn-secondary" type="button" @click="emit('close')">关闭</button>
+  <Teleport to="body">
+    <div v-if="show" class="skipped-overlay" @click.self="emit('close')">
+      <div class="skipped-dialog" @click.stop>
+        <button class="skipped-close" type="button" aria-label="关闭" @click="emit('close')">×</button>
+        <h3>已跳过 {{ count }} 条规则</h3>
+        <p class="skipped-subtitle">这些规则因为下面原因没扫描，可能漏报一部分垃圾。</p>
+        <ul v-if="count > 0" class="skipped-list">
+          <li v-for="item in items" :key="item.id" class="skipped-item">
+            <div class="skipped-item-main">
+              <span class="skipped-item-name">{{ item.name }}</span>
+              <span class="skipped-item-reason">{{ item.reasonText }}</span>
+            </div>
+            <span class="skipped-tag" :class="`skipped-tag-${item.reason}`">{{ item.reasonText }}</span>
+          </li>
+        </ul>
+        <div v-else class="skipped-empty">没有被跳过的规则。</div>
+        <div class="skipped-actions">
+          <button v-if="hasAdmin" class="btn btn-primary" type="button" @click="emit('rescan')">
+            以管理员身份重扫
+          </button>
+          <button class="btn btn-secondary" type="button" @click="emit('close')">关闭</button>
+        </div>
       </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -91,7 +93,7 @@ const hasAdmin = computed(() => items.value.some((item) => item.reason === 'admi
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10001;
+  z-index: 9450;
   animation: skippedFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   font-family: var(--font-sans);
 }
