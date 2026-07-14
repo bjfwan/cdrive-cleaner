@@ -31,6 +31,8 @@ const actionTone = computed(() => {
   }
   return 'neutral';
 });
+
+const canAccept = computed(() => (props.suggestion.action || '').toLowerCase() === 'migrate');
 </script>
 
 <template>
@@ -65,6 +67,7 @@ const actionTone = computed(() => {
         <span>忽略</span>
       </button>
       <button
+        v-if="canAccept"
         class="ai-card-btn ai-card-btn--primary"
         :disabled="applying"
         @click="emit('accept', suggestion)"
@@ -73,6 +76,7 @@ const actionTone = computed(() => {
         <span v-else class="ai-card-btn-spinner" aria-hidden="true"></span>
         <span>{{ applying ? '准备中…' : '采纳并迁移' }}</span>
       </button>
+      <span v-else class="ai-card-unavailable">请在对应功能中处理</span>
     </footer>
   </article>
 </template>
@@ -213,6 +217,12 @@ const actionTone = computed(() => {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.ai-card-unavailable {
+  align-self: center;
+  color: var(--text-secondary, #6b7280);
+  font-size: 12px;
 }
 
 .ai-card-btn {

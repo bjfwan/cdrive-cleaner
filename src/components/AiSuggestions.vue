@@ -203,7 +203,7 @@ function onDismiss(suggestion: AiSuggestion) {
       <button class="ai-cta ai-cta--primary" style="margin-top: 0.5rem" @click="aiStore.clearAnalyzing(); refresh()">重试</button>
     </div>
 
-    <div v-else-if="suggestions.length === 0" class="ai-empty">
+    <div v-else-if="state.analyzing && suggestions.length === 0" class="ai-empty">
       <svg class="ai-analyzing-art" viewBox="0 0 320 200" aria-hidden="true">
         <defs>
           <linearGradient id="aa-grad" x1="0%" y1="0%" x2="100%" y2="100%">

@@ -623,7 +623,7 @@ async function submitFeedback() {
   };
   try {
     await invoke(CMD_REPORT_JUNK_FEEDBACK, { feedback: payload });
-    showToast('反馈已记录', '感谢反馈，下个版本会优化此规则', 'success');
+    showToast('反馈已记录', '反馈已保存在本机', 'success');
     feedbackOpen.value = false;
     feedbackTarget.value = null;
     feedbackNote.value = '';

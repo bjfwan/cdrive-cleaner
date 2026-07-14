@@ -46,7 +46,7 @@ const enabledCategories = computed(() => {
           <IconShield :size="22" />
           <h2>隐私政策</h2>
         </div>
-        <button class="close-btn" @click="emit('close')">
+        <button class="close-btn" type="button" aria-label="关闭隐私政策" @click="emit('close')">
           <IconClose :size="20" />
         </button>
       </header>

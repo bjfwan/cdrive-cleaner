@@ -191,7 +191,8 @@ async function doExecute(opportunity: ReclaimOpportunity) {
             <button
               v-else
               class="reclaim-btn"
-              :disabled="executingId !== null"
+              :disabled="executingId !== null || (op.requires_admin && !isElevated)"
+              :title="op.requires_admin && !isElevated ? '请先开启管理员模式' : undefined"
               @click="executeReclaim(op)"
             >
               <span v-if="op.requires_admin && !isElevated">需管理员</span>
@@ -205,7 +206,7 @@ async function doExecute(opportunity: ReclaimOpportunity) {
     <ConfirmDialog
       :show="!!confirmTarget"
       :title="confirmTarget?.risk_level === 'irreversible' ? `不可还原：回收 ${formatBytes(confirmTarget?.reclaimable_size ?? 0)}？` : `回收 ${formatBytes(confirmTarget?.reclaimable_size ?? 0)}？`"
-      :message="`将执行「${confirmTarget?.label ?? ''}」释放约 ${formatBytes(confirmTarget?.reclaimable_size ?? 0)}。${confirmTarget?.risk_level === 'irreversible' ? '系统状态会被改写，无法再还原回当前的快照/休眠/恢复点等。' : '执行后可在「迁移历史」里看到记录。'}`"
+      :message="`将执行「${confirmTarget?.label ?? ''}」释放约 ${formatBytes(confirmTarget?.reclaimable_size ?? 0)}。${confirmTarget?.risk_level === 'irreversible' ? '系统状态会被改写，无法再还原回当前的快照/休眠/恢复点等。' : '执行结果会显示在当前页面，重新扫描后更新空间。'}`"
       :confirm-text="confirmTarget?.risk_level === 'irreversible' ? '我确认无法还原' : '立即回收'"
       cancel-text="再想想"
       :type="confirmType"
