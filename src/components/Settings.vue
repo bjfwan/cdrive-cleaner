@@ -731,29 +731,6 @@ async function exportDiagnostics() {
             </label>
           </div>
 
-          <div class="setting-item setting-item--row">
-            <div class="setting-label">
-              <label>下载加速镜像</label>
-              <span class="setting-description">
-                选择国内镜像加速更新下载（不影响版本检查，仅加速安装包下载）
-              </span>
-            </div>
-            <div class="mirror-controls">
-              <select v-model="settings.downloadMirror" class="mirror-select">
-                <option value="none">直连 GitHub（默认）</option>
-                <option value="ghproxy">ghproxy.com 镜像</option>
-                <option value="custom">自定义镜像地址</option>
-              </select>
-              <input
-                v-if="settings.downloadMirror === 'custom'"
-                v-model="settings.downloadMirrorUrl"
-                type="text"
-                class="mirror-input"
-                placeholder="https://your-mirror.example.com/"
-              />
-            </div>
-          </div>
-
           <div class="setting-item">
             <div class="setting-label">
               <label>手动检查</label>
@@ -1624,70 +1601,6 @@ async function exportDiagnostics() {
   outline: none;
   border-color: var(--color-accent-primary);
   box-shadow: 0 0 0 3px rgba(139, 115, 85, 0.08);
-}
-
-.mirror-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  min-width: 220px;
-  flex-shrink: 0;
-}
-
-.mirror-select {
-  padding: 0.65rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--color-text-primary);
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid var(--color-border-medium);
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-base);
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  appearance: auto;
-}
-
-.mirror-select:hover {
-  border-color: var(--color-border-strong);
-}
-
-.mirror-select:focus {
-  outline: none;
-  border-color: var(--color-accent-primary);
-  box-shadow: 0 0 0 3px rgba(139, 115, 85, 0.08);
-}
-
-.mirror-input {
-  padding: 0.65rem 0.85rem;
-  font-size: 0.8125rem;
-  color: var(--color-text-primary);
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid var(--color-border-medium);
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-base);
-  box-shadow: var(--shadow-sm);
-}
-
-.mirror-input::placeholder {
-  color: var(--color-text-tertiary);
-  font-size: 0.8125rem;
-}
-
-.mirror-input:hover {
-  border-color: var(--color-border-strong);
-}
-
-.mirror-input:focus {
-  outline: none;
-  border-color: var(--color-accent-primary);
-  box-shadow: 0 0 0 3px rgba(139, 115, 85, 0.08);
-}
-
-[data-theme="dark"] .mirror-select,
-[data-theme="dark"] .mirror-input {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--color-text-primary);
 }
 
 .input-suffix {
@@ -2941,4 +2854,3 @@ async function exportDiagnostics() {
   color: #aab2c0;
 }
 </style>
-

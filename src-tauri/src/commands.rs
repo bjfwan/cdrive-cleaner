@@ -23,6 +23,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tauri::AppHandle;
 use tauri::Emitter;
+use tauri_plugin_opener::OpenerExt;
 
 #[derive(serde::Serialize)]
 pub struct ScanCapabilities {
@@ -1972,21 +1973,36 @@ fn get_disk_info_for_path_inner<'a>(root_path: &str, disks: &'a [DiskInfo]) -> O
 
 // ─── Open URL ───────────────────────────────────────────────────────────────
 
+const OFFICIAL_RELEASES_URL: &str = "https://github.com/bjfwan/cdrive-cleaner/releases";
+
+fn is_official_release_url(url: &str) -> bool {
+    if url == OFFICIAL_RELEASES_URL || url == format!("{OFFICIAL_RELEASES_URL}/") {
+        return true;
+    }
+
+    let Some(child_path) = url.strip_prefix(&format!("{OFFICIAL_RELEASES_URL}/")) else {
+        return false;
+    };
+
+    child_path.split('/').all(|segment| {
+        !segment.is_empty()
+            && segment != "."
+            && segment != ".."
+            && segment
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+    })
+}
+
 #[tauri::command]
-pub fn open_url(url: String) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        use std::process::Command;
-        Command::new("cmd")
-            .args(["/C", "start", "", &url])
-            .spawn()
-            .map_err(|e| format!("无法打开链接: {e}"))?;
+pub fn open_url(app: AppHandle, url: String) -> Result<(), String> {
+    if !is_official_release_url(&url) {
+        return Err("仅允许打开 CSD 官方 GitHub Releases 页面".to_string());
     }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = url;
-    }
-    Ok(())
+
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| format!("无法打开官方发布页面: {e}"))
 }
 
 // ─── Update Check ───────────────────────────────────────────────────────────
@@ -2483,5 +2499,53 @@ mod tests {
     fn version_is_newer_different_lengths() {
         assert!(version_is_newer("0.1.8.1", "0.1.8"));
         assert!(!version_is_newer("0.1.8", "0.1.8.1"));
+    }
+
+    #[test]
+    fn official_release_url_accepts_root_and_child_paths() {
+        assert!(is_official_release_url(
+            "https://github.com/bjfwan/cdrive-cleaner/releases"
+        ));
+        assert!(is_official_release_url(
+            "https://github.com/bjfwan/cdrive-cleaner/releases/"
+        ));
+        assert!(is_official_release_url(
+            "https://github.com/bjfwan/cdrive-cleaner/releases/tag/v0.1.11"
+        ));
+        assert!(is_official_release_url(
+            "https://github.com/bjfwan/cdrive-cleaner/releases/latest"
+        ));
+    }
+
+    #[test]
+    fn official_release_url_rejects_lookalikes_and_non_https_urls() {
+        for url in [
+            "http://github.com/bjfwan/cdrive-cleaner/releases",
+            "https://github.com.evil.example/bjfwan/cdrive-cleaner/releases",
+            "https://github.com/evil/bjfwan/cdrive-cleaner/releases",
+            "https://github.com/bjfwan/cdrive-cleaner/releases.evil",
+            "https://github.com@evil.example/bjfwan/cdrive-cleaner/releases",
+        ] {
+            assert!(!is_official_release_url(url), "unexpectedly allowed: {url}");
+        }
+    }
+
+    #[test]
+    fn official_release_url_rejects_metacharacters_and_control_sequences() {
+        for url in [
+            "https://github.com/bjfwan/cdrive-cleaner/releases?x=1",
+            "https://github.com/bjfwan/cdrive-cleaner/releases#fragment",
+            "https://github.com/bjfwan/cdrive-cleaner/releases/&calc.exe",
+            "https://github.com/bjfwan/cdrive-cleaner/releases/|calc.exe",
+            "https://github.com/bjfwan/cdrive-cleaner/releases/;calc.exe",
+            "https://github.com/bjfwan/cdrive-cleaner/releases/`calc.exe`",
+            "https://github.com/bjfwan/cdrive-cleaner/releases/%0d%0acalc.exe",
+            "https://github.com/bjfwan/cdrive-cleaner/releases/\\calc.exe",
+            "https://github.com/bjfwan/cdrive-cleaner/releases/../issues",
+            "https://github.com/bjfwan/cdrive-cleaner/releases/tag/../../issues",
+            "https://github.com/bjfwan/cdrive-cleaner/releases/\ncalc.exe",
+        ] {
+            assert!(!is_official_release_url(url), "unexpectedly allowed: {url:?}");
+        }
     }
 }

@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import { IconClose, IconInfo, IconRefresh } from './icons';
-import { downloadUpdate, installUpdate, resolveMirrorUrl } from '../utils/updater';
 import type { UpdateInfo } from '../types';
 
 interface Props {
@@ -23,77 +21,16 @@ const emit = defineEmits<{
   retry: [];
 }>();
 
-type Stage = 'idle' | 'downloading' | 'downloaded' | 'installing' | 'error';
+const openError = ref('');
 
-const stage = ref<Stage>('idle');
-const downloadPercent = ref(0);
-const downloadedBytes = ref(0);
-const totalBytes = ref(0);
-const installerPath = ref('');
-const errorMsg = ref('');
-
-watch(() => props.show, (val) => {
-  if (!val) {
-    stage.value = 'idle';
-    downloadPercent.value = 0;
-    downloadedBytes.value = 0;
-    totalBytes.value = 0;
-    installerPath.value = '';
-    errorMsg.value = '';
-  }
-  if (val) {
-    stage.value = 'idle';
-  }
-});
-
-async function startDownload() {
-  if (!props.updateInfo?.installer_url) {
-    openInBrowser();
-    return;
-  }
-
-  const downloadUrl = resolveMirrorUrl(props.updateInfo.installer_url);
-
-  stage.value = 'downloading';
-  downloadPercent.value = 0;
-
-  const unlisten = await listen<{ downloaded: number; total: number; percent: number }>(
-    'download-progress',
-    (event) => {
-      downloadPercent.value = Math.round(event.payload.percent);
-      downloadedBytes.value = event.payload.downloaded;
-      totalBytes.value = event.payload.total;
-    }
-  );
-
-  try {
-    const path = await downloadUpdate(downloadUrl);
-    installerPath.value = path;
-    stage.value = 'downloaded';
-  } catch (err) {
-    stage.value = 'error';
-    errorMsg.value = String(err);
-  } finally {
-    unlisten();
-  }
-}
-
-async function startInstall() {
-  if (!installerPath.value) return;
-  stage.value = 'installing';
-  try {
-    await installUpdate(installerPath.value);
-  } catch (err) {
-    stage.value = 'error';
-    errorMsg.value = String(err);
-  }
-}
-
-function openInBrowser() {
+async function openInBrowser() {
   if (!props.updateInfo) return;
-  invoke('open_url', { url: props.updateInfo.download_url }).catch(() => {
-    window.open(props.updateInfo!.download_url, '_blank');
-  });
+  openError.value = '';
+  try {
+    await invoke('open_url', { url: props.updateInfo.download_url });
+  } catch (err) {
+    openError.value = String(err);
+  }
 }
 
 function formatDate(dateStr: string): string {
@@ -106,17 +43,12 @@ function formatDate(dateStr: string): string {
   }
 }
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 </script>
 
 <template>
-  <div v-if="show" class="update-overlay" @click.self="stage === 'idle' && emit('close')">
+  <div v-if="show" class="update-overlay" @click.self="emit('close')">
     <div class="update-dialog" @click.stop>
-      <button v-if="stage !== 'downloading' && stage !== 'installing'" class="close-btn" @click="emit('close')">
+      <button class="close-btn" type="button" aria-label="关闭更新窗口" @click="emit('close')">
         <IconClose :size="18" />
       </button>
 
@@ -142,89 +74,34 @@ function formatSize(bytes: number): string {
 
       <!-- Has update -->
       <div v-else-if="updateInfo?.has_update" class="update-content">
-        <!-- Idle: show update info -->
-        <template v-if="stage === 'idle'">
-          <div class="update-badge">
-            <span class="badge-new">新版本</span>
-          </div>
+        <div class="update-badge">
+          <span class="badge-new">新版本</span>
+        </div>
 
-          <h3 class="update-title">
-            v{{ updateInfo.latest_version }} 已发布
-          </h3>
-          <p class="update-current">
-            当前版本：v{{ updateInfo.current_version }}
-            <template v-if="updateInfo.published_at">
-              · 发布于 {{ formatDate(updateInfo.published_at) }}
-            </template>
-          </p>
+        <h3 class="update-title">
+          v{{ updateInfo.latest_version }} 已发布
+        </h3>
+        <p class="update-current">
+          当前版本：v{{ updateInfo.current_version }}
+          <template v-if="updateInfo.published_at">
+            · 发布于 {{ formatDate(updateInfo.published_at) }}
+          </template>
+        </p>
 
-          <div v-if="updateInfo.release_notes" class="update-notes">
-            <h4>更新日志</h4>
-            <div class="notes-content">{{ updateInfo.release_notes }}</div>
-          </div>
+        <div v-if="updateInfo.release_notes" class="update-notes">
+          <h4>更新日志</h4>
+          <div class="notes-content">{{ updateInfo.release_notes }}</div>
+        </div>
 
-          <div class="update-actions">
-            <button class="btn btn-secondary" @click="emit('close')">稍后再说</button>
-            <button class="btn btn-primary" @click="startDownload">
-              <IconRefresh :size="16" />
-              立即更新
-            </button>
-          </div>
-        </template>
-
-        <!-- Downloading -->
-        <template v-else-if="stage === 'downloading'">
-          <h3 class="update-title">正在下载更新</h3>
-          <p class="update-current">
-            v{{ updateInfo.latest_version }}
-            <template v-if="totalBytes > 0">
-              · {{ formatSize(downloadedBytes) }} / {{ formatSize(totalBytes) }}
-            </template>
-          </p>
-          <div class="progress-bar-container">
-            <div class="progress-bar" :style="{ width: downloadPercent + '%' }"></div>
-          </div>
-          <p class="progress-text">{{ downloadPercent }}%</p>
-        </template>
-
-        <!-- Downloaded, ready to install -->
-        <template v-else-if="stage === 'downloaded'">
-          <div class="update-icon-ok">
-            <IconInfo :size="48" />
-          </div>
-          <h3 class="update-title">下载完成</h3>
-          <p class="update-current">安装后应用将自动关闭并启动安装向导</p>
-          <div class="update-actions">
-            <button class="btn btn-secondary" @click="emit('close')">稍后安装</button>
-            <button class="btn btn-primary" @click="startInstall">
-              <IconRefresh :size="16" />
-              立即安装
-            </button>
-          </div>
-        </template>
-
-        <!-- Installing -->
-        <template v-else-if="stage === 'installing'">
-          <div class="update-checking">
-            <div class="checking-spinner"></div>
-            <h3>正在启动安装器</h3>
-            <p>应用即将关闭…</p>
-          </div>
-        </template>
-
-        <!-- Error -->
-        <template v-else-if="stage === 'error'">
-          <h3 class="update-title error-title">更新失败</h3>
-          <p class="update-current">{{ errorMsg }}</p>
-          <div class="update-actions">
-            <button class="btn btn-secondary" @click="openInBrowser">浏览器下载</button>
-            <button class="btn btn-primary" @click="startDownload">
-              <IconRefresh :size="16" />
-              重试下载
-            </button>
-          </div>
-          <p class="update-hint">国内网络较慢？可在 设置 → 更新 → 下载加速镜像 中选择国内镜像</p>
-        </template>
+        <p class="update-hint">为确保安装包安全，应用将打开官方 GitHub Releases 页面供您下载。</p>
+        <p v-if="openError" class="update-current error-title">{{ openError }}</p>
+        <div class="update-actions">
+          <button class="btn btn-secondary" @click="emit('close')">稍后再说</button>
+          <button class="btn btn-primary" @click="openInBrowser">
+            <IconRefresh :size="16" />
+            前往 GitHub 下载
+          </button>
+        </div>
       </div>
 
       <!-- No update -->
